@@ -68,8 +68,10 @@ Edits made inside the recovered files (`core.js`, `view.js`) are marked with a
 - Founders: five young adults, real ages 8–14 days.
 - Stages: child (days 0–7), adult (7–24), wise elder (24+). Life ≈ 30 days
   (± up to 1.6). `stageOf`, `ageDays`, `bodyScale`.
-- Pairs form between unrelated adults with mutual warmth > `LIFE.pairWarmth`.
-  A pair has a child about every `LIFE.pairBirthDays` days.
+- Pairs form between unrelated adults (not parent/child, not siblings) with mutual
+  warmth > `LIFE.pairWarmth`; after two days grown, a good friend will do
+  (`LIFE.friendWarmth`). A pair has a child about every `LIFE.pairBirthDays` (6)
+  days until the valley is 85% full, then up to 2.5 times less often.
 - Children inherit a blend of temperament, interests and looks, and one parent's
   accent. They start knowing nothing and learn by watching and from chats
   (`shareNews`; elders teach twice as readily).
@@ -81,7 +83,13 @@ Edits made inside the recovered files (`core.js`, `view.js`) are marked with a
   `LIFE.maxCapacity` (36). When the valley is over capacity, a curious young
   adult (sometimes with its partner) chooses to go downstream; friends walk them
   to the edge. Recorded in `world.downstream` and `world.lineage`.
-- The valley never fails: with fewer than four adults, births speed up.
+- When the valley is at least 85% full, a restless young adult chooses to leave
+  about every `LIFE.restlessDays` (3) days, so leaving is part of ordinary life.
+- The valley never fails: with fewer than four adults, births speed up, and when
+  there are too few grown-ups, or nobody unrelated to pair with, a traveler comes
+  up the creek and stays (`travelers()`).
+- Generation time is about two weeks (children are born to parents aged 7–24
+  days), so a year holds roughly 25–30 generations.
 
 ## Saves
 

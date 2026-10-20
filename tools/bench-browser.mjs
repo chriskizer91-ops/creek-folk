@@ -16,6 +16,7 @@ await page.waitForFunction(() => window.__creek && window.__creek.world, null, {
 await page.evaluate(async (s) => {
   const w = JSON.parse(s);
   w.realStart = Date.now() - w.t * 1000; w.skip = 0;
+  window.__creek.world = null; // so the page doesn't save over it while unloading
   await window.__creek.store.put('main', JSON.stringify(w));
 }, save);
 await page.reload();
