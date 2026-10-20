@@ -317,7 +317,14 @@ var BeliefView = class {
     let gp = w.givingPlace;
     this.lantern.visible = !!(gp && w.lantern);
     if (this.lantern.visible) {
-      this.lantern.position.set(gp.x + 0.9, this.h(gp.x + 0.9, gp.z - 0.6), gp.z - 0.6);
+      // beside the shrine (or the bare Giving Place, before there is one)
+      let t = w.temple && w.byId[w.temple.sid],
+        rot = t ? t.rot : 0,
+        lx = 1.2,
+        lz = t ? -4.2 : -0.6,
+        x = gp.x + lx * Math.cos(rot) + lz * Math.sin(rot),
+        z = gp.z - lx * Math.sin(rot) + lz * Math.cos(rot);
+      this.lantern.position.set(x, this.h(x, z), z);
       this.lanternLight.intensity = (0.4 + 2.2 * night) * (1 + Math.sin(clock * 3.1) * 0.08);
     }
     // stars on a starry night

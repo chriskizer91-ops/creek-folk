@@ -395,7 +395,7 @@ function plantTimberGrove(w, s) {
   let T = w.terrain,
     n = 0;
   for (let i = 0; i < 80 && n < TEMPLE.groveTrees; i++) {
-    let p = T.randomPoint(w.rng, { near: { x: s.x, z: s.z, r: 9 + i / 8 }, offFloor: true, minEdge: 4, avoid: [{ x: s.x, z: s.z, r: 6.5 }] });
+    let p = T.randomPoint(w.rng, { near: { x: s.x, z: s.z, r: 9 + i / 8 }, offFloor: true, minEdge: 4, avoid: [{ x: s.x, z: s.z, r: TEMPLE_ROOM }] });
     if (!p || w.res.some((r) => (r.x - p.x) ** 2 + (r.z - p.z) ** 2 < 4) || w.structures.some((o) => (o.x - p.x) ** 2 + (o.z - p.z) ** 2 < (STRUCTURES[o.kind].radius + 1.5) ** 2)) continue;
     let o = register(w, { id: w.nextId++, kind: "timbertree", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: T.side(p.x, p.z), planted: Math.round(w.t), grow: 0, amt: 0, max: 3, canopy: 0.4, variant: "pine", forGreat: s.kind });
     w.res.push(o);

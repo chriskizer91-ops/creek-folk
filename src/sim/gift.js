@@ -421,8 +421,8 @@ function chooseGivingPlace(w, c) {
       let z = clamp(home.z + sg * dz, 10, VL - 10),
         x = T.axisX(z) + (side === 0 ? -1 : 1) * (T.floorHW(z) + 4.5);
       if (!T.walkable(x, z) || T.valleyR(x, z) > 0.84 || T.edgeDist(x, z) < 4) continue;
-      if (w.structures.some((s) => (s.x - x) ** 2 + (s.z - z) ** 2 < (STRUCTURES[s.kind].radius + 6) ** 2)) continue;
-      if (w.res.some((r) => (r.kind === "tree" || r.kind === "podtree") && (r.x - x) ** 2 + (r.z - z) ** 2 < 16)) continue;
+      if (w.structures.some((s) => (s.x - x) ** 2 + (s.z - z) ** 2 < (STRUCTURES[s.kind].radius + TEMPLE_ROOM) ** 2)) continue;
+      if (w.res.some((r) => r.kind !== "reeds" && (r.x - x) ** 2 + (r.z - z) ** 2 < (r.kind === "tree" || r.kind === "podtree" || r.kind === "orchard" ? 49 : 25))) continue;
       best = { x: +x.toFixed(2), z: +z.toFixed(2) };
       break;
     }

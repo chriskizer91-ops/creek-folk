@@ -45,9 +45,13 @@ function faunaNext(w, group) {
 
 // Somewhere pleasant near where they live: on the terrace, away from the water.
 function faunaSpot(w, near, r, extra = {}) {
-  let T = w.terrain;
-  return T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r }, offFloor: true, minEdge: 3, ...extra }) || T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: r * 1.6 }, minEdge: 2 });
+  let T = w.terrain,
+    avoid = w.givingPlace ? [{ x: w.givingPlace.x, z: w.givingPlace.z, r: TEMPLE_ROOM }] : [];
+  return T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r }, offFloor: true, minEdge: 3, avoid, ...extra }) || T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: r * 1.6 }, minEdge: 2, avoid });
 }
+// The ground kept clear around the Giving Place for the temple (it reaches about 9 m
+// toward their midwinter sunrise).
+var TEMPLE_ROOM = 9.5;
 
 function villageCentre(w) {
   let homes = w.structures.filter((s) => s.kind === "home" && s.level > 0);
@@ -145,7 +149,7 @@ function giveBird(w) {
 
 // More of the valley's own materials, close to where they're needed.
 function giveGreatTree(w) {
-  let near = (w.givingPlace && w.givingPlace) || villageCentre(w),
+  let near = villageCentre(w),
     p = faunaSpot(w, near, 12, { minEdge: 3.5 });
   if (!p) return null;
   let o = register(w, { id: w.nextId++, kind: "greatlog", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 40, max: 40, timber: 14, ry: +w.rng.range(0, 3.14).toFixed(2), gift: true });
@@ -154,8 +158,8 @@ function giveGreatTree(w) {
 }
 
 function giveClayBank(w) {
-  let near = w.givingPlace || villageCentre(w),
-    p = faunaSpot(w, near, 10, { minEdge: 2 });
+  let near = w.givingPlace ? { x: w.givingPlace.x, z: w.givingPlace.z } : villageCentre(w),
+    p = faunaSpot(w, near, 14, { minEdge: 2 });
   if (!p) return null;
   let o = register(w, { id: w.nextId++, kind: "clay", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 36, max: 40, gift: true });
   w.res.push(o);
@@ -163,8 +167,8 @@ function giveClayBank(w) {
 }
 
 function giveStones(w) {
-  let near = w.givingPlace || villageCentre(w),
-    p = faunaSpot(w, near, 9, { minEdge: 2.5 });
+  let near = w.givingPlace ? { x: w.givingPlace.x, z: w.givingPlace.z } : villageCentre(w),
+    p = faunaSpot(w, near, 13, { minEdge: 2.5 });
   if (!p) return null;
   let o = register(w, { id: w.nextId++, kind: "stones", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 36, max: 36, gift: true });
   w.res.push(o);

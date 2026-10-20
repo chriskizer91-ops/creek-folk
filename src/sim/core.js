@@ -6483,7 +6483,7 @@
       let a = STRUCTURES[o.kind].radius + n + 1.4;
       if ((o.x - t) ** 2 + (o.z - e) ** 2 < a * a) return !1;
     }
-    if (i.givingPlace && s !== "dam" && s !== "crossing" && (i.givingPlace.x - t) ** 2 + (i.givingPlace.z - e) ** 2 < (n + 7) ** 2) return !1; // BELIEF: room for the temple
+    if (i.givingPlace && s !== "dam" && s !== "crossing" && (i.givingPlace.x - t) ** 2 + (i.givingPlace.z - e) ** 2 < (n + TEMPLE_ROOM) ** 2) return !1; // BELIEF: room for the temple
     for (let o of i.res) {
       if (o.kind === "sprout" || o.kind === "orchard" && o.stage <= 1)
       continue;
