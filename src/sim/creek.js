@@ -682,61 +682,66 @@ function creekFloodWork(w, T, seed) {
 
 // ---- Stage 0: water spreading over the valley floor ------------------------
 
-// Route each spill across the floor and wear the cells it crosses a little deeper.
-// Water leaving the creek first works its way out across the floor, then follows
-// the floor's own fall down the valley, choosing the lowest way (the floor's hollows,
-// and the channels earlier floods wore). Paths that carry water get deeper and carry
-// more next time, so side channels form, branch and persist.
+// Route each spill across the floor and wear the ground it crosses a little deeper.
+// Each thread of water starts at the bank, heads out across the floor and then down
+// the valley, turning a little at each step toward lower ground (the floor's hollows,
+// and the channels earlier floods wore), so its course curves the way water does.
+// Paths that carry water get deeper and draw the next flood's water into them, so side
+// channels form, branch, join and persist.
 function creekSpread(w, spills, seed) {
   let cr = w.creek,
     T = w.terrain,
     ns = cr.nodes,
     chan = cr.chan,
-    H = T.h,
     W1 = VW + 1,
     flow = creekSpread.flow || (creekSpread.flow = new Float32Array(VERTS)),
     s = Math.floor(seed * 1e6) | 0,
-    jit = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 0.015;
+    rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   flow.fill(0);
-  let onFloor = (vx, vz) => vx >= 1 && vz >= 1 && vx < VW && vz < VL && Math.abs(vx - T.axisX(vz)) < T.floorHW(vz) + 0.5 && T.valleyR(vx, vz) < 0.9,
-    inCreek = (vx, vz) => {
-      let n = ns[creekNodeIndex(vz)];
-      return Math.abs(vx - T.creekX(vz)) < 0.5 * creekTopWidth(n);
-    };
+  let onFloor = (x, z) => x >= 1 && z >= 1 && x < VW - 1 && z < VL - 1 && Math.abs(x - T.axisX(z)) < T.floorHW(z) + 0.8 && T.valleyR(x, z) < 0.9,
+    inCreek = (x, z) => Math.abs(x - T.creekX(z)) < 0.5 * creekTopWidth(ns[creekNodeIndex(z)]) + 0.2,
+    hAt = (x, z) => T.heightAt(x, z);
   for (let i of spills) {
     let n = ns[i],
       cx = T.creekX(n.z),
       half = 0.5 * creekTopWidth(n);
     for (let side = -1; side <= 1; side += 2)
       for (let lane = 0; lane < 3; lane++) {
-        let vx = Math.round(cx + side * (half + 0.8 + lane * 1.6)),
-          vz = Math.round(n.z + (lane - 1) * 0.7),
-          q = n._ob / 6;
-        for (let step = 0; step < 90 && onFloor(vx, vz); step++) {
-          flow[vz * W1 + vx] += q;
-          let here = H[vz * W1 + vx] - chan[vz * W1 + vx] * 0,
-            best = null,
-            bh = here + 0.03,
-            out = step < 4; // first, away from the creek
-          for (let [dx, dz] of out ? [[side, 0], [side, 1], [0, 1]] : [[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
-            let nx = vx + dx,
-              nz = vz + dz;
+        let x = cx + side * (half + 0.7 + lane * 0.9),
+          z = n.z + (rnd() - 0.5) * 1.5,
+          // heading, measured from straight down the valley (+z) toward +x
+          th = side * (0.7 + 0.5 * rnd()),
+          q = n._ob / 6,
+          last = -1;
+        for (let step = 0; step < 140 && onFloor(x, z); step++) {
+          let v = Math.round(z) * W1 + Math.round(x);
+          if (v !== last) (flow[v] += q), (last = v);
+          let best = null,
+            bs = 1e9;
+          for (let dt of [-0.55, -0.28, 0, 0.28, 0.55]) {
+            let t2 = clamp(th + dt, -1.35, 1.35), // never back up the valley
+              nx = x + 0.8 * Math.sin(t2),
+              nz = z + 0.8 * Math.cos(t2);
             if (!onFloor(nx, nz)) continue;
             if (inCreek(nx, nz)) {
-              if (out) continue;
+              if (step < 5) continue;
               best = null; // back into the creek: this thread rejoins it
-              bh = -1e9;
+              bs = -1e9;
               break;
             }
-            let hh = H[nz * W1 + nx] + jit() - 0.006 * dz;
-            if (hh < bh) (bh = hh), (best = [nx, nz]);
+            let sc = hAt(nx, nz) + 0.012 * Math.abs(dt) + 0.02 * rnd();
+            if (sc < bs) (bs = sc), (best = [nx, nz, t2]);
           }
-          if (!best) {
-            // a hollow: the water ponds here and deepens it a little
-            if (bh > -1e8) chan[vz * W1 + vx] = Math.min(0.3, chan[vz * W1 + vx] + 0.008);
+          if (!best) break;
+          if (best[0] !== undefined && bs - hAt(x, z) > 0.04) {
+            // a hollow it can't climb out of: the water ponds here and deepens it a little
+            let k = Math.round(z) * W1 + Math.round(x);
+            chan[k] = Math.min(0.3, chan[k] + 0.008);
             break;
           }
-          [vx, vz] = best;
+          [x, z, th] = best;
+          // drift back toward straight down the valley, slowly
+          th *= 0.97;
         }
       }
   }
