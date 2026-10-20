@@ -7718,12 +7718,13 @@ var LIFE = {
   elderDays: 24,          // age when a creekfolk becomes a wise elder
   lifespanDays: 30,       // average length of a life
   lifespanSpread: 0.8,    // standard deviation, days (clamped to +/- 1.6)
-  pairBirthDays: 3.0,     // a pair with room has a child about this often (tuned by tools/year.cjs)
+  pairBirthDays: 6.0,     // a pair with room has a child about this often (tuned by tools/year.cjs)
   pairWarmth: 0.4,        // mutual warmth needed to pair up
   settleDays: 2,          // after this many days grown, a good friend is enough
   friendWarmth: 0.15,     // ...meaning this much mutual warmth
   floorAdults: 4,         // below this many adults, births speed up (the valley never empties)
   maxCapacity: 36,        // upper limit, set from the catch-up benchmark
+  restlessDays: 3,        // when the valley is nearly full, someone chooses to leave about this often
   founders: 5,
   founderAges: [8, 9.5, 11, 12.5, 14],
 };
@@ -7933,10 +7934,11 @@ function births(w) {
   // Births go on when the valley is full (young adults leave to make room), but pause
   // if it is badly overcrowded.
   if (w.creatures.length >= valleyCapacity(w) + 6) return;
-  // Fewer births as the valley fills: pairs have children about every pairBirthDays when
-  // the valley is nearly empty, and about 2.5 times less often when it is full.
-  let fill = clamp(w.creatures.length / valleyCapacity(w), 0, 1.2);
-  let p = (LIFE.tick / (LIFE.pairBirthDays * (1 + 1.5 * fill * fill) * DAY_S)) * boost;
+  // Fewer births once the valley is nearly full: pairs have children about every
+  // pairBirthDays until it is 85% full, then up to two and a half times less often.
+  let fill = w.creatures.length / valleyCapacity(w),
+    crowd = 1 + 1.5 * clamp((fill - 0.85) / 0.15, 0, 1);
+  let p = (LIFE.tick / (LIFE.pairBirthDays * crowd * DAY_S)) * boost;
   for (let [a, b] of pairs) if (w.rng.chance(p)) bear(w, a, b);
 }
 
@@ -8168,8 +8170,11 @@ function groveTree(w, c) {
 // ---------------------------------------------------------------------------
 function leaving(w) {
   let cap = valleyCapacity(w),
-    over = w.creatures.filter((c) => !c.leaving && !c.farewell).length - cap;
-  if (over <= 0) return;
+    n = w.creatures.filter((c) => !c.leaving && !c.farewell).length,
+    over = n - cap;
+  // Over capacity, someone must go. Nearly full, a restless young one may choose to,
+  // about once every few days.
+  if (over <= 0 && !(n >= cap * 0.85 && w.rng.chance(LIFE.tick / (LIFE.restlessDays * DAY_S)))) return;
   if (w.creatures.some((c) => c.leaving)) return; // one at a time
   let young = w.creatures.filter((c) => {
     let a = ageDays(w, c);
@@ -8420,7 +8425,8 @@ function travelers(w) {
   }
   w.lonelySince = w.lonelySince ?? w.t;
   let wait = adults.length < 2 ? DAY_S * 0.25 : stuck && paired ? DAY_S * 1.5 : DAY_S;
-  if (w.t - w.lonelySince < wait || w.t - (w.lastTraveler || -1e9) < DAY_S * 1.5) return;
+  let spacing = adults.length < LIFE.floorAdults || !paired ? DAY_S * 1.5 : DAY_S * 4;
+  if (w.t - w.lonelySince < wait || w.t - (w.lastTraveler || -1e9) < spacing) return;
   arriveTraveler(w);
   w.lastTraveler = w.t;
   w.lonelySince = null;
