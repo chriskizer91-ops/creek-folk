@@ -1,6 +1,8 @@
 // Catch-up benchmark in a real browser: load a saved valley, jump N days through the
 // developer menu (replayed in full in the Web Worker), and time it.
 //   node tools/bench-browser.mjs runs/worlds/year-1-day150.json 30
+// PAGE=releases/creekfolk-phase2.html to benchmark another build; THROTTLE=4 slows the
+// CPU four times through the DevTools protocol (a stand-in for a phone).
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 const [file, daysArg] = process.argv.slice(2);
@@ -11,7 +13,11 @@ const page = await (await browser.newContext({ viewport: { width: 1280, height: 
 const logs = [];
 page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
-await page.goto('file://' + process.cwd() + '/dist/creekfolk.html');
+if (process.env.THROTTLE) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: +process.env.THROTTLE });
+}
+await page.goto('file://' + process.cwd() + '/' + (process.env.PAGE || 'dist/creekfolk.html'));
 await page.waitForFunction(() => window.__creek && window.__creek.world, null, { timeout: 30000 });
 await page.evaluate(async (s) => {
   const w = JSON.parse(s);
@@ -26,7 +32,7 @@ const before = await page.evaluate(() => ({ day: +(__creek.world.t / 86400).toFi
 console.log('loaded', before);
 await page.screenshot({ path: 'shots/bench-before.png' });
 const t0 = Date.now();
-await page.evaluate((d) => __creek.dev.jump(d * 86400e3), days);
+await page.evaluate((d) => __creek.dev.jump(d * (d < 1 ? 86400e3 : 86400e3)), days);
 for (;;) {
   await page.waitForTimeout(2000);
   const st = await page.evaluate(() => ({ c: !!__creek.catching, t: __creek.world.t }));

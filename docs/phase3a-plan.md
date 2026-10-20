@@ -202,3 +202,47 @@ A real year is about 45 valley years and, at about 8 storms per wet season, abou
   build shows on the author's phone.
 - Year arc: headless runs (`tools/year.cjs`) with the creek metrics per month.
 - Determinism with floods and dams.
+
+## What changed while building it
+- **Loose gravel can move on.** With a strict "never scour" rule, small floods dropped
+  gravel that big floods could never move, so an undammed creek filled itself up. Now a
+  flood can carry on gravel an earlier flood left loose, but never digs below what has
+  settled for good (`bedMin`; deposits settle quickly in still water or among plants).
+  The creek still only gets better.
+- **Ponds are reservoirs with their own basins.** Water reaching any node of a dam's
+  basin goes into the pond; the pond spills when full and shrinks through the dry season
+  (evaporation 1.1 mm and seepage 0.4 mm per valley day, chosen so a first pool survives).
+- **The hills' slow water** (`CREEK.hillFill`, `hillTau`): the wet season's rain is given
+  back to the floor over about 70 valley days. A cut-down creek drains it at once (and a
+  bare gravel bed lets it sink away), so the valley still dries; a healed floor holds it,
+  which is what lets it stay marshy through the dry season.
+- **Climbing from the bottom.** A silted dam that would leak if raised asks the dam below
+  it to be raised first; the lowest dam of a series gets a stone apron below it. Without
+  this the bottom dam capped the whole series.
+- **Raised ponds stay shallow over the floor** (`raiseAbove` 0.1 m): higher, the floor
+  became a lake instead of a marsh.
+- **Gardens** go at the edge of the valley floor near home; the old rule (within 7 m of
+  the creek) found no sites in the new valley.
+- **Determinism rule:** every change to the creek ends with `creekRefresh()`, and the
+  world keeps the `build` key in a fixed place, so a reload is exact.
+- **Deposits are shared along the creek** (`creekShareDeposit`). A flood used to drop up
+  to 12 cm on a single 2 m node. Each node's slope comes from the node below it, so a
+  bump starved the node above it, which filled too, and since deposits never wash out
+  the bed grew into a sawtooth (the bed swinging 0.7 m node to node by day 210, the floor
+  stepping in 2 m strips that drew as bands across the valley). Now each flood's gravel
+  and mud are shared with the neighbouring nodes (3 either way, never across a dam) and
+  the mud left on the floor with 6 either way. `creekBumpiness()` measures it; the lab
+  and the year runner print it as `rough`/`bumpy` (bed / floor, metres).
+- **The floor has relief** (about +-0.17 m: long swales down the valley, hummocks), ponds
+  above the floor spread over connected lower ground by flood fill (`creekPondFloor`), and
+  the floor's water table is blended between nodes, so water on the floor follows hollows
+  instead of filling 2 m strips.
+- **The real cause of the sawtooth** was the slope: each node's slope was clamped to
+  0.3-2.5 times the five-node average, and a three-node sawtooth drives that average
+  toward zero at its humps, so humps looked flat and caught more gravel while pools
+  looked steep and never filled. Now the average never falls below half the floor's own
+  (smooth) slope, and water can't stand lower than the water just below it, so a pool
+  behind a hump is slack water like a dam's pond. Pools fill, humps don't, and a bumpy
+  bed smooths itself out (the undammed lab: bed bumpiness 0.10 m at day 50, 0.002 m by
+  day 200). A side effect: an undammed creek now heals slowly by itself (15% of the
+  floor wet at the driest by day 200, against 82% with the lab's dams).

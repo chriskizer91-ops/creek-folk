@@ -45,3 +45,46 @@ function upgradeWorld(w) {
   if (!w.stories) storyFounding(w); // MINDS: a valley from before stories
   return w;
 }
+
+// ---- developer triggers (the dev build's "make it happen now" buttons) -----
+// These change the valley outside its own course of events, so they are only
+// offered by the developer menu.
+function devTrigger(w, what) {
+  let alive = w.creatures.filter((c) => !c.visitor);
+  if (what === "storm") {
+    let e = w.weather;
+    e.cum = rainTotal(w, w.t);
+    e.cumT = w.t;
+    e.tok = (e.tok || 0) + 1;
+    let was = e.state;
+    e.state = "storm";
+    e.rain = 1.6;
+    e.since = w.t;
+    e.until = w.t + 900;
+    schedule(w, e.until, "R", 0, e.tok);
+    if (was !== "storm") storyStorm(w);
+    logEvent(w, 2, "A storm rolled in over the valley.", [], null, "weather");
+    let T = creekStorm(w);
+    return `storm (a ${T.toFixed(1)}-year flood)`;
+  }
+  if (what === "flood") {
+    let T = creekStorm(w, 25);
+    return `a ${T}-year flood`;
+  }
+  if (what === "birth") {
+    let adults = alive.filter((c) => stageOf(w, c) === "adult"),
+      pair = adults.map((c) => [c, c.partner && w.byId[c.partner]]).find(([c, p]) => p && stageOf(w, p) === "adult");
+    if (!pair && adults.length >= 2) pair = [adults[0], adults.find((c) => c !== adults[0] && !(adults[0].parents || []).includes(c.id))];
+    if (!pair || !pair[1]) return "no two grown-ups to be parents";
+    bear(w, pair[0], pair[1]);
+    return `a child for ${pair[0].name} and ${pair[1].name}`;
+  }
+  if (what === "passing") {
+    let c = alive.filter((c) => !c.farewell).sort((a, b) => a.born - b.born)[0];
+    if (!c) return "nobody";
+    c.lifespan = Math.max(0, Math.round(w.t - c.born));
+    return `${c.name}'s time has come`;
+  }
+  if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  return "unknown";
+}

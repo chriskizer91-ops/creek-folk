@@ -50,3 +50,9 @@ var CatchupWorker = {
     });
   },
 };
+
+// The words under the catch-up bar.
+function catchupLabel(h) {
+  let gap = h.to - h.from;
+  return `Catching up on ${durationText(gap)}\u2026${gap > 6 * 3600 ? " Keep the screen on until it\u2019s done." : ""}`;
+}

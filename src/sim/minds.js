@@ -29,6 +29,7 @@ var SKILL_TEXT = {
   glowcap: "to find the mushrooms that glow",
   tools: "to make and use tools",
   dams: "to dam the creek",
+  downstream: "to build dams from the bottom of the creek up",
 };
 
 // ---------------------------------------------------------------------------
@@ -551,13 +552,13 @@ function snapshotForVisits(w, c) {
   };
 }
 
-function visits(w) {
-  if (w.creatures.some((c) => c.visitor)) return;
-  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
-  if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
+function visits(w, force = false) {
+  if (w.creatures.some((c) => c.visitor)) return false;
+  let cands = (w.downstream || []).filter((d) => d.snap && (force || (w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400)) && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  if (!cands.length || (!force && !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400)))) return false;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
-  let edge = downstreamEdge(w, { x: w.terrain.creekX(58) + 2, z: 58 });
+  let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
   let c = makeFolk(w, d.name, edge.x, edge.z);
   let sn = d.snap;
   Object.assign(c, { id: d.id, look: sn.look, temp: sn.temp, interests: sn.interests, accent: sn.accent, lex: sn.lex, sig: sn.sig, rel: sn.rel, strength: sn.strength, adultStrength: sn.strength });
