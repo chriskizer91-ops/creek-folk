@@ -749,6 +749,7 @@
     };
   }
   function relation(i, t) {
+    if (t == null) return { fam: 0, warmth: 0.1, annoy: 0, asked: 0, helped: 0, inv: 0, acc: 0, gotShare: 0, gotLittle: 0, told: 0, toldTrue: 0, lastT: -1e9 }; // LIFE: an empty home has no owner
     let e = typeof t == "number" ? t : t.id,
       n = i.rel[e];
     return (
@@ -2318,7 +2319,7 @@
     if (
     t.know[r] &&
     !e.know[r] &&
-    i.rng.chance(0.12 + 0.2 * e.temp.curiosity))
+    i.rng.chance((0.12 + 0.2 * e.temp.curiosity) * teachFactor(t, e))) // LIFE: elders teach
     {
       let o = {
         mud: `${t.name} explained to ${e.name} how mud dries hard.`,
@@ -2822,7 +2823,7 @@
     "crack"]
     );
   function walkSpeed(i) {
-    let t = WALK_SPEED * (0.85 + 0.3 * i.temp.activity);
+    let t = WALK_SPEED * (0.85 + 0.3 * i.temp.activity) * stageSpeed(i); // LIFE: pace by stage
     return (
       i.carry && HEAVY_MATERIALS[i.carry.k] && (t *= 0.82),
       i.needs.energy < 0.2 && (t *= 0.82),
@@ -2872,7 +2873,7 @@
   }
   function travelCost(i, t, e, n, s, r) {
     let o = i.terrain,
-      a = dist2d(e, n, s, r) / (WALK_SPEED * (0.85 + 0.3 * t.temp.activity));
+      a = dist2d(e, n, s, r) / (WALK_SPEED * (0.85 + 0.3 * t.temp.activity) * stageSpeed(t)); // LIFE
     if (o.side(e, n) !== o.side(s, r)) {
       let l = wadeCost(i, t) + 6;
       for (let c of crossingsList(i)) {
@@ -5158,7 +5159,7 @@
       h = t.interests.water > 0.6 && n.caution < 0.45,
       d = [],
       u = (x, g, m) => {
-        g *= failurePenalty(i, t, x),
+        g *= failurePenalty(i, t, x) * lifeGoalFactor(i, t, x), // LIFE: goals by stage
         g > 0.02 &&
         d.push({
           goal: x,
@@ -7047,6 +7048,9 @@
       case "R":
         changeWeather(i);
         break;
+      case "L": // LIFE: ages, births, passings, leaving (src/sim/life.js)
+        lifeTick(i);
+        break;
     }
   }
   function changeWeather(i) {
@@ -7620,5 +7624,5 @@
     e.wet = t.wetS !== void 0 ? b64ToSparse(t.wetS, 4096) : new Float32Array(4096),
     t.hydro || (e.hydro = newHydro(), placeSnag(e), seedWetness(e));
     for (let n of e.creatures) n.desire.dam === void 0 && (n.desire.dam = 0);
-    return setDayCycle(e.cycle || null), e;
+    return upgradeWorld(e); // LIFE: day cycle, ages and the calendar (src/sim/hooks.js)
   }

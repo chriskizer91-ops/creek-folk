@@ -1,8 +1,14 @@
 // The simulation's public surface, used by the app, the worker and the Node tests.
 var CreekSim = {
-  createWorld,
+  newValley,
   runUntil,
   saveWorld,
   loadWorld,
-  setDayCycle,
+  stageCounts,
+  stageOf,
+  ageDays,
+  valleyCapacity,
+  seasonAt,
+  dateText,
+  LIFE,
 };

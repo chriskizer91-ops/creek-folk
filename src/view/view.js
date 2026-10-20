@@ -690,6 +690,14 @@
               }
               break;
             }
+          case "grove":{ // LIFE: a memorial tree; it grows from a sapling over the months
+              let a = xm(groveStage(this.world, t)),
+                l = new Et(a.trunk, he()),
+                c = new Et(a.crown, he());
+              l.castShadow = c.castShadow = !0, e.rotation.y = r, e.add(l, c);
+              e.add(new Et(mergeParts([part(on(0.09), PALETTE.stone2, { x: 0.32, y: 0.05, z: 0.18 })]), he()));
+              break;
+            }
           case "sprout":{
               let a = xm(0);
               e.add(new Et(a.trunk, he()), new Et(a.crown, he()));
@@ -833,6 +841,7 @@
       sig(t) {
         return t.kind === "orchard" ?
         "o" + t.stage + (t.guard ? "g" : "") :
+        t.kind === "grove" ? "g" + groveStage(this.world, t) :
         t.grow !== void 0 ?
         t.kind + ":" + Math.round(t.grow * 10) :
         t.kind;
@@ -5437,7 +5446,7 @@ void main(){
     return t + (t === 1 ? " day ago" : " days ago");
   }
   function clockText(i) {
-    return `Day ${dayNumber(i.t)} \xB7 ${timeOfDayName(i.t)}`;
+    return `${dateText(i)} \xB7 ${seasonAt(i).name} \xB7 ${timeOfDayName(i.t)}`; // LIFE: the real calendar
   }
   var qc = {
       eye: '<svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>',
@@ -5641,10 +5650,10 @@ void main(){
       creatureHTML(t) {
         let e = this.w,
           n = e.byId[t];
-        if (!n) return this.header("Gone");
+        if (!n) return goneHTML(this, e, t); // LIFE: passed on or gone downstream
         let s = sd(e, n),
           r = countsLines(n),
-          o = `<div class="sh-head"><div class="who"><span class="dot" style="background:${s}"></span><div><div class="sh-title">${escapeHtml(n.name)}</div><div class="sh-sub">${escapeHtml(moodWord(n))}${r.length ? " \xB7 known for " + r.join(" and ") : ""}</div></div></div><div class="hbtns"><button class="pill ${this.app.following === n.id ? "on" : ""}" data-act="follow" data-id="${n.id}">${this.app.following === n.id ? "Following" : "Follow"}</button><button class="iconbtn sm" data-act="close" aria-label="Close">${qc.close}</button></div></div>`,
+          o = `<div class="sh-head"><div class="who"><span class="dot" style="background:${s}"></span><div><div class="sh-title">${escapeHtml(n.name)}</div><div class="sh-sub">${escapeHtml(lifeLine(e, n))}</div><div class="sh-sub">${escapeHtml(moodWord(n))}${r.length ? " \xB7 known for " + r.join(" and ") : ""}</div></div></div><div class="hbtns"><button class="pill ${this.app.following === n.id ? "on" : ""}" data-act="follow" data-id="${n.id}">${this.app.following === n.id ? "Following" : "Follow"}</button><button class="iconbtn sm" data-act="close" aria-label="Close">${qc.close}</button></div></div>`,
           a = this.curTab("c", "now"),
           l = "";
         if (a === "now") {
@@ -5982,7 +5991,6 @@ void main(){
           [90, "90 seconds"],
           [300, "5 minutes"]]
           )}
-      ${e("realClock", "Day and night follow my clock", "off: a full day passes every 2 hours")}
       ${e("dimNight", "Dim the screen at night", "easier on an always-on display")}
       ${e("wakeLock", "Keep the screen awake", s.wake)}
       ${e("names", "Always show names")}
@@ -6001,12 +6009,8 @@ void main(){
       <h4>Your valley</h4>
       <p class="muted">${escapeHtml(s.text)}</p>
       <div class="btnrow"><button class="pill" data-act="export">Export save</button><button class="pill" data-act="import">Import save</button></div>
-      <details class="testing"><summary>Testing tools</summary>
-      <p class="muted">Skipping ahead runs the full simulation for that stretch, exactly as if it had passed. The valley stays that far ahead of the clock.</p>
-      <div class="btnrow"><button class="pill" data-act="skip" data-h="1">+1 hour</button><button class="pill" data-act="skip" data-h="6">+6 hours</button><button class="pill" data-act="skip" data-h="24">+1 day</button></div>
-      </details>
       <div class="btnrow"><button class="pill danger" data-act="newworld">Start a new valley\u2026</button></div>
-      <p class="muted small">Creekfolk (working title) \xB7 everything runs on this device; nothing is sent anywhere.</p>
+      <p class="muted small">Creekfolk \xB7 everything runs on this device; nothing is sent anywhere.</p>
     </div>`);
 
       }
@@ -6124,8 +6128,9 @@ void main(){
       showWelcome(t) {
         this.summary.innerHTML = `<div class="card welcome"><div class="sh-title big">Creekfolk</div>
       <div class="sh-body">
-      <p>Six small creatures have just woken up in a meadow beside a creek. They have their own temperaments, needs, and curiosities, and they will figure out the valley \u2014 and each other \u2014 on their own.</p>
-      <p>Everything happens in real time. Small things take seconds; a mud hut takes hours; the biggest projects take days. When you close the game, the valley keeps its clock, and the full simulation catches up when you return.</p>
+      <p>Five small creatures have just woken up in a meadow beside a creek. They have their own temperaments, needs, and curiosities, and they will figure out the valley \u2014 and each other \u2014 on their own.</p>
+      <p>Everything happens in real time, and there is no way to hurry it. A day in the valley lasts an hour; the seasons follow your own calendar. A creekfolk lives about a month: a child, then a grown-up, then a wise elder. Their children will carry on what they started.</p>
+      <p>When you close the game, the valley keeps its clock, and every moment is simulated when you return.</p>
       <p class="muted"><b>Drag</b> to look around \xB7 <b>pinch</b> or <b>scroll</b> to zoom \xB7 <b>two fingers</b> or <b>right-drag</b> to turn \xB7 <b>tap</b> a creature to follow it.</p>
       </div><div class="btnrow center"><button class="pill on" data-go>Watch them</button></div></div>`,
         this.summary.classList.remove("hidden"),
@@ -6358,8 +6363,8 @@ void main(){
       this.heard = new Map(),
       this.wake = null,
       this.wakeStatus = "",
-      this.loadOrCreate(),
-      this.resize(),
+      this.store = new ValleyStore(), // LIFE: saves live in IndexedDB (src/view/store.js)
+      this.dev = new DevMenu(this), // LIFE: hidden developer menu (src/view/dev.js)
       window.addEventListener("resize", () => this.resize()),
       this.canvas.addEventListener("webglcontextlost", (t) => {
         t.preventDefault(),
@@ -6384,55 +6389,54 @@ void main(){
       this.requestWake(),
       this.last = performance.now(),
       this.lastFrame = 0,
-      requestAnimationFrame((t) => this.frame(t)),
+      this.loadOrCreate().then(() => {
+        this.resize(), requestAnimationFrame((t) => this.frame(t));
+      }),
       window.__creek = this;
     }
-    loadOrCreate() {
+    async loadOrCreate() {
       let t = null,
         e = null;
-      if (this.ls)
-      for (let n of [SAVE_KEY, BACKUP_KEY]) {
-        let s = this.ls.getItem(n);
-        if (s)
+      for (let n of ["main", "backup"]) {
+        let r = await this.store.get(n);
+        if (r)
         try {
-          t = loadWorld(s), e = n;
+          t = loadWorld(r), e = n;
           break;
-        } catch (r) {
-          console.warn("save unreadable", n, r);
+        } catch (o) {
+          console.warn("save unreadable", n, o);
         }
-      } else
-      this.hud.saveWarn.classList.remove("hidden");
-      t ? (
-      this.setWorld(t),
-      e === BACKUP_KEY && this.hud.toast("Restored from the backup save.")) : (
-      t = this.newWorld(),
-      this.setWorld(t),
-      setTimeout(() => this.hud.showWelcome(), 300));
+      }
+      if (!t && this.ls)
+      for (let n of [SAVE_KEY, BACKUP_KEY]) {
+        let r = this.ls.getItem(n);
+        if (r)
+        try {
+          t = loadWorld(r), e = "legacy";
+          break;
+        } catch (o) {
+          console.warn("old save unreadable", n, o);
+        }
+      }
+      this.store.available || this.hud.saveWarn.classList.remove("hidden");
+      t ?
+      (this.setWorld(t),
+      e === "backup" && this.hud.toast("Restored from the backup save."),
+      e === "legacy" && (this.save(), this.hud.toast("Your valley has moved to the new save storage."))) :
+      (t = this.newWorld(), this.setWorld(t), this.save(), setTimeout(() => this.hud.showWelcome(), 300));
     }
     newWorld(t) {
       t = t || "valley-" + Math.random().toString(36).slice(2, 8);
-      let e = createWorld(t);
-      return e.realStart = Date.now(), e.skip = 0, e;
+      let n = devNow(),
+        e = newValley(t, { calStart: n, tzMin: new Date(n).getTimezoneOffset() }); // LIFE: five founders on the real calendar
+      return e.realStart = n, e.skip = 0, e;
     }
     applyClock() {
-      let t = this.world;
-      if (this.settings.realClock) {
-        let e = new Date(),
-          s =
-          (((e.getHours() * 3600 + e.getMinutes() * 60 + e.getSeconds()) /
-          86400 -
-          1 / 24) %
-          1 +
-          1) %
-          1;
-        t.cycle = { len: 86400, off: ((s - t.t / 86400) % 1 + 1) % 1 };
-      } else t.cycle = null;
-      setDayCycle(t.cycle);
+      setDayCycle(this.world.cycle || null);
     }
     setWorld(t) {
       this.world = t,
-      !!t.cycle != !!this.settings.realClock && (
-      this.world = t, this.applyClock()),
+      this.applyClock(),
       t.onLog = (e) => this.onLog(e),
       this.renderer.setWorld(t),
       this.rig.setWorld(t),
@@ -6442,42 +6446,41 @@ void main(){
     }
     simTarget() {
       let t = this.world,
-        e = (Date.now() - t.realStart) / 1e3 + (t.skip || 0);
+        e = (devNow() - t.realStart) / 1e3 + (t.skip || 0); // LIFE: devNow() adds the developer offset
       return (
         e < t.t - 120 && (
-        t.realStart = Date.now() - (t.t - (t.skip || 0)) * 1e3, e = t.t),
+        t.realStart = devNow() - (t.t - (t.skip || 0)) * 1e3, e = t.t),
         e);
 
     }
     save() {
-      if (!this.ls || !this.world || this.catching) return !1;
+      if (!this.world || this.catching) return !1;
+      let t;
       try {
-        let t = saveWorld(this.world);
-        return (
-          this.ls.setItem(SAVE_KEY, t),
-          performance.now() - this.lastBak > 600 * 1e3 && (
-          this.ls.setItem(BACKUP_KEY, t), this.lastBak = performance.now()),
-          this.lastSaveSize = t.length,
-          this.lastSaveAt = Date.now(),
-          this.hud.saveWarn.classList.add("hidden"),
-          !0);
-
-      } catch (t) {
-        return (
-          console.warn("save failed", t),
-          this.hud.saveWarn.classList.remove("hidden"),
-          !1);
-
+        t = saveWorld(this.world);
+      } catch (e) {
+        return console.warn("save failed", e), !1;
       }
+      let e = performance.now() - this.lastBak > 600 * 1e3;
+      e && (this.lastBak = performance.now());
+      this.store.put("main", t).
+      then(() => (e ? this.store.put("backup", t) : !0)).
+      then(() => {
+        this.lastSaveSize = t.length, this.lastSaveAt = Date.now(), this.hud.saveWarn.classList.add("hidden");
+      }).
+      catch((n) => {
+        console.warn("save failed", n), this.hud.saveWarn.classList.remove("hidden");
+      });
+      return !0;
     }
     saveInfo() {
       let t = this.world,
         e = durationText(t.t),
-        n = this.ls ?
+        n = this.store.available ?
         `Saved in this browser${this.lastSaveAt ? " (last " + Math.round((Date.now() - this.lastSaveAt) / 1e3) + "s ago)" : ""}.` :
         "This browser won\u2019t let the game save \u2014 use Export to keep a copy.";
       return {
-        text: `This valley is ${e} old (seed \u201C${t.seed}\u201D). ${n} Export makes a file you can import on another device.`,
+        text: `This valley began on ${dateText(t, 0)} and is ${e} old (seed \u201C${t.seed}\u201D). ${n} A year is a long time to trust a browser, so export a backup file now and then; it can be imported on any device.`,
         wake: this.wakeStatus
       };
     }
@@ -6561,12 +6564,6 @@ void main(){
         case "import":
           this.importSave();
           break;
-        case "skip":{
-            let n = +e.h;
-            this.world.skip = (this.world.skip || 0) + n * 3600,
-            this.hud.close();
-            break;
-          }
         case "newworld":{
             this.hud.close(),
             this.hud.
@@ -6595,7 +6592,6 @@ void main(){
       t === "shadows" && this.renderer.setShadows(e),
       t === "wakeLock" && this.requestWake(),
       t === "ambient" && !e && this.ambient && this.setAmbient(!1),
-      t === "realClock" && this.applyClock(),
       this.hud.render(!0);
     }
     exportSave() {
@@ -6657,7 +6653,7 @@ void main(){
           );
           return;
         }
-        n.realStart || (n.realStart = Date.now() - n.t * 1e3, n.skip = 0),
+        n.realStart || (n.realStart = devNow() - n.t * 1e3, n.skip = 0),
         (await this.hud.confirm(
           "Replace this valley?",
           "The saved valley will replace the current one. Time that passed since it was exported will be caught up.",
@@ -6768,6 +6764,28 @@ void main(){
       {
         let h = this.catching;
         h.to = a;
+        // LIFE: long gaps are replayed in a Web Worker (src/view/catchup.js), every moment in full,
+        // so the page stays responsive. The worker returns the caught-up valley; any time that
+        // passed while it worked is then run here as before.
+        if (!h.worker && !h.workerDone && h.to - o.t > CATCHUP_WORKER_MIN && CatchupWorker.available()) {
+          h.worker = !0, h.workerFrom = o.t;
+          CatchupWorker.run(saveWorld(o), h.to, (m) => h.workerT = m.t).
+          then((m) => h.result = m).
+          catch((m) => (console.warn("catch-up worker failed, catching up here instead", m), h.worker = !1, h.workerDone = !0));
+        }
+        if (h.worker) {
+          if (h.result) {
+            let m = h.result;
+            h.result = null, h.worker = !1, h.workerDone = !0;
+            let x = loadWorld(m.save);
+            for (let y of m.events) h.events.push(y);
+            this.setWorld(x), o = this.world;
+          } else {
+            let m = ((h.workerT ?? h.workerFrom) - h.from) / Math.max(1, h.to - h.from);
+            t - h.started > 250 && this.hud.showCatchup(!0, m, `Catching up on ${durationText(h.to - h.from)}\u2026`);
+            return;
+          }
+        }
         let d = runUntil(o, a, performance.now() + 40, () => performance.now()),
           u = (o.t - h.from) / Math.max(1, h.to - h.from);
         if (
