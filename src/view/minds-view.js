@@ -6,46 +6,64 @@
 qc.gift =
   '<svg viewBox="0 0 24 24"><path d="M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" fill="currentColor"/><rect x="3" y="7" width="18" height="4" rx="1" fill="currentColor"/><path d="M12 7v14" stroke="#fff8ec" stroke-width="1.6"/><path d="M12 7c-1.5-3-5-3.5-5-1.5S10 7 12 7zm0 0c1.5-3 5-3.5 5-1.5S14 7 12 7z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
-var GIFT_CHOICES = [
-  ["rain", "A gentle rain", "waters the gardens and fills the ponds"],
-  ["seeds", "A scatter of seeds", "something to plant, and something to eat"],
-  ["warm", "A warm day", "dries everyone off and helps things grow"],
-  ["found", "Something to find", "a small mystery in the grass"],
-];
-
 function hoursText(sec) {
   let h = Math.floor(sec / 3600),
     m = Math.round((sec % 3600) / 60);
   return h ? `${h} hour${h === 1 ? "" : "s"}${m ? ` ${m} minute${m === 1 ? "" : "s"}` : ""}` : `${Math.max(1, m)} minute${m === 1 ? "" : "s"}`;
 }
 
+// BELIEF (Phase 3B): what they make of the gifts. They come to believe the creek gives.
 function beliefSummary(w) {
   let alive = w.creatures.filter((c) => !c.visitor),
-    seen = alive.filter((c) => c.beliefs && c.beliefs.seen > 0),
-    believers = alive.filter((c) => c.beliefs && c.beliefs.giver > 0.5);
+    bs = believers(w);
   if (!(w.gifts || []).length) return "They haven't had a gift yet.";
   let bits = [];
+  let doubt = alive.length - bs.length;
   bits.push(
-    believers.length
-      ? `${believers.length} of ${alive.length} believe someone watches over the valley and sends the gifts${giverName(w).startsWith('"') ? `; they call the giver ${giverName(w)}` : ""}.`
-      : `Most think the gifts are just luck${seen.length ? ", or the creek's doing" : ""}.`,
+    bs.length
+      ? `${bs.length === alive.length ? "All" : bs.length > alive.length / 2 ? "Most" : bs.length === 1 ? "One" : "Some"} of them believe the creek gives them what they need${giverName(w).startsWith('"') ? `; they call it ${giverName(w)}` : ""}.${doubt > 0 && bs.length > 1 ? ` ${doubt === 1 ? "One still says" : doubt + " still say"} it's only luck.` : ""}`
+      : `Most think the gifts are just luck${alive.some((c) => c.beliefs && c.beliefs.giver > 0.3) ? ", though some wonder if the creek has something to do with it" : ""}.`,
   );
-  if (w.customs && w.customs.thanks) bits.push(`When a gift comes, it's the custom to ${GESTURE_FIRST[w.customs.thanks.g].replace(/my /, "your ")}.`);
-  if (w.giftPatternNoticed) bits.push("They've noticed the gifts come about twice a day.");
-  if (w.giftsStopped) bits.push("Lately the gifts have stopped, and they wonder why.");
+  if (w.spring && w.spring.found) bits.push("They say the creek's gifts come from the Spring, where the creek begins.");
+  if (w.customs && w.customs.thanks) bits.push(`When the creek gives, it's the custom to ${GESTURE_FIRST[w.customs.thanks.g].replace(/my /, "your ")}.`);
+  if (w.giftRhythm) bits.push(`They've noticed that ${rhythmText(w.giftRhythm)}.`);
+  if (w.giftsStopped) bits.push(`Lately the gifts haven't come. "The creek is resting," they say, and a lantern burns at the Giving Place.`);
   return bits.join(" ");
+}
+
+function requestLine(w) {
+  let r = w.request;
+  if (!r || w.t >= r.until) return "";
+  let c = w.byId[r.by],
+    k = GIFT_KINDS[r.kind];
+  return `<p class="ask"><b>${escapeHtml(c ? c.name : r.name)} asked the creek for ${escapeHtml((k.phrase || k.label).replace(/^an? /, "").replace(/^a /, ""))}</b> <small>"${escapeHtml(r.why[0].toUpperCase() + r.why.slice(1))}."</small></p>`;
+}
+
+function offeringsLine(w) {
+  let of = w.offerings;
+  if (!of || !of.total) return "";
+  let names = { bead: ["carved bead", "carved beads"], flower: ["flower", "flowers"], pebble: ["pretty pebble", "pretty pebbles"], ring: ["woven ring", "woven rings"], feather: ["feather", "feathers"], shell: ["creek shell", "creek shells"], whistle: ["reed whistle", "reed whistles"], figure: ["little clay figure", "little clay figures"], water: ["cup of spring water", "cups of spring water"] };
+  let parts = Object.entries(of.n)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${n === 1 ? "a" : n} ${(names[k] || [k, k + "s"])[n === 1 ? 0 : 1]}`);
+  return `<p class="muted">Left for you at the Giving Place: ${escapeHtml(parts.length > 1 ? parts.slice(0, -1).join(", ") + " and " + parts.at(-1) : parts[0])}.</p>`;
 }
 
 Hud.prototype.giftHTML = function () {
   let w = this.w,
     ready = giftReady(w),
-    last = (w.gifts || [])[w.gifts ? w.gifts.length - 1 : 0];
-  let body = ready
-    ? `<p class="muted">Once every twelve hours you can send the valley one gift. It will help things grow, and the creekfolk will make of it what they will.</p><ul class="list">${GIFT_CHOICES.map(
-        ([k, t, d]) => `<li><button class="pill" data-act="gift" data-kind="${k}">${t}</button><small>${d}</small></li>`,
-      ).join("")}</ul>`
-    : `<p>Your next gift can be sent in ${hoursText(giftWaitSeconds(w))}.</p>${last ? `<p class="muted">Last time: ${escapeHtml(giftText(last.what).toLowerCase())}, ${agoText(w.t - last.t)}.</p>` : ""}`;
-  return this.header("A gift for the valley", "once every twelve hours") + `<div class="sh-body">${body}<h4>What they make of it</h4><p class="muted">${escapeHtml(beliefSummary(w))}</p></div>`;
+    last = (w.gifts || [])[w.gifts ? w.gifts.length - 1 : 0],
+    body = requestLine(w);
+  if (ready) {
+    body += `<p class="muted">Once every twelve hours you can send the valley one gift. It will help things grow, and the creekfolk will make of it what they will.</p>`;
+    for (let [g, gl] of GIFT_GROUPS)
+      body += `<h4>${gl}</h4><ul class="list gifts">${Object.entries(GIFT_KINDS)
+        .filter(([, k]) => k.group === g)
+        .map(([id, k]) => `<li><button class="pill${w.request && w.request.kind === id && w.t < w.request.until ? " on" : ""}" data-act="gift" data-kind="${id}">${k.label}</button><small>${k.hint}</small></li>`)
+        .join("")}</ul>`;
+  } else body += `<p>Your next gift can be sent in ${hoursText(giftWaitSeconds(w))}.</p>${last ? `<p class="muted">Last time: ${escapeHtml(giftText(last.what).toLowerCase())}, ${agoText(w.t - last.t)}.</p>` : ""}`;
+  body += `<h4>What they make of it</h4><p class="muted">${escapeHtml(beliefSummary(w))}</p>` + offeringsLine(w);
+  return this.header("A gift for the valley", "once every twelve hours") + `<div class="sh-body">${body}</div>`;
 };
 
 (function () {
@@ -54,9 +72,11 @@ Hud.prototype.giftHTML = function () {
     if (t === "gift") {
       if (this.catching) return this.hud.toast("The valley is still catching up.");
       let r = giveGift(this.world, e.kind);
-      if (!r) return this.hud.toast("Not yet. Gifts come once every twelve hours.");
+      if (!r) return this.hud.toast(giftReady(this.world) ? "That gift can't be given just now." : "Not yet. Gifts come once every twelve hours.");
       this.hud.close();
-      this.hud.toast({ rain: "You sent a gentle rain.", seeds: "You scattered seeds in the grass.", warm: "You sent a warm day.", found: "You left something in the grass for them to find." }[r.kind]);
+      let k = GIFT_KINDS[r.kind],
+        say = { found: "You left something in the grass for them to find.", seeds: "You scattered seeds in the grass.", dream: "You sent one of them a dream." }[r.kind] || `You sent ${(k.phrase || r.what || k.label).replace(/^A /, "a ")}.`;
+      this.hud.toast(say + (r.asked ? ` ${this.world.byId[r.asked] ? this.world.byId[r.asked].name : "They"} had asked the creek for it.` : ""));
       this.save();
       return;
     }
@@ -75,13 +95,14 @@ function storiesTabHTML(w, c) {
   let b = c.beliefs || {},
     out = "";
   let belief =
-    !b.seen
+    !b.seen && !(b.giver > 0.35)
       ? "Hasn't seen a gift yet."
       : b.giver > 0.6
-        ? `Believes someone watches over the valley and sends the gifts${favoriteWord(c, "giver") ? `, and calls them "${favoriteWord(c, "giver")}"` : ""}.`
+        ? `Believes the creek gives them what they need${favoriteWord(c, "giver") ? `, and calls it "${favoriteWord(c, "giver")}"` : ""}.`
         : b.giver > 0.35
-          ? "Wonders whether someone sends the gifts."
+          ? "Wonders whether the creek has something to do with the gifts."
           : "Thinks the gifts are just luck.";
+  if (b.beyond) belief += " But they're sure the gifts themselves come from someone beyond the valley, someone who looks in on them. They wave at the sky.";
   out += `<h4>The gifts</h4><p>${escapeHtml(belief)}${b.thanks && b.giver > 0.6 ? ` <small>Says thank you when one comes: ${escapeHtml(GESTURE_ING[b.thanks])}.</small>` : ""}</p>`;
   if (c.treasure) out += `<p class="muted">Keeps ${escapeHtml(c.treasure)} they found in the grass.</p>`;
   let lore = Object.entries(c.lore || {})
@@ -157,7 +178,8 @@ function villageCustomsHTML(w) {
     cu = w.customs || {};
   if (cu.passing && cu.passing.custom) out.push(`When someone passes, they ${OFFERINGS[cu.passing.custom][1]} for them.`);
   if (cu.seasons && cu.seasons.n >= 2) out.push(`They gather together whenever the season turns.`);
-  if (cu.thanks) out.push(`When a gift arrives, they ${GESTURE_FIRST[cu.thanks.g].replace(/my /, "their ")} to say thank you.`);
+  if (cu.thanks) out.push(`When the creek gives, they ${GESTURE_FIRST[cu.thanks.g].replace(/my /, "their ")} to say thank you.`);
+  if (w.givingPlace && (w.stats.gifts || 0) > 0) out.push(`They mark every giving day with a notch on the Giving Stone: ${w.stats.gifts} so far.`);
   let lost = Object.keys(w.lost || {});
   let html = out.length ? `<h4>Village customs</h4><ul class="list">${out.map((t) => `<li><span>${escapeHtml(t)}</span></li>`).join("")}</ul>` : "";
   html += `<h4>The gifts</h4><p class="muted">${escapeHtml(beliefSummary(w))}</p>`;

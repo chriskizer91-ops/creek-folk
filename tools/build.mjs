@@ -16,7 +16,7 @@ import { transform } from 'esbuild';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dev = process.argv.includes('--dev');
-export const BUILD_VERSION = '3a';
+export const BUILD_VERSION = '3b';
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 // Order matters: later files may use names from earlier ones.
@@ -26,7 +26,9 @@ export const SIM_FILES = [
   'src/sim/creek.js',     // the creek model: floods, ponds, water table, Stage 0 wetland
   'src/sim/life.js',      // ages, stages, births, passings, leaving downstream
   'src/sim/minds.js',     // stories and myths, named places, customs, lost skills, visitors
+  'src/sim/fauna.js',     // gifts that live: flowers, fruit trees, goats, bees, fish, birds
   'src/sim/gift.js',      // the player's gift and beliefs about the giver
+  'src/sim/temple.js',    // the temple to the creek, and the great project for valleys with no giver
   'src/sim/hooks.js',     // small patches that connect life and calendar to the core
   'src/sim/api.js',       // the surface used by the app, the worker and the tests
 ];
@@ -39,6 +41,7 @@ const VIEW_FILES = [
   'src/view/dev.js',      // hidden developer menu
   'src/view/patches.js',  // small patches that connect the new parts to the view
   'src/view/minds-view.js', // the gift button, stories, places, customs and beliefs in the HUD
+  'src/view/belief-view.js', // the gift sheet, the Temple tab, the temple, animals, offerings, sky
   'src/view/boot.js',     // starts the app
 ];
 

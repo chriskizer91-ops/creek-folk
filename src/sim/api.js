@@ -39,5 +39,18 @@ var CreekSim = {
   creekPondLevels,
   creekCells,
   creekBumpiness,
+  // Phase 3B: belief and the temple
+  GIFT,
+  GIFT_KINDS,
+  giftNeedWhy,
+  giftRhythm,
+  rhythmText,
+  believers,
+  mostBelieve,
+  TEMPLE,
+  templePace,
+  giftRate,
+  paceOfRate,
+  STRUCTURES,
   devTrigger,
 };

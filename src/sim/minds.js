@@ -92,7 +92,7 @@ function sameVersion(a, b) {
 function storyText(w, s, v) {
   let where = v.where ? ` at ${v.where}` : "",
     big = v.big || 0,
-    sent = ["founding", "storm", "gift", "frogs"].includes(s.kind),
+    sent = ["founding", "storm", "gift", "frogs", "spring"].includes(s.kind),
     why = v.why === "giver" ? (sent ? `, sent by ${giverName(w)}` : `, with the blessing of ${giverName(w)}`) : v.why === "creek" ? ", because the creek wished it" : v.why === "elders" ? ", as the elders had said it would" : "";
   switch (s.kind) {
     case "founding":
@@ -117,6 +117,15 @@ function storyText(w, s, v) {
       return `The frogs came back to the marsh${where}${why}${big ? ", singing all at once on the same night" : ""}.`;
     case "lost":
       return `Once, long ago, the creekfolk knew ${SKILL_TEXT[v.what] || v.what}${v.who ? `; ${v.who} was the last who did` : ""}.`;
+    // BELIEF (Phase 3B)
+    case "temple":
+      return `The creekfolk began the ${v.what}${v.where ? ` at ${v.where}` : ""}${why}${big ? (big >= 2 ? ", and the creek sang all night" : ", on the first warm morning of the year") : ""}.`;
+    case "temple-wait":
+      return `The ${v.what} stood half-built while the creek rested${why}${big ? (big >= 2 ? ", and not a single stone was lost" : ", and the lantern never went out") : ""}.`;
+    case "temple-done":
+      return `The ${v.what} was finished${v.n ? ` after ${daysWord(v.n)}` : ""}${why}${big ? (big >= 2 ? ", and the creek ran gold that evening" : ", and everyone slept on its steps") : ""}.`;
+    case "spring":
+      return `${v.who} walked up past the head of the valley and found the spring where the creek begins${why}${big ? (big >= 2 ? ", and drank from it, and came back a head taller" : ", and the water was warm as milk") : ""}.`;
   }
   return "Something happened, long ago.";
 }
@@ -140,13 +149,13 @@ function retell(w, teller, listener, s, v) {
   let rng = w.rng,
     l = teller.lore[s.id],
     age = (w.t - s.t) / 86400,
-    p = MINDS.driftBase * (l.first ? 0.5 : 1) * (1 + Math.min(1.5, age / 20)) * (listener.stage === "child" ? 1.4 : 1) * (teller.stage === "elder" ? 0.8 : 1) * (0.7 + 0.6 * teller.temp.curiosity);
+    p = MINDS.driftBase * (s.carved ? 0.5 : 1) * (l.first ? 0.5 : 1) * (1 + Math.min(1.5, age / 20)) * (listener.stage === "child" ? 1.4 : 1) * (teller.stage === "elder" ? 0.8 : 1) * (0.7 + 0.6 * teller.temp.curiosity);
   if (!rng.chance(p)) return v;
   let nv = { ...v },
     ops = [];
   if (nv.n != null) ops.push("n");
   if (nv.who != null && s.kind !== "founding") ops.push("who", "who");
-  if (["founding", "storm", "gift", "frogs", "discovery", "built"].includes(s.kind)) ops.push("why");
+  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring"].includes(s.kind)) ops.push("why");
   ops.push("big", "big");
   if (s.x != null) ops.push("where");
   let op = rng.pick(ops);
@@ -273,6 +282,10 @@ function shortAbout(w, s) {
     gift: "the gift",
     frogs: "the frogs coming back",
     lost: "what was forgotten",
+    temple: "how the great work began",
+    "temple-wait": "the time the creek rested",
+    "temple-done": "the great work's finishing",
+    spring: "who found the spring",
   }[s.kind] || "the old days";
 }
 
@@ -568,7 +581,7 @@ function visits(w, force = false) {
   register(w, c);
   w.creatures.push(c);
   w.stats.visits = (w.stats.visits || 0) + 1;
-  let news = w.rng.pick(DOWNSTREAM_NEWS);
+  let news = springNews(w, c) || w.rng.pick(DOWNSTREAM_NEWS); // BELIEF: news of the spring comes first
   logEvent(w, 3, `${c.name} came back up the creek to visit! They say ${news}.`, [c.id], edge, "visit");
   newStory(w, "news", { who: c.name, what: news }, edge, 2, [c]);
   for (let o of w.creatures) {

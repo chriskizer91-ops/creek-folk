@@ -131,6 +131,7 @@ function lifeTick(w) {
   housing(w);
   mindsTick(w); // stories, myths, visitors (minds.js)
   giftTick(w); // gifts that stopped, found objects (gift.js)
+  templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -295,6 +296,7 @@ function bear(w, a, b) {
   for (let k in c.interests) c.interests[k] = +clamp((a.interests[k] + b.interests[k]) / 2 + w.rng.normal() * 0.12, 0.05, 0.95).toFixed(3);
   c.fearWater = +clamp(0.35 + c.temp.caution * 0.4, 0.05, 0.9).toFixed(3);
   initLife(w, c, w.t, { parents: [a.id, b.id], gen: Math.max(a.gen || 0, b.gen || 0) + 1 });
+  inheritBelief(w, c, a, b); // BELIEF: children grow up with their family's belief (gift.js)
   if (nm.honors) c.honors = nm.honors;
   c.home = null;
   c.sleepSpot = home ? { x: home.x, z: home.z } : null;
@@ -396,6 +398,8 @@ function passOn(w, c) {
   let age = ageDays(w, c),
     near = w.creatures.filter((o) => o !== c && o.act && o.plan && o.plan.goal === "vigil" && o.plan.with === c.id);
   let rec = lineageRecord(w, c);
+  w.lastPassing = Math.round(w.t);
+  passBeyond(w, c); // BELIEF: the one who believes in you passes it on (gift.js)
   rec.died = Math.round(w.t);
   rec.age = +age.toFixed(1);
   rec.children = (c.children || []).slice();
@@ -572,6 +576,7 @@ function depart(w, c) {
   let near = w.creatures.filter((o) => o !== c && o.plan && o.plan.goal === "vigil" && (o.plan.with === c.id || (c.leaving && o.plan.with === c.leaving.with)));
   let rec = lineageRecord(w, c);
   rec.left = Math.round(w.t);
+  passBeyond(w, c); // BELIEF: the one who believes in you passes it on before going
   rec.age = +ageDays(w, c).toFixed(1);
   rec.children = (c.children || []).slice();
   rec.partner = c.partner;
@@ -784,6 +789,8 @@ function arriveTraveler(w) {
   logEvent(w, 3, `A traveler came up the creek from somewhere downstream: ${c.name}. They looked around for a long while, and stayed.`, [c.id], at, "arrival");
   remember(w, c, "life", "I followed the creek upstream and found this valley. I think I will stay.", 0.9, { x: at.x, z: at.z, pv: 0.3 });
   newStory(w, "arrival", { who: c.name }, at, 2, witnessesNear(w, at, 14, [c])); // MINDS
+  let spring = springNews(w, c); // BELIEF: a traveler may bring news of the spring
+  if (spring) logEvent(w, 3, `${c.name} says that ${spring}.`, [c.id], at, "spring");
   c.asleep = false;
   c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 8, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
   schedule(w, w.t + 8, "A", c.id, c.tok);

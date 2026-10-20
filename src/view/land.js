@@ -11,6 +11,7 @@
 // above the ground, so its edges follow the floor's hollows and side channels.
 // ==========================================================================
 
+var LAND_SNOW = new wt(0.93, 0.95, 0.98);
 var LAND = {
   straw: new wt(0xb8a466),
   dust: new wt(0x9a8058),
@@ -225,7 +226,8 @@ GroundView = class {
       let y = clamp((x - a) / (b - a), 0, 1);
       return y * y * (3 - 2 * y);
     };
-    let corners = [[0, 0], [0, 1], [1, 0], [1, 0], [0, 1], [1, 1]];
+    let corners = [[0, 0], [0, 1], [1, 0], [1, 0], [0, 1], [1, 1]],
+      snow = snowLevel(w); // BELIEF: a snow day (belief-view.js)
     for (let d = 0; d < this.GL; d++)
       for (let u = 0; u < this.GW; u++) {
         let k = d * this.GW + u,
@@ -269,6 +271,7 @@ GroundView = class {
             R > 0.7 && g.lerp(B ? LAND.marsh3a : LAND.marsh3b, ss(0.7, 1, R) * 0.6);
           }
           if (E > 0) g.lerp(R > 0.45 ? LAND.pathWet : E > 0.6 ? LAND.path2 : LAND.path, E);
+          if (snow > 0 && !(R > 0.6) && !(cut > 0.06 && kind === LAND_KIND.bed)) g.lerp(LAND_SNOW, snow * (0.78 + 0.18 * hash01(k * 3 + M)));
           if (this.overlay && vin) this.overlayColor(g, this.overlay, vx, vz, G, R, E);
           let s = M < 3 ? 1 : 0.97,
             N = (k * 6 + M) * 3;
@@ -281,7 +284,7 @@ GroundView = class {
     // the grass tufts dry with the land
     if (this.tuftMat) {
       let dry = 1 - (cr ? 0.5 * cr.greenNow + 0.5 * soil : 1);
-      this.tuftMat.color.setRGB(1 + 0.45 * dry, 1 + 0.12 * dry, 1 - 0.45 * dry);
+      this.tuftMat.color.setRGB(1 + 0.45 * dry + 1.2 * snow, 1 + 0.12 * dry + 1.4 * snow, 1 - 0.45 * dry + 1.7 * snow);
     }
   }
   buildDecor() {
