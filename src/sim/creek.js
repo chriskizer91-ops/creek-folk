@@ -1058,9 +1058,13 @@ function creekDriest(w) {
   return cr && cr.driest.length ? cr.driest[cr.driest.length - 1] : null;
 }
 
-// Plain words for a share of the floor.
+// Plain words for a share of the floor: a short word ("a quarter"), or how much of
+// the floor (subject of a sentence: "About a quarter of the valley floor").
 function creekShareWords(f) {
-  return f <= 0.004 ? "none of it" : f < 0.04 ? "only a pool or two" : f < 0.15 ? "a little of it" : f < 0.3 ? "about a quarter" : f < 0.42 ? "about a third" : f < 0.6 ? "about half" : f < 0.85 ? "most of it" : f < 0.97 ? "nearly all of it" : "all of it";
+  return f <= 0.004 ? "none" : f < 0.04 ? "a pool or two" : f < 0.15 ? "a little" : f < 0.3 ? "a quarter" : f < 0.42 ? "a third" : f < 0.6 ? "half" : f < 0.85 ? "most" : f < 0.97 ? "nearly all" : "all";
+}
+function creekShareOfFloor(f) {
+  return f <= 0.004 ? "none of the valley floor" : f < 0.04 ? "only a pool or two" : f < 0.15 ? "a little of the valley floor" : f < 0.3 ? "about a quarter of the valley floor" : f < 0.42 ? "about a third of the valley floor" : f < 0.6 ? "about half the valley floor" : f < 0.85 ? "most of the valley floor" : f < 0.97 ? "nearly all the valley floor" : "all of the valley floor";
 }
 
 // Stage of the creek at z (for the dev overlay and the panel).

@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+const [file, out] = process.argv.slice(2);
+const save = fs.readFileSync(file, 'utf8');
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+await page.goto('file://' + process.cwd() + '/dist/creekfolk.html');
+await page.waitForFunction(() => window.__creek && window.__creek.world, null, { timeout: 30000 });
+await page.evaluate(async (s) => { const w = JSON.parse(s); w.realStart = Date.now() - w.t * 1000; w.skip = 0; window.__creek.world = null; await window.__creek.store.put('main', JSON.stringify(w)); }, save);
+await page.reload();
+await page.waitForFunction(() => window.__creek && window.__creek.world, null, { timeout: 60000 });
+await page.evaluate(() => document.querySelectorAll('[data-go], .summary button').forEach((b) => b.click()));
+await page.evaluate(() => __creek.hud.open('village'));
+await page.waitForTimeout(2500);
+console.log(await page.evaluate(() => document.querySelector('.sh-body')?.innerText.slice(0, 1500)));
+await page.screenshot({ path: out });
+await browser.close();

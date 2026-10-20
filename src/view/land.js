@@ -857,13 +857,14 @@ function villageLandHTML(w) {
   h += `<h4>At the driest time of year</h4>`;
   if (dr.length) {
     let last = dr[dr.length - 1];
-    h += `<p>At the driest point of last year, <b>${escapeHtml(creekShareWords(last.wet))}</b> of the valley floor stayed wet.</p>`;
+    h += `<p>At the driest point of last year, <b>${escapeHtml(creekShareOfFloor(last.wet))}</b> stayed wet.</p>`;
     if (dr.length > 1) h += `<p class="muted">The last few years at their driest: ${dr.map((d) => escapeHtml(creekShareWords(d.wet))).join(" → ")}.</p>`;
   } else h += `<p>The valley hasn’t come through a dry season yet.</p>`;
   h += `<h4>The creek now</h4><p>${escapeHtml(dateText(w))}: ${s.wetSeason ? "the wet season, when storms come and the creek runs" : "the dry season"}. `;
   h += flowing >= VL - 4 ? "The creek is running the whole length of the valley." : flowing > 8 ? `The creek runs for ${flowing > VL / 2 ? "most" : "part"} of the valley, then sinks into its bed.` : "The creek has stopped flowing; only pools hold water.";
-  h += ` ${escapeHtml(creekShareWords(cr.wetNow))} of the floor is wet right now.</p>`;
+  let now = creekShareOfFloor(cr.wetNow);
+  h += ` Right now ${escapeHtml(now)} ${now.startsWith("only") ? "hold" : "is"} water or marsh.</p>`;
   h += `<p>${healed > 0.8 ? "Almost the whole creek has healed: it has filled its old trench and spread back over its floor." : healed > 0.3 ? "In long stretches the creek has filled its old trench and reaches its floor again." : filling > 0.3 ? "Behind the dams the creek is filling its trench back up with gravel and mud." : "The creek is cut down into a trench below its old floor, so floods can’t spread out and the floor dries."}</p>`;
-  if (dams.length) h += `<p class="muted">${dams.length} dam${dams.length > 1 ? "s" : ""} across the creek${held < dams.length ? `, ${dams.length - held} of them not holding (the water below is too far down)` : ""}. Dams built up: ${w.stats.raises || 0} times.</p>`;
+  if (dams.length) h += `<p class="muted">${dams.length} dam${dams.length > 1 ? "s" : ""} across the creek${held < dams.length ? `, ${dams.length - held === 1 ? "one" : dams.length - held} of them not holding (the water below is too far down)` : ""}. ${w.stats.raises ? ` As ponds silted up, dams have been built up ${w.stats.raises === 1 ? "once" : w.stats.raises + " times"}.` : ""}</p>`;
   return h;
 }

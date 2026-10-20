@@ -13,32 +13,36 @@ what is done.
 5. The plan for the part you are on, e.g. `docs/phase3a-plan.md`.
 
 ## Where things stand
-_Last updated: 2026-10-20, Phase 3A started._
+_Last updated: 2026-10-20, Phase 3A built; being measured before showing the author._
 
 | Part | State | Branch |
 |---|---|---|
 | Phase 1: foundation | done, shown to the author | `main` (`releases/creekfolk-phase1.html`) |
 | Phase 2: minds | done, shown to the author | `main` (`releases/creekfolk-phase2.html`) |
-| Phase 3A: the land | in progress, see the table below | `phase-3a` |
+| Phase 3A: the land | built; final measurements and report in progress | `phase-3a` |
 | Phase 3B: belief and the temple | not started | |
 | Phase 3C: life and the ending | not started | |
 | Phase 4: visuals | not started | |
 | Phase 5: year tests (two years) | not started | |
 
-Phase 3A pieces (details in `docs/phase3a-plan.md`):
+Phase 3A pieces (details in `docs/phase3a-plan.md`, results in `docs/PHASE3A.md`):
 
 | Piece | State |
 |---|---|
-| Versioned saves, two builds, dev build tools | not started |
-| 8-day year, wet and dry seasons, seasonal weather | not started |
-| Bigger valley grid (80 x 160) and new terrain | not started |
-| Creek model port (`src/sim/creek.js`) and lab harness | design done, code not started |
-| Hydrology: drying, ponds through the dry season, water table, wet-at-driest | not started |
-| Stage 0 spreading | not started |
-| Dams on the model, drop rule, "downstream first" knowledge, raising | not started |
-| Capacity from the creek, village panel lines | not started |
-| Drawing the creek, ponds and floor water from the model | not started |
-| Measurements, determinism, year-arc runs, screenshots, report `docs/PHASE3A.md` | not started |
+| Versioned saves, two builds, dev build tools | done (`store.js`, `dev.js`, `build.mjs`); tested in `tools/browser-dev.mjs` |
+| 8-day year, wet and dry seasons, seasonal weather | done (`calendar.js`, `changeWeather`) |
+| Bigger valley grid (80 x 160) and new terrain | done (`Terrain` in `core.js`) |
+| Creek model port (`src/sim/creek.js`) and lab harness | done; `tools/creek-lab.cjs` |
+| Hydrology: drying, ponds through the dry season, water table, wet-at-driest | done |
+| Stage 0 spreading | done (`creekSpread`); look will be refined in Phase 4 |
+| Dams on the model, drop rule, "downstream first" knowledge, raising, aprons | done |
+| Capacity from the creek, village panel Land tab | done |
+| Drawing the creek, ponds and floor water from the model | done (`src/view/land.js`) |
+| Measurements, determinism, year-arc runs, screenshots, report | in progress |
+
+Known gaps left for later parts: beavers and the Returning (3C; the dev menu has
+disabled buttons for them), the sky calendar (no sky calendar exists yet;
+`daysToMidwinter()` is ready for it), the creek's main channel does not migrate.
 
 ## Rules the author has set
 - Finish a part, then **stop and show the author** before starting the next part.

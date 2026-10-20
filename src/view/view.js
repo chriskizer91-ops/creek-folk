@@ -3559,8 +3559,8 @@ void main(){
         this.renderer.shadowMap.enabled = !!e.shadows,
         this.renderer.shadowMap.type = Is,
         this.scene = new _r(),
-        this.camera = new ln(26, 1, 1, 260),
-        this.scene.fog = new wo(12575743, 70, 190),
+        this.camera = new ln(26, 1, 1, 340), // CREEK: a longer valley
+        this.scene.fog = new wo(12575743, 95, 280),
         this.hemi = new Fo(13625599, 5601850, 1.2),
         this.scene.add(this.hemi),
         this.sun = new Ho(16773590, 2.2),
