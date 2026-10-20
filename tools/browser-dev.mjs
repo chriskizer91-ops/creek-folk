@@ -49,5 +49,18 @@ if (snaps.length) {
   await page.waitForTimeout(3000);
   console.log('restored to t =', await page.evaluate(() => __creek.world.t.toFixed(0)), '| note:', await page.evaluate(() => __creek.dev.note));
 }
+// a valley from another build is refused, in the author's words
+import fs from 'node:fs';
+const old = fs.existsSync('runs/worlds/p2-year-1-day150.json') ? fs.readFileSync('runs/worlds/p2-year-1-day150.json', 'utf8') : null;
+if (old) {
+  await page.evaluate(() => { document.querySelectorAll('#devmenu [data-x]').forEach((b) => b.click()); __creek.importSave(); });
+  await page.waitForTimeout(500);
+  await page.fill('#importtext', old);
+  await page.click('text=Load');
+  await page.waitForTimeout(800);
+  const msg = await page.evaluate(() => [...document.querySelectorAll('.dialog, .card, [role=dialog]')].map((e) => e.innerText).join(' | '));
+  console.log('importing a Phase 2 save:', msg.replace(/\s+/g, ' ').slice(0, 220));
+  await page.screenshot({ path: 'shots/dev-import-refused.png' });
+}
 console.log(logs.join('\n') || '(no errors)');
 await browser.close();

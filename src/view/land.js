@@ -458,7 +458,8 @@ GroundView = class {
     if (!changed && t - this.lastPaint < 2) return;
     this.lastPaint = t;
     this.paint(t);
-    this.syncChannel();
+    // the trench's colours follow the season slowly; its shape follows the creek
+    if (changed || t - (this.lastChannel || -99) > 12) (this.lastChannel = t), this.syncChannel();
   }
 };
 

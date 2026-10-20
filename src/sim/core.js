@@ -6551,15 +6551,14 @@
     } else if (e === "meeting")
     l = 4, c = 8, h = "where everyone passes by";else
     if (e === "garden") {
-      for (let d = 0; d < 40; d++) {
-        let u = n.randomPoint(s, {
-          side: n.side(o.x, o.z),
-          minEdge: 2.8,
-          maxEdge: 7,
-          near: { x: o.x, z: o.z, r: 14 }
-        });
-        if (u && siteFor(i, u.x, u.z, r, e))
-        return { ...u, why: "near the creek for water" };
+      // CREEK: at the edge of the valley floor near home, where the low ground begins:
+      // damp from below once the creek heals, but above the floor that turns to marsh
+      let sg = o.x < n.axisX(o.z) ? -1 : 1;
+      for (let d = 0; d < 48; d++) {
+        let z = clamp(o.z + s.range(-12, 12) * (1 + d / 16), 8, VL - 8),
+          x = n.axisX(z) + sg * (n.floorHW(z) + s.range(0.4, 2.6) + d * 0.04);
+        if (n.walkable(x, z) && siteFor(i, x, z, r, e))
+        return { x, z, why: "where the low ground begins, for water" };
       }
       return null;
     } else if (e === "chimes")
