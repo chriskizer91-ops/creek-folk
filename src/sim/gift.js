@@ -464,17 +464,18 @@ function numberWords(n) {
   n = Math.round(n);
   if (n < 20) return NUMBER_WORDS[n];
   if (n < 100) return TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? "-" + NUMBER_WORDS[n % 10] : "");
+  if (n < 1000) return NUMBER_WORDS[Math.floor(n / 100)] + " hundred" + (n % 100 ? " and " + numberWords(n % 100) : "");
   return String(n);
 }
 var HOUR_PHRASE = { dawn: "at dawn", morning: "in the morning", midday: "at midday", afternoon: "in the afternoon", dusk: "at dusk", night: "in the night" };
 
-// The rhythm of the last few gifts, if there is one: { days, when } (when may be null).
 // How long without a gift before they say the creek is resting: three days, or half again
 // the rhythm they know, so a player who comes every four days isn't "away" every time.
 function restAfter(w) {
   return Math.max(GIFT.restDays * 86400, w.giftRhythm ? 1.5 * w.giftRhythm.days * getDayLength() : 0);
 }
 
+// The rhythm of the last few gifts, if there is one: { days, when } (when may be null).
 function giftRhythm(w, n = 4) {
   let g = (w.gifts || []).slice(-(n + 1));
   if (g.length < n + 1) return null;
