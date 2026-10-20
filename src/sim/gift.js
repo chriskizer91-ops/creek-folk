@@ -355,8 +355,18 @@ function beliefOpenness(c) {
   let t = c.temp;
   return 0.5 + t.curiosity * 0.8 - t.caution * 0.35 + (c.stage === "child" ? 0.3 : 0);
 }
-function beliefCap(c) {
-  return clamp(0.85 * beliefOpenness(c) - 0.11, 0.3, 1);
+// The least open grown-ups of their own valley (about one in seven) stay doubters.
+var doubtCache = new WeakMap();
+function doubtLine(w) {
+  let c = doubtCache.get(w);
+  if (c && c.t === w.t) return c.v;
+  let os = w.creatures.filter((o) => !o.visitor && o.stage !== "child").map(beliefOpenness).sort((a, b) => a - b),
+    v = os.length >= 5 ? os[Math.floor(os.length * 0.15)] : -1e9;
+  doubtCache.set(w, { t: w.t, v });
+  return v;
+}
+function beliefCap(w, c) {
+  return c.stage !== "child" && beliefOpenness(c) < doubtLine(w) ? 0.45 : 1;
 }
 
 function noticeGift(w, c, kind, what, need, mult = 1) {
@@ -366,7 +376,7 @@ function noticeGift(w, c, kind, what, need, mult = 1) {
     // The curious look for reasons; the cautious and incurious shrug.
     openness = beliefOpenness(c),
     gain = (0.06 + 0.16 * need) * clamp(openness, 0.15, 1.5) * (1 + 0.2 * Math.min(5, b.seen)) * mult;
-  b.giver = +clamp(Math.min(Math.max(b.giver, beliefCap(c)), b.giver + gain * (1 - b.giver)), 0, 1).toFixed(3);
+  b.giver = +clamp(Math.min(Math.max(b.giver, beliefCap(w, c)), b.giver + gain * (1 - b.giver)), 0, 1).toFixed(3);
   b.seen++;
   b.lastSeen = Math.round(w.t);
   let heard = mult < 0.7, // heard about it from the others
@@ -658,7 +668,7 @@ function giftChat(w, a, b) {
   if (Math.abs(diff) < 0.05) return;
   let r = relation(b, a),
     trust = honestyRate(r) * (0.5 + clamp(r.warmth, 0, 1));
-  bb.giver = +clamp(bb.giver + diff * 0.1 * trust * (b.stage === "child" ? 2 : 1), 0, diff > 0 ? Math.max(bb.giver, beliefCap(b)) : 1).toFixed(3);
+  bb.giver = +clamp(bb.giver + diff * 0.1 * trust * (b.stage === "child" ? 2 : 1), 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
   if (ba.giver > 0.5 && bb.giver > 0.3) wordFor(w, b, "giver");
   if (Math.abs(diff) > 0.55 && a.stage !== "child" && b.stage !== "child" && w.rng.chance(0.12) && w.t - (w.lastArgument || -1e9) > 86400) {
     w.lastArgument = w.t;
@@ -675,7 +685,7 @@ function giftChat(w, a, b) {
 // A child grows up with its family's belief.
 function inheritBelief(w, c, a, b) {
   let g = ((a.beliefs ? a.beliefs.giver : 0) + (b.beliefs ? b.beliefs.giver : 0)) / 2;
-  beliefsOf(c).giver = +Math.min(0.75 * g, beliefCap(c)).toFixed(3);
+  beliefsOf(c).giver = +Math.min(0.75 * g, beliefCap(w, c)).toFixed(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +768,8 @@ function giftTick(w) {
     logEvent(w, 3, c ? `The gifts haven't come for a while. "The creek is resting," ${c.name} says. They left a lantern burning at the Giving Place, so the creek will know where to find them.` : "The gifts haven't come for a while. The creek must be resting.", c ? [c.id] : [], w.givingPlace || null, "belief");
     for (let o of w.creatures) if (beliefsOf(o).giver > 0.5) remember(w, o, "belief", "The creek is resting. It will give again when it's ready.", 0.7);
   }
+  // Doubters talk themselves back out of it: "it's only luck".
+  for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.45 && !c.visitor && beliefCap(w, c) < 0.5) c.beliefs.giver = +Math.max(0.45, c.beliefs.giver - 0.002).toFixed(4);
   // Faith fades only very slowly while the creek rests.
   if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - 0.0001 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
 }

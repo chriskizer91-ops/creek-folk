@@ -97,8 +97,8 @@ function drawHall(r, f, b) {
   panel(6, -HW - 0.1, hz - 0.6, Math.PI / 2);
   panel(7, HW + 0.1, hz - 0.6, Math.PI / 2);
   panel(10, -HW - 0.1, hz + 0.7, Math.PI / 2);
-  if (f(1, 8)) for (let i = 0; i < Math.round(6 * f(1, 8)); i++) for (let sg of [-1, 1]) P(lt(0.08, 0.06, 2 * HD + 0.6), PALETTE.plank, { x: sg * (0.4 + i * 0.4), y: postH + 1.0 - (0.4 + i * 0.4) * 0.45, z: hz, rz: sg * 0.42 });
-  if (f(1, 9)) for (let sg of [-1, 1]) P(lt(HW * 1.25, 0.1, (2 * HD + 0.7) * Math.max(0.2, f(1, 9))), sg < 0 ? PALETTE.tile : PALETTE.tile2, { x: sg * HW * 0.55, y: postH + 0.55, z: hz, rz: sg * 0.42 });
+  if (f(1, 8)) for (let i = 0; i < Math.round(6 * f(1, 8)); i++) for (let sg of [-1, 1]) P(lt(0.08, 0.06, 2 * HD + 0.6), PALETTE.plank, { x: sg * (0.4 + i * 0.4), y: postH + 1.0 - (0.4 + i * 0.4) * 0.45, z: hz, rz: -sg * 0.42 });
+  if (f(1, 9)) for (let sg of [-1, 1]) P(lt(HW * 1.25, 0.1, (2 * HD + 0.7) * Math.max(0.2, f(1, 9))), sg < 0 ? PALETTE.tile : PALETTE.tile2, { x: sg * HW * 0.55, y: postH + 0.62, z: hz, rz: -sg * 0.42 });
   if (f(1, 11)) P(lt(0.9, 1.4, 0.08), PALETTE.plank, { y: 0.7, z: hz - HD - 0.06 }), f(1, 11) >= 1 && [-0.7, 0.7].forEach((x) => P(Bn(0.09, 5, 4), PALETTE.glow, { x, y: 1.55, z: hz - HD - 0.2 }));
 }
 
@@ -251,10 +251,16 @@ var BeliefView = class {
     this.stars.frustumCulled = false;
     this.stars.visible = false;
     this.group.add(this.stars);
+    // the same stars, reflected in every pond and pool (what you see from above)
+    this.wstarMat = new Er({ color: 0xfff8e8, size: 3, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false });
+    this.wstars = new Co(new ye(), this.wstarMat);
+    this.wstars.frustumCulled = false;
+    this.wstars.visible = false;
+    this.group.add(this.wstars);
     let bands = [0xd04040, 0xe08a30, 0xe8d040, 0x50b050, 0x4070d0, 0x7050b0],
       rb = new Pe();
     bands.forEach((c, i) => {
-      let m = new Et(new zo(120 - i * 2.2, 1.1, 3, 64, Math.PI), new je({ color: c, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+      let m = new Et(new zo(34 - i * 1.15, 0.62, 3, 64, Math.PI), new je({ color: c, transparent: true, opacity: 0, fog: false, depthWrite: false }));
       rb.add(m);
     });
     this.rainbow = rb;
@@ -318,15 +324,30 @@ var BeliefView = class {
     let st = starryLevel(w) * clamp(night * 1.4, 0, 1);
     this.stars.visible = st > 0.01;
     if (this.stars.visible && camera) this.stars.position.copy(camera.position), (this.starMat.opacity = st);
+    this.wstars.visible = st > 0.01;
+    if (this.wstars.visible) {
+      if (this.wstarKey !== w.starry.from) (this.wstarKey = w.starry.from), this.waterStars(w);
+      this.wstarMat.opacity = st * (0.75 + 0.25 * Math.sin(clock * 2.7));
+    }
     // the rainbow, opposite the sun, over the valley
     let rl = rainbowLevel(w) * (1 - 0.7 * night);
-    this.rainbow.visible = rl > 0.01;
+    this.rainbow.visible = rl > 0.01 && !!camera;
     if (this.rainbow.visible) {
-      let fx = focus ? focus.x : VW / 2,
-        fz = focus ? focus.z : VL / 2;
-      this.rainbow.position.set(fx - 60, -20, fz + 40);
-      this.rainbow.rotation.y = 1.1;
-      for (let m of this.rainbow.children) m.material.opacity = 0.32 * rl;
+      // an arc just beyond what you're looking at, facing you, sized to the view
+      let look = window.__creek && window.__creek.rig ? window.__creek.rig.cur : focus,
+        fx = look ? look.x : VW / 2,
+        fz = look ? look.z : VL / 2,
+        dist = look && look.dist ? look.dist : 40,
+        dx = fx - camera.position.x,
+        dz = fz - camera.position.z,
+        d = Math.hypot(dx, dz) || 1,
+        R = 0.32 * dist;
+      dx /= d;
+      dz /= d;
+      this.rainbow.position.set(fx + dx * 0.12 * dist, this.h(fx, fz) - 0.15 * R, fz + dz * 0.12 * dist);
+      this.rainbow.rotation.set(0, Math.atan2(dx, dz), 0);
+      this.rainbow.scale.setScalar(R / 34);
+      for (let m of this.rainbow.children) m.material.opacity = 0.45 * rl;
     }
     // snow falling for most of a snow day
     let sn = w.snow && w.t >= w.snow.t0 && w.t < w.snow.t0 + 0.6 * (w.snow.until - w.snow.t0) ? 1 : 0;
@@ -343,6 +364,32 @@ var BeliefView = class {
       this.flakes.position.set(focus.x, this.h(focus.x, focus.z), focus.z);
       this.flakeMat.opacity = 0.85;
     }
+  }
+  // Points on standing water: pond nodes along the creek, and the floor's pools and marsh.
+  waterStars(w) {
+    let pts = [],
+      T = w.terrain,
+      c = creekCells(w),
+      W = w.wt;
+    if (W)
+      for (let k = 0; k < CELLS && pts.length < 1500; k += 1) {
+        if (!(W[k] > c.h[k] + 0.03) || hash01(k * 1.37) > 0.22) continue;
+        let x = (k % VW) + hash01(k * 3.1),
+          z = ((k / VW) | 0) + hash01(k * 5.3);
+        pts.push(x, W[k] + 0.03, z);
+      }
+    let cr = w.creek;
+    if (cr)
+      for (let i = 0; i < cr.nodes.length; i++) {
+        let n = cr.nodes[i],
+          lv = Math.max(n.wl, cr._pondNow ? cr._pondNow[i] : -1e9);
+        if (n.z < 0 || n.z > VL || lv - n.bed < 0.08) continue;
+        for (let j = 0; j < 3; j++) pts.push(T.creekX(n.z) + (hash01(i * 7 + j) - 0.5) * 1.6, lv + 0.03, n.z + hash01(i * 11 + j) * 2);
+      }
+    this.wstars.geometry.dispose();
+    let g = new ye();
+    g.setAttribute("position", new Zt(pts, 3));
+    this.wstars.geometry = g;
   }
   updateFlowers(w, f, season) {
     let n = f ? f.flowers.reduce((a, fl) => a + fl.patches.length, 0) : 0,

@@ -549,7 +549,7 @@ ACTIONS.journey = {
       newStory(w, "spring", { who: c.name }, at, 3, witnessesNear(w, c, 12, [c]));
       remember(w, c, "spring", "I found the spring where the creek begins. I drank from it. I'll never forget it.", 1, { x: at.x, z: at.z, pv: 0.8 });
       feel(c, w, "joy", 1);
-      for (let o of w.creatures) if (o.beliefs && o.beliefs.giver > 0.4) o.beliefs.giver = +Math.min(Math.max(o.beliefs.giver, beliefCap(o)), o.beliefs.giver + 0.05).toFixed(3);
+      for (let o of w.creatures) if (o.beliefs && o.beliefs.giver > 0.4) o.beliefs.giver = +Math.min(Math.max(o.beliefs.giver, beliefCap(w, o)), o.beliefs.giver + 0.05).toFixed(3);
     } else {
       sp.visits++;
       sp.lastVisit = Math.round(w.t);
