@@ -2649,11 +2649,20 @@
       // silted up: the bed behind it has risen almost to the crest
       let behind = cr.nodes[Math.max(0, d.i - 1)];
       n.silted = behind.bed >= d.crest - CREEK.siltGap && d.crest < node.fp + CREEK.raiseAbove ? 1 : 0;
-      if (n.silted && !n.building && !n.raise && (n.cond ?? 1) > 0.55 && i.t - (n.raiseAskT || 0) > 2 * VALLEY_DAY) {
+      // a silted dam that can't go higher until the water below it rises asks the dam
+      // below to be built up too, so a series climbs from the bottom up
+      if (n.silted && !creekSafeToRaise(i, n, CREEK.raiseStep)) {
+        let below = null;
+        for (let k = d.i + 1; k <= Math.min(cr.nodes.length - 1, d.i + 8) && !below; k++) below = cr._damAt[k];
+        let bs = below && i.byId[below.id];
+        if (bs && below.crest < cr.nodes[below.i].fp + CREEK.raiseAbove) bs.needUp = 1;
+      }
+      if ((n.silted || n.needUp) && !n.building && !n.raise && (n.cond ?? 1) > 0.55 && i.t - (n.raiseAskT || 0) > 2 * VALLEY_DAY) {
+        n.needUp = 0;
         n.cond = 0.55;
         n.raise = 1;
         n.raiseAskT = Math.round(i.t);
-        if (!n.siltNoted) {
+        if (!n.siltNoted && n.silted) {
           n.siltNoted = 1;
           logEvent(i, 1, `The pond behind the ${builtLevelDef(n).label} has filled with silt; it needs building up.`, [], n, "wetland");
         }

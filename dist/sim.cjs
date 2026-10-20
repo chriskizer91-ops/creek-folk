@@ -2652,11 +2652,20 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       // silted up: the bed behind it has risen almost to the crest
       let behind = cr.nodes[Math.max(0, d.i - 1)];
       n.silted = behind.bed >= d.crest - CREEK.siltGap && d.crest < node.fp + CREEK.raiseAbove ? 1 : 0;
-      if (n.silted && !n.building && !n.raise && (n.cond ?? 1) > 0.55 && i.t - (n.raiseAskT || 0) > 2 * VALLEY_DAY) {
+      // a silted dam that can't go higher until the water below it rises asks the dam
+      // below to be built up too, so a series climbs from the bottom up
+      if (n.silted && !creekSafeToRaise(i, n, CREEK.raiseStep)) {
+        let below = null;
+        for (let k = d.i + 1; k <= Math.min(cr.nodes.length - 1, d.i + 8) && !below; k++) below = cr._damAt[k];
+        let bs = below && i.byId[below.id];
+        if (bs && below.crest < cr.nodes[below.i].fp + CREEK.raiseAbove) bs.needUp = 1;
+      }
+      if ((n.silted || n.needUp) && !n.building && !n.raise && (n.cond ?? 1) > 0.55 && i.t - (n.raiseAskT || 0) > 2 * VALLEY_DAY) {
+        n.needUp = 0;
         n.cond = 0.55;
         n.raise = 1;
         n.raiseAskT = Math.round(i.t);
-        if (!n.siltNoted) {
+        if (!n.siltNoted && n.silted) {
           n.siltNoted = 1;
           logEvent(i, 1, `The pond behind the ${builtLevelDef(n).label} has filled with silt; it needs building up.`, [], n, "wetland");
         }
@@ -7931,6 +7940,8 @@ var CREEK = {
   evap: 0.0011, // m/valley day off open water at full warmth
   pondSeep: 0.0004, // m/valley day a pond loses into drier ground around it
   lambda: 3, // m: how far the creek's water level reaches into the floor's water table
+  hillFill: 0.03, // m of water-table rise the hills store per valley day of rain ...
+  hillTau: 70, // ... and give back to the floor slowly, over this many valley days
   floodTau: 0.12, // valley days for a flood to drain away
 };
 
@@ -8117,6 +8128,7 @@ function creekInit(w) {
     dams: {},
     soil: 0.9,
     up: 1.2,
+    hill: 0.6,
     flood: null,
     floods: 0,
     sIdx: -1,
@@ -8329,7 +8341,9 @@ function creekRaiseDam(w, s, who) {
     `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
     apron ?
     `${who.name} laid a stone apron below the ${builtLevelDef(s).label} and built it up a hand higher, over the silt.` :
-    `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
+    s.silted ?
+    `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.` :
+    `${who.name} built the ${builtLevelDef(s).label} up a hand higher, so the pond above it can rise too.`,
     [who.id],
     s,
     "wetland"
@@ -8634,6 +8648,12 @@ function creekHydro(w, init = false) {
   let rel = cr.up * (1 - Math.exp(-dtD / CREEK.upTau));
   cr.up -= rel;
   let Qin = CREEK.springQ * (0.3 + 1.7 * s.wet) + CREEK.upQ * (cr.up / CREEK.upTau);
+  // the hills soak up the wet season's rain and give it back to the floor slowly, all
+  // through the dry season. A cut-down creek drains it straight away; a healed floor
+  // holds it, which is why a healed valley stays wet (and its creek keeps running)
+  cr.hill = (cr.hill ?? 0.6) + rain * CREEK.hillFill * dtD;
+  let hillOut = cr.hill * (1 - Math.exp(-dtD / CREEK.hillTau));
+  cr.hill -= hillOut;
   // a flood drains away over a few valley hours
   let fk = 0;
   if (cr.flood) {
@@ -8679,7 +8699,7 @@ function creekHydro(w, init = false) {
       }
       // rain soaks in; roots draw water up in the warm months; a bare gravel bed lets
       // water sink away below it
-      dg += rain * CREEK.rech * dtD;
+      dg += rain * CREEK.rech * dtD + hillOut;
       let depth = n.fp - n.g;
       if (depth < CREEK.root) dg -= CREEK.et * warm * cloudy * (1 - depth / CREEK.root) * dtD;
       let fill = clamp((n.bed - (cr.init[i] ? cr.init[i][0] : n.bed)) / 0.6, 0, 1); // mud in the bed seals it
