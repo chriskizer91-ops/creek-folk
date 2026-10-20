@@ -36,6 +36,26 @@ if (process.argv[2] === "--child") {
     const k = kinds.slice().sort((a, b) => S.giftNeed(w, b) - S.giftNeed(w, a))[rnd() < 0.25 ? 3 : 0];
     S.giveGift(w, k);
   };
+  // Phase 3A: how the creek is doing
+  const creekRow = () => {
+    const cr = w.creek,
+      dr = S.creekDriest(w),
+      st = {};
+    for (const n of cr.nodes) if (n.z >= 0 && n.z <= S.VL) st[n.stage] = (st[n.stage] || 0) + 1;
+    const inV = cr.nodes.filter((n) => n.z >= 0 && n.z <= S.VL);
+    return {
+      wet: cr.wetNow,
+      green: cr.greenNow,
+      driest: dr ? dr.wet : null,
+      trench: +(inV.reduce((a, n) => a + n.fp - n.bed, 0) / inV.length).toFixed(3),
+      dams: w.structures.filter((s) => s.kind === "dam").map((s) => s.level + (s.leaks ? "!" : "")).join(""),
+      raises: w.stats.raises || 0,
+      feed: S.creekFeed(w),
+      floods: cr.floods,
+      stages: st,
+      downstream: w.creatures.filter((c) => c.know.downstream).length,
+    };
+  };
   for (let d = 1; d <= days; d++) {
     if (policy !== "none" && d < stopDay)
       for (const h of [9, 21]) {
@@ -59,9 +79,10 @@ if (process.argv[2] === "--child") {
         errors: w.stats.errors || 0,
         season: S.seasonAt(w).name,
         ms: Date.now() - t0,
+        creek: creekRow(),
       });
     }
-    if (d % 30 === 0) process.send({ type: "progress", seed, day: d, pop: w.creatures.length, ms: Date.now() - t0 });
+    if (d % +(process.env.EVERY || 30) === 0) process.send({ type: "progress", seed, day: d, pop: w.creatures.length, ms: Date.now() - t0, creek: creekRow() });
     if ((w.stats.errors || 0) > lastErr) lastErr = w.stats.errors;
   }
   const firsts = {};
@@ -95,7 +116,8 @@ if (process.argv[2] === "--child") {
       firstMythDay: (w.hist.find((e) => e.kind === "myth") || { t: null }).t / D || null,
       samples: w.hist.filter((e) => ["myth", "custom", "belief", "visit", "lost", "place", "forgotten"].includes(e.kind)).slice(-14).map((e) => `${(e.t / D).toFixed(1)} ${e.text}`),
     },
-    knowledge: Object.fromEntries(["mud", "planting", "clay", "glowcap", "tools", "dams"].map((k) => [k, w.creatures.filter((c) => c.know[k]).length])),
+    creekDriest: w.creek.driest,
+    knowledge: Object.fromEntries(["mud", "planting", "clay", "glowcap", "tools", "dams", "downstream"].map((k) => [k, w.creatures.filter((c) => c.know[k]).length])),
     structures: w.structures.map((s) => s.kind + ":" + s.level).sort().join(" "),
     errors: w.stats.errors || 0,
   };
@@ -126,7 +148,7 @@ function next() {
   running++;
   const ch = fork(__filename, ["--child", seed, String(days), start]);
   ch.on("message", (m) => {
-    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s)`);
+    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s)${m.creek ? ` | creek: wet now ${(m.creek.wet * 100).toFixed(0)}%, at the driest ${m.creek.driest == null ? "-" : (m.creek.driest * 100).toFixed(0) + "%"}, trench ${m.creek.trench}m, dams ${m.creek.dams}, raised ${m.creek.raises}, feed ${m.creek.feed}, downstream-knowers ${m.creek.downstream}` : ""}`);
     if (m.type === "done") results.push(m.out);
   });
   ch.on("exit", (code) => {

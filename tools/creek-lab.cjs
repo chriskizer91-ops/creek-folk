@@ -3,7 +3,7 @@
 // docs/PHASE3-CHANGES.md (section 4) without waiting for the whole valley.
 //
 //   node tools/creek-lab.cjs [--days 120] [--seed lab-1] [--dams arc|none|one|high]
-//                            [--every 2] [--json runs/creek-lab.json]
+//                            [--every 2] [--json runs/creek-lab.json] [--save runs/worlds/lab.json]
 //
 // Prints one line every --every real days, and the driest point of each valley year.
 "use strict";
@@ -47,7 +47,10 @@ const byZ = {};
 function placeDam(z, level) {
   let s = byZ[z];
   if (!s) {
-    s = { id: w.nextId++, kind: "dam", x: w.terrain.creekX(z), z, level: 0, cond: 1 };
+    const T = w.terrain,
+      u = T.bankPoint(0, z, 0.4),
+      f = T.bankPoint(1, z, 0.4);
+    s = { id: w.nextId++, kind: "dam", x: +T.creekX(z).toFixed(2), z, rot: 0, level: 0, cond: 1, t: Math.round(w.t), building: null, contrib: {}, spare: {}, pond: 0, built: [], ends: [{ x: +u.x.toFixed(2), z: +u.z.toFixed(2) }, { x: +f.x.toFixed(2), z: +f.z.toFixed(2) }] };
     w.byId[s.id] = s;
     w.structures.push(s);
     byZ[z] = s;
@@ -95,4 +98,6 @@ for (let day = 0; day < days; day += 0.25) {
   }
 }
 console.log(`\n${days} days in ${((Date.now() - t0) / 1000).toFixed(1)} s; storms ${w.creek.floods} (${(w.creek.floods / (days / 8)).toFixed(1)} per valley year)`);
+const saveOut = arg("save", null);
+if (saveOut) fs.mkdirSync(path.dirname(saveOut), { recursive: true }), fs.writeFileSync(saveOut, S.saveWorld(w));
 if (jsonOut) fs.writeFileSync(jsonOut, JSON.stringify({ seed, scen, rows, driest: w.creek.driest }, null, 1));

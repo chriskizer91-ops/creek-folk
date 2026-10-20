@@ -429,9 +429,27 @@ function creekRaiseDam(w, s, who) {
   let n = cr.nodes[d.i],
     top = n.fp + CREEK.raiseAbove;
   if (d.crest >= top - 0.01) return false;
-  // someone who knows the water must stand at its foot won't build it up into a leak
-  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) return false;
+  // someone who knows the water must stand at its foot won't build it up into a leak.
+  // If no dam below holds water against it, they lay a stone apron below it first, so
+  // the water below stands higher: the series climbs from the bottom up.
+  let apron = false;
+  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) {
+    let N = cr.nodes.length,
+      below = false;
+    for (let j = d.i + 1; j <= Math.min(N - 1, d.i + 4); j++) if (cr._damAt && cr._damAt[j]) below = true;
+    if (below) return false;
+    let target = d.crest + CREEK.raiseStep - CREEK.dropMax + 0.02;
+    for (let j = d.i + 1; j < N; j++) {
+      let n2 = cr.nodes[j],
+        want = target - 0.14 * (j - d.i - 1);
+      if (want <= n2.bed + 0.005) break;
+      want = Math.min(want, n2.fp - 0.1);
+      n2.bed = n2.bedMin = +want.toFixed(5);
+    }
+    apron = true;
+  }
   d.crest = +Math.min(top, d.crest + CREEK.raiseStep).toFixed(4);
+  d.apron = (d.apron || 0) + (apron ? 1 : 0);
   d.raised = (d.raised || 0) + 1;
   s.raised = d.raised;
   s.cond = 1;
@@ -441,13 +459,17 @@ function creekRaiseDam(w, s, who) {
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
     `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
+    apron ?
+    `${who.name} laid a stone apron below the ${builtLevelDef(s).label} and built it up a hand higher, over the silt.` :
     `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
     [who.id],
     s,
     "wetland"
   );
   creekDamIndex(cr);
+  if (apron) creekDerive(w);
   creekPondLevels(cr);
+  creekPondNow(cr);
   creekCellWater(w, 0, seasonAt(w));
   return true;
 }

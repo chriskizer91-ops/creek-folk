@@ -33,6 +33,7 @@ export const SIM_FILES = [
 const VENDOR_FILES = ['src/vendor/three-r186.js'];
 const VIEW_FILES = [
   'src/view/view.js',     // the original renderer, HUD and app
+  'src/view/land.js',     // the ground and the water, drawn from the creek model
   'src/view/store.js',    // IndexedDB saves
   'src/view/catchup.js',  // long catch-ups in a Web Worker
   'src/view/dev.js',      // hidden developer menu

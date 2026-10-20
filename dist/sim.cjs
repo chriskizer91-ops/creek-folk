@@ -464,6 +464,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
             hwB = this.hwOf(cr.nodes[i + 1]);
           this.lut[n * 4 + 1] = hwA + (hwB - hwA) * t;
         }
+          this.cut || (this.cut = new Float32Array(this.h.length));
         for (let z = 0; z <= VL; z++) {
           let fp = this.fpAt(z),
             cx = this.creekX(z);
@@ -474,6 +475,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
               h = w * floor + (1 - w) * Math.max(this.terr[k], floor) + this.hill[k],
               s = this.section(z, Math.abs(x - cx));
             this.h[k] = s < h ? s : h;
+            this.cut[k] = s < h ? h - s : 0; // how deep the creek has cut here (for drawing)
           }
         }
         this.version++;
@@ -509,6 +511,29 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
           d = this.h[a * n + o + 1],
           u = this.h[(a + 1) * n + o],
           f = this.h[(a + 1) * n + o + 1];
+        return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
+      }
+      // the ground at (x, z) as if the creek's trench were not there (for drawing the
+      // trench as its own smooth mesh): bilinear over the grid like the ground itself
+      uncarvedAt(t, e) {
+        if (t < 0 || e < 0 || t >= VW || e >= VL || !this.cut) {
+          let b = this.baseAt(t, e),
+            fp = this._nodes ? this.fpAt(e) : this.fp0(e),
+            floor = fp + b.micro;
+          return b.wF * floor + (1 - b.wF) * Math.max(b.terr, floor) + b.hill;
+        }
+        let n = this.N,
+          o = Math.floor(t),
+          a = Math.floor(e),
+          l = t - o,
+          c = e - a,
+          H = this.h,
+          C = this.cut,
+          v = (k) => H[k] + C[k],
+          h = v(a * n + o),
+          d = v(a * n + o + 1),
+          u = v((a + 1) * n + o),
+          f = v((a + 1) * n + o + 1);
         return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
       }
       // on the valley floor (the bottomland that can turn to wetland): 0..1
@@ -8256,9 +8281,27 @@ function creekRaiseDam(w, s, who) {
   let n = cr.nodes[d.i],
     top = n.fp + CREEK.raiseAbove;
   if (d.crest >= top - 0.01) return false;
-  // someone who knows the water must stand at its foot won't build it up into a leak
-  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) return false;
+  // someone who knows the water must stand at its foot won't build it up into a leak.
+  // If no dam below holds water against it, they lay a stone apron below it first, so
+  // the water below stands higher: the series climbs from the bottom up.
+  let apron = false;
+  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) {
+    let N = cr.nodes.length,
+      below = false;
+    for (let j = d.i + 1; j <= Math.min(N - 1, d.i + 4); j++) if (cr._damAt && cr._damAt[j]) below = true;
+    if (below) return false;
+    let target = d.crest + CREEK.raiseStep - CREEK.dropMax + 0.02;
+    for (let j = d.i + 1; j < N; j++) {
+      let n2 = cr.nodes[j],
+        want = target - 0.14 * (j - d.i - 1);
+      if (want <= n2.bed + 0.005) break;
+      want = Math.min(want, n2.fp - 0.1);
+      n2.bed = n2.bedMin = +want.toFixed(5);
+    }
+    apron = true;
+  }
   d.crest = +Math.min(top, d.crest + CREEK.raiseStep).toFixed(4);
+  d.apron = (d.apron || 0) + (apron ? 1 : 0);
   d.raised = (d.raised || 0) + 1;
   s.raised = d.raised;
   s.cond = 1;
@@ -8268,13 +8311,17 @@ function creekRaiseDam(w, s, who) {
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
     `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
+    apron ?
+    `${who.name} laid a stone apron below the ${builtLevelDef(s).label} and built it up a hand higher, over the silt.` :
     `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
     [who.id],
     s,
     "wetland"
   );
   creekDamIndex(cr);
+  if (apron) creekDerive(w);
   creekPondLevels(cr);
+  creekPondNow(cr);
   creekCellWater(w, 0, seasonAt(w));
   return true;
 }
@@ -10269,10 +10316,10 @@ function snapshotForVisits(w, c) {
   };
 }
 
-function visits(w) {
-  if (w.creatures.some((c) => c.visitor)) return;
-  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
-  if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
+function visits(w, force = false) {
+  if (w.creatures.some((c) => c.visitor)) return false;
+  let cands = (w.downstream || []).filter((d) => d.snap && (force || (w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400)) && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  if (!cands.length || (!force && !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400)))) return false;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
   let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
@@ -10694,6 +10741,49 @@ function upgradeWorld(w) {
   return w;
 }
 
+// ---- developer triggers (the dev build's "make it happen now" buttons) -----
+// These change the valley outside its own course of events, so they are only
+// offered by the developer menu.
+function devTrigger(w, what) {
+  let alive = w.creatures.filter((c) => !c.visitor);
+  if (what === "storm") {
+    let e = w.weather;
+    e.cum = rainTotal(w, w.t);
+    e.cumT = w.t;
+    e.tok = (e.tok || 0) + 1;
+    let was = e.state;
+    e.state = "storm";
+    e.rain = 1.6;
+    e.since = w.t;
+    e.until = w.t + 900;
+    schedule(w, e.until, "R", 0, e.tok);
+    if (was !== "storm") storyStorm(w);
+    logEvent(w, 2, "A storm rolled in over the valley.", [], null, "weather");
+    let T = creekStorm(w);
+    return `storm (a ${T.toFixed(1)}-year flood)`;
+  }
+  if (what === "flood") {
+    let T = creekStorm(w, 25);
+    return `a ${T}-year flood`;
+  }
+  if (what === "birth") {
+    let adults = alive.filter((c) => stageOf(w, c) === "adult"),
+      pair = adults.map((c) => [c, c.partner && w.byId[c.partner]]).find(([c, p]) => p && stageOf(w, p) === "adult");
+    if (!pair && adults.length >= 2) pair = [adults[0], adults.find((c) => c !== adults[0] && !(adults[0].parents || []).includes(c.id))];
+    if (!pair || !pair[1]) return "no two grown-ups to be parents";
+    bear(w, pair[0], pair[1]);
+    return `a child for ${pair[0].name} and ${pair[1].name}`;
+  }
+  if (what === "passing") {
+    let c = alive.filter((c) => !c.farewell).sort((a, b) => a.born - b.born)[0];
+    if (!c) return "nobody";
+    c.lifespan = Math.max(0, Math.round(w.t - c.born));
+    return `${c.name}'s time has come`;
+  }
+  if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  return "unknown";
+}
+
 // ==== src/sim/api.js ====
 // The simulation's public surface, used by the app, the worker and the Node tests.
 var CreekSim = {
@@ -10735,6 +10825,7 @@ var CreekSim = {
   creekRaiseDam,
   creekPondLevels,
   creekCells,
+  devTrigger,
 };
 
 module.exports = CreekSim;

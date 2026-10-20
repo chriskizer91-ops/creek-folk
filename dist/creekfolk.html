@@ -587,6 +587,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
             hwB = this.hwOf(cr.nodes[i + 1]);
           this.lut[n * 4 + 1] = hwA + (hwB - hwA) * t;
         }
+          this.cut || (this.cut = new Float32Array(this.h.length));
         for (let z = 0; z <= VL; z++) {
           let fp = this.fpAt(z),
             cx = this.creekX(z);
@@ -597,6 +598,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
               h = w * floor + (1 - w) * Math.max(this.terr[k], floor) + this.hill[k],
               s = this.section(z, Math.abs(x - cx));
             this.h[k] = s < h ? s : h;
+            this.cut[k] = s < h ? h - s : 0; // how deep the creek has cut here (for drawing)
           }
         }
         this.version++;
@@ -632,6 +634,29 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
           d = this.h[a * n + o + 1],
           u = this.h[(a + 1) * n + o],
           f = this.h[(a + 1) * n + o + 1];
+        return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
+      }
+      // the ground at (x, z) as if the creek's trench were not there (for drawing the
+      // trench as its own smooth mesh): bilinear over the grid like the ground itself
+      uncarvedAt(t, e) {
+        if (t < 0 || e < 0 || t >= VW || e >= VL || !this.cut) {
+          let b = this.baseAt(t, e),
+            fp = this._nodes ? this.fpAt(e) : this.fp0(e),
+            floor = fp + b.micro;
+          return b.wF * floor + (1 - b.wF) * Math.max(b.terr, floor) + b.hill;
+        }
+        let n = this.N,
+          o = Math.floor(t),
+          a = Math.floor(e),
+          l = t - o,
+          c = e - a,
+          H = this.h,
+          C = this.cut,
+          v = (k) => H[k] + C[k],
+          h = v(a * n + o),
+          d = v(a * n + o + 1),
+          u = v((a + 1) * n + o),
+          f = v((a + 1) * n + o + 1);
         return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
       }
       // on the valley floor (the bottomland that can turn to wetland): 0..1
@@ -8379,9 +8404,27 @@ function creekRaiseDam(w, s, who) {
   let n = cr.nodes[d.i],
     top = n.fp + CREEK.raiseAbove;
   if (d.crest >= top - 0.01) return false;
-  // someone who knows the water must stand at its foot won't build it up into a leak
-  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) return false;
+  // someone who knows the water must stand at its foot won't build it up into a leak.
+  // If no dam below holds water against it, they lay a stone apron below it first, so
+  // the water below stands higher: the series climbs from the bottom up.
+  let apron = false;
+  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) {
+    let N = cr.nodes.length,
+      below = false;
+    for (let j = d.i + 1; j <= Math.min(N - 1, d.i + 4); j++) if (cr._damAt && cr._damAt[j]) below = true;
+    if (below) return false;
+    let target = d.crest + CREEK.raiseStep - CREEK.dropMax + 0.02;
+    for (let j = d.i + 1; j < N; j++) {
+      let n2 = cr.nodes[j],
+        want = target - 0.14 * (j - d.i - 1);
+      if (want <= n2.bed + 0.005) break;
+      want = Math.min(want, n2.fp - 0.1);
+      n2.bed = n2.bedMin = +want.toFixed(5);
+    }
+    apron = true;
+  }
   d.crest = +Math.min(top, d.crest + CREEK.raiseStep).toFixed(4);
+  d.apron = (d.apron || 0) + (apron ? 1 : 0);
   d.raised = (d.raised || 0) + 1;
   s.raised = d.raised;
   s.cond = 1;
@@ -8391,13 +8434,17 @@ function creekRaiseDam(w, s, who) {
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
     `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
+    apron ?
+    `${who.name} laid a stone apron below the ${builtLevelDef(s).label} and built it up a hand higher, over the silt.` :
     `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
     [who.id],
     s,
     "wetland"
   );
   creekDamIndex(cr);
+  if (apron) creekDerive(w);
   creekPondLevels(cr);
+  creekPondNow(cr);
   creekCellWater(w, 0, seasonAt(w));
   return true;
 }
@@ -10392,10 +10439,10 @@ function snapshotForVisits(w, c) {
   };
 }
 
-function visits(w) {
-  if (w.creatures.some((c) => c.visitor)) return;
-  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
-  if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
+function visits(w, force = false) {
+  if (w.creatures.some((c) => c.visitor)) return false;
+  let cands = (w.downstream || []).filter((d) => d.snap && (force || (w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400)) && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  if (!cands.length || (!force && !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400)))) return false;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
   let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
@@ -10817,6 +10864,49 @@ function upgradeWorld(w) {
   return w;
 }
 
+// ---- developer triggers (the dev build's "make it happen now" buttons) -----
+// These change the valley outside its own course of events, so they are only
+// offered by the developer menu.
+function devTrigger(w, what) {
+  let alive = w.creatures.filter((c) => !c.visitor);
+  if (what === "storm") {
+    let e = w.weather;
+    e.cum = rainTotal(w, w.t);
+    e.cumT = w.t;
+    e.tok = (e.tok || 0) + 1;
+    let was = e.state;
+    e.state = "storm";
+    e.rain = 1.6;
+    e.since = w.t;
+    e.until = w.t + 900;
+    schedule(w, e.until, "R", 0, e.tok);
+    if (was !== "storm") storyStorm(w);
+    logEvent(w, 2, "A storm rolled in over the valley.", [], null, "weather");
+    let T = creekStorm(w);
+    return `storm (a ${T.toFixed(1)}-year flood)`;
+  }
+  if (what === "flood") {
+    let T = creekStorm(w, 25);
+    return `a ${T}-year flood`;
+  }
+  if (what === "birth") {
+    let adults = alive.filter((c) => stageOf(w, c) === "adult"),
+      pair = adults.map((c) => [c, c.partner && w.byId[c.partner]]).find(([c, p]) => p && stageOf(w, p) === "adult");
+    if (!pair && adults.length >= 2) pair = [adults[0], adults.find((c) => c !== adults[0] && !(adults[0].parents || []).includes(c.id))];
+    if (!pair || !pair[1]) return "no two grown-ups to be parents";
+    bear(w, pair[0], pair[1]);
+    return `a child for ${pair[0].name} and ${pair[1].name}`;
+  }
+  if (what === "passing") {
+    let c = alive.filter((c) => !c.farewell).sort((a, b) => a.born - b.born)[0];
+    if (!c) return "nobody";
+    c.lifespan = Math.max(0, Math.round(w.t - c.born));
+    return `${c.name}'s time has come`;
+  }
+  if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  return "unknown";
+}
+
 // ==== src/sim/api.js ====
 // The simulation's public surface, used by the app, the worker and the Node tests.
 var CreekSim = {
@@ -10858,6 +10948,7 @@ var CreekSim = {
   creekRaiseDam,
   creekPondLevels,
   creekCells,
+  devTrigger,
 };
 
 // ==========================================================================
@@ -11359,6 +11450,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
             hwB = this.hwOf(cr.nodes[i + 1]);
           this.lut[n * 4 + 1] = hwA + (hwB - hwA) * t;
         }
+          this.cut || (this.cut = new Float32Array(this.h.length));
         for (let z = 0; z <= VL; z++) {
           let fp = this.fpAt(z),
             cx = this.creekX(z);
@@ -11369,6 +11461,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
               h = w * floor + (1 - w) * Math.max(this.terr[k], floor) + this.hill[k],
               s = this.section(z, Math.abs(x - cx));
             this.h[k] = s < h ? s : h;
+            this.cut[k] = s < h ? h - s : 0; // how deep the creek has cut here (for drawing)
           }
         }
         this.version++;
@@ -11404,6 +11497,29 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
           d = this.h[a * n + o + 1],
           u = this.h[(a + 1) * n + o],
           f = this.h[(a + 1) * n + o + 1];
+        return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
+      }
+      // the ground at (x, z) as if the creek's trench were not there (for drawing the
+      // trench as its own smooth mesh): bilinear over the grid like the ground itself
+      uncarvedAt(t, e) {
+        if (t < 0 || e < 0 || t >= VW || e >= VL || !this.cut) {
+          let b = this.baseAt(t, e),
+            fp = this._nodes ? this.fpAt(e) : this.fp0(e),
+            floor = fp + b.micro;
+          return b.wF * floor + (1 - b.wF) * Math.max(b.terr, floor) + b.hill;
+        }
+        let n = this.N,
+          o = Math.floor(t),
+          a = Math.floor(e),
+          l = t - o,
+          c = e - a,
+          H = this.h,
+          C = this.cut,
+          v = (k) => H[k] + C[k],
+          h = v(a * n + o),
+          d = v(a * n + o + 1),
+          u = v((a + 1) * n + o),
+          f = v((a + 1) * n + o + 1);
         return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
       }
       // on the valley floor (the bottomland that can turn to wetland): 0..1
@@ -19151,9 +19267,27 @@ function creekRaiseDam(w, s, who) {
   let n = cr.nodes[d.i],
     top = n.fp + CREEK.raiseAbove;
   if (d.crest >= top - 0.01) return false;
-  // someone who knows the water must stand at its foot won't build it up into a leak
-  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) return false;
+  // someone who knows the water must stand at its foot won't build it up into a leak.
+  // If no dam below holds water against it, they lay a stone apron below it first, so
+  // the water below stands higher: the series climbs from the bottom up.
+  let apron = false;
+  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) {
+    let N = cr.nodes.length,
+      below = false;
+    for (let j = d.i + 1; j <= Math.min(N - 1, d.i + 4); j++) if (cr._damAt && cr._damAt[j]) below = true;
+    if (below) return false;
+    let target = d.crest + CREEK.raiseStep - CREEK.dropMax + 0.02;
+    for (let j = d.i + 1; j < N; j++) {
+      let n2 = cr.nodes[j],
+        want = target - 0.14 * (j - d.i - 1);
+      if (want <= n2.bed + 0.005) break;
+      want = Math.min(want, n2.fp - 0.1);
+      n2.bed = n2.bedMin = +want.toFixed(5);
+    }
+    apron = true;
+  }
   d.crest = +Math.min(top, d.crest + CREEK.raiseStep).toFixed(4);
+  d.apron = (d.apron || 0) + (apron ? 1 : 0);
   d.raised = (d.raised || 0) + 1;
   s.raised = d.raised;
   s.cond = 1;
@@ -19163,13 +19297,17 @@ function creekRaiseDam(w, s, who) {
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
     `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
+    apron ?
+    `${who.name} laid a stone apron below the ${builtLevelDef(s).label} and built it up a hand higher, over the silt.` :
     `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
     [who.id],
     s,
     "wetland"
   );
   creekDamIndex(cr);
+  if (apron) creekDerive(w);
   creekPondLevels(cr);
+  creekPondNow(cr);
   creekCellWater(w, 0, seasonAt(w));
   return true;
 }
@@ -21164,10 +21302,10 @@ function snapshotForVisits(w, c) {
   };
 }
 
-function visits(w) {
-  if (w.creatures.some((c) => c.visitor)) return;
-  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
-  if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
+function visits(w, force = false) {
+  if (w.creatures.some((c) => c.visitor)) return false;
+  let cands = (w.downstream || []).filter((d) => d.snap && (force || (w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400)) && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  if (!cands.length || (!force && !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400)))) return false;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
   let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
@@ -21589,6 +21727,49 @@ function upgradeWorld(w) {
   return w;
 }
 
+// ---- developer triggers (the dev build's "make it happen now" buttons) -----
+// These change the valley outside its own course of events, so they are only
+// offered by the developer menu.
+function devTrigger(w, what) {
+  let alive = w.creatures.filter((c) => !c.visitor);
+  if (what === "storm") {
+    let e = w.weather;
+    e.cum = rainTotal(w, w.t);
+    e.cumT = w.t;
+    e.tok = (e.tok || 0) + 1;
+    let was = e.state;
+    e.state = "storm";
+    e.rain = 1.6;
+    e.since = w.t;
+    e.until = w.t + 900;
+    schedule(w, e.until, "R", 0, e.tok);
+    if (was !== "storm") storyStorm(w);
+    logEvent(w, 2, "A storm rolled in over the valley.", [], null, "weather");
+    let T = creekStorm(w);
+    return `storm (a ${T.toFixed(1)}-year flood)`;
+  }
+  if (what === "flood") {
+    let T = creekStorm(w, 25);
+    return `a ${T}-year flood`;
+  }
+  if (what === "birth") {
+    let adults = alive.filter((c) => stageOf(w, c) === "adult"),
+      pair = adults.map((c) => [c, c.partner && w.byId[c.partner]]).find(([c, p]) => p && stageOf(w, p) === "adult");
+    if (!pair && adults.length >= 2) pair = [adults[0], adults.find((c) => c !== adults[0] && !(adults[0].parents || []).includes(c.id))];
+    if (!pair || !pair[1]) return "no two grown-ups to be parents";
+    bear(w, pair[0], pair[1]);
+    return `a child for ${pair[0].name} and ${pair[1].name}`;
+  }
+  if (what === "passing") {
+    let c = alive.filter((c) => !c.farewell).sort((a, b) => a.born - b.born)[0];
+    if (!c) return "nobody";
+    c.lifespan = Math.max(0, Math.round(w.t - c.born));
+    return `${c.name}'s time has come`;
+  }
+  if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  return "unknown";
+}
+
 // ==== src/sim/api.js ====
 // The simulation's public surface, used by the app, the worker and the Node tests.
 var CreekSim = {
@@ -21630,6 +21811,7 @@ var CreekSim = {
   creekRaiseDam,
   creekPondLevels,
   creekCells,
+  devTrigger,
 };
 
 // ==== src/vendor/three-r186.js ====
@@ -48154,371 +48336,7 @@ void main() {
     return t - Math.floor(t);
   }
   var Be = (i) => new wt(i),
-    GroundView = class {
-      constructor(t, e) {
-        this.world = t,
-        this.scene = e,
-        this.group = new Pe(),
-        e.add(this.group),
-        this.buildGround(),
-        this.buildWater(),
-        this.buildDecor(),
-        this.wearBucket = new Uint8Array(4096),
-        this.lastWearCheck = 0;
-      }
-      dispose() {
-        this.group.traverse((t) => {
-          t.geometry && t.geometry.dispose();
-        }),
-        this.scene.remove(this.group),
-        this.waterMat && this.waterMat.dispose();
-      }
-      baseCellColor(t, e) {
-        let n = this.world.terrain,
-          s = t + 0.5,
-          r = e + 0.5;
-        if (t < 0 || e < 0 || t >= 64 || e >= 64) {
-          let p = n.noise.get(s * 0.35 + 50, r * 0.35);
-          return n.edgeDist(s, r) < 0 ?
-          Be(PALETTE.mud).multiplyScalar(0.55) :
-          Be(p > 0.5 ? PALETTE.hill : PALETTE.hill2).multiplyScalar(
-            0.9 + hash01(t * 31 + e * 7 + 999) * 0.12
-          );
-        }
-        let o = n.edgeDist(s, r),
-          a = n.valleyR(s, r),
-          l = n.heightAt(s, r),
-          c = n.noise.get(s * 0.35, r * 0.35),
-          h = hash01(t * 131 + e * 17);
-        if (o < -0.2) return Be(PALETTE.mud).multiplyScalar(0.55);
-        if (o < 0.45) return Be(PALETTE.bank).multiplyScalar(0.9 + h * 0.15);
-        if (o < 1.1)
-        return Be(c > 0.55 ? PALETTE.sand : PALETTE.mud).lerp(Be(PALETTE.grass2), 0.3);
-        let d =
-        Math.abs(n.heightAt(s + 1, r) - n.heightAt(s - 1, r)) +
-        Math.abs(n.heightAt(s, r + 1) - n.heightAt(s, r - 1));
-        if (a > 0.88 && d > 2.6)
-        return Be(h > 0.5 ? PALETTE.rock : PALETTE.rock2).multiplyScalar(0.9 + c * 0.2);
-        if (a > 0.9)
-        return Be(c > 0.5 ? PALETTE.hill : PALETTE.hill2).multiplyScalar(0.92 + h * 0.12);
-        let u = n.noise.fbm(s * 0.06 + 20, r * 0.06, 2);
-        return Be(PALETTE.grass2).
-        lerp(Be(PALETTE.meadow), Math.min(1, Math.max(0, (u - 0.3) * 2.2))).
-        multiplyScalar(0.97 + h * 0.04 + (l - 1) * 0.02);
-      }
-      buildGround() {
-        let t = this.world.terrain,
-          e = 64,
-          n = 18;
-        this.PAD = n;
-        let s = e + n * 2;
-        this.G = s;
-        let r = (d, u) =>
-          d >= 0 && u >= 0 && d <= e && u <= e ?
-          t.h[u * (e + 1) + d] :
-          t.heightRaw(d, u),
-          o = new Float32Array(s * s * 6 * 3),
-          a = new Float32Array(s * s * 6 * 3);
-        this.cellColor = new Array(s * s);
-        let l = 0;
-        for (let d = 0; d < s; d++)
-        for (let u = 0; u < s; u++) {
-          let f = u - n,
-            p = d - n,
-            x = r(f, p),
-            g = r(f + 1, p),
-            m = r(f, p + 1),
-            b = r(f + 1, p + 1),
-            y = !1 ?
-            [
-            [f, x, p],
-            [f, m, p + 1],
-            [f + 1, b, p + 1],
-            [f, x, p],
-            [f + 1, b, p + 1],
-            [f + 1, g, p]] :
-
-            [
-            [f, x, p],
-            [f, m, p + 1],
-            [f + 1, g, p],
-            [f + 1, g, p],
-            [f, m, p + 1],
-            [f + 1, b, p + 1]];
-
-          for (let [S, M, A] of y) o[l++] = S, o[l++] = M, o[l++] = A;
-          this.cellColor[d * s + u] = this.baseCellColor(f, p);
-        }
-        let c = new ye();
-        c.setAttribute("position", new Le(o, 3)),
-        c.setAttribute("color", new Le(a, 3)),
-        c.computeVertexNormals(),
-        this.groundGeo = c;
-        for (let d = 0; d < s * s; d++) this.paintCell(d, 0);
-        let h = new Et(c, new Qe({ vertexColors: !0, flatShading: !0 }));
-        h.receiveShadow = !0, this.ground = h, this.group.add(h);
-      }
-      gi(t) {
-        let e = t % 64;
-        return (Math.floor(t / 64) + this.PAD) * this.G + (e + this.PAD);
-      }
-      paintCell(t, e) {
-        let n = this.groundGeo.attributes.color.array,
-          s = this.cellColor[t];
-        for (let r = 0; r < 6; r++) {
-          let o = (t * 6 + r) * 3,
-            a = r < 3 ? 1 : 0.97;
-          n[o] = s.r * a, n[o + 1] = s.g * a, n[o + 2] = s.b * a;
-        }
-      }
-      cornerWet(t, e) {
-        let n = this.world.wet;
-        if (!n) return 0;
-        let s = 0,
-          r = 0;
-        for (let o = -1; o <= 0; o++)
-        for (let a = -1; a <= 0; a++) {
-          let l = t + a,
-            c = e + o;
-          l < 0 || c < 0 || l >= 64 || c >= 64 || (s += n[c * 64 + l], r++);
-        }
-        return r ? s / r : 0;
-      }
-      cornerWear(t, e) {
-        let n = this.world.wear,
-          s = 0,
-          r = 0;
-        for (let l = -1; l <= 0; l++)
-        for (let c = -1; c <= 0; c++) {
-          let h = t + c,
-            d = e + l;
-          h < 0 || d < 0 || h >= 64 || d >= 64 || (s += n[d * 64 + h], r++);
-        }
-        let o = r ? s / r : 0,
-          a = Math.min(1, Math.max(0, (o - 6) / 30));
-        return a * a * (3 - 2 * a) * 0.92;
-      }
-      updateWear(t) {
-        if (t - this.lastWearCheck < 4) return;
-        this.lastWearCheck = t;
-        let e = this.groundGeo.attributes.color.array,
-          n = Be(PALETTE.dirt),
-          s = Be(PALETTE.dirt2),
-          r = Be(7232060),
-          o = Be(6465610),
-          a = Be(7314766),
-          l = Be(8362576),
-          c = Be(6261338),
-          h = Be(7241548),
-          d = 65,
-          u = this.cw || (this.cw = new Float32Array(d * d)),
-          f = this.cq || (this.cq = new Float32Array(d * d)),
-          p = !1;
-        for (let m = 0; m < d; m++)
-        for (let b = 0; b < d; b++) {
-          let T = Math.round(this.cornerWear(b, m) * 24) / 24;
-          T !== u[m * d + b] && (u[m * d + b] = T, p = !0);
-          let y = Math.round(this.cornerWet(b, m) * 20) / 20;
-          y !== f[m * d + b] && (f[m * d + b] = y, p = !0);
-        }
-        if (!p) return;
-        let x = (m, b, T) => {
-            let y = Math.min(1, Math.max(0, (T - m) / (b - m)));
-            return y * y * (3 - 2 * y);
-          },
-          g = new wt();
-        for (let m = 0; m < 64; m++)
-        for (let b = 0; b < 64; b++) {
-          let T = this.gi(m * 64 + b),
-            y = this.cellColor[T],
-            S = [
-            [b, m],
-            [b, m + 1],
-            [b + 1, m],
-            [b + 1, m],
-            [b, m + 1],
-            [b + 1, m + 1]];
-
-          for (let M = 0; M < 6; M++) {
-            let [A, v] = S[M],
-              E = u[v * d + A],
-              R = f[v * d + A];
-            if (g.copy(y), R > 0.1) {
-              let B = hash01(T * 7 + 3) < 0.5;
-              g.lerp(o, x(0.1, 0.4, R) * 0.7),
-              R > 0.4 && g.lerp(B ? a : l, x(0.4, 0.7, R) * 0.8),
-              R > 0.7 && g.lerp(B ? c : h, x(0.7, 1, R) * 0.6);
-            }
-            g.lerp(R > 0.45 ? r : E > 0.6 ? s : n, E);
-            let P = M < 3 ? 1 : 0.97,
-              N = (T * 6 + M) * 3;
-            e[N] = g.r * P, e[N + 1] = g.g * P, e[N + 2] = g.b * P;
-          }
-        }
-        this.groundGeo.attributes.color.needsUpdate = !0;
-      }
-      buildWater() {
-        let t = this.world.terrain,
-          e = [],
-          n = [],
-          s = 0.5;
-        for (let a = -4; a < 68; a += s) {
-          let l = a + s,
-            c = t.creekX(a) - t.creekHW(a) - 0.35,
-            h = t.creekX(a) + t.creekHW(a) + 0.35,
-            d = t.creekX(l) - t.creekHW(l) - 0.35,
-            u = t.creekX(l) + t.creekHW(l) + 0.35,
-            f = WATER_LEVEL;
-          e.push(c, f, a, d, f, l, h, f, a, h, f, a, d, f, l, u, f, l),
-          n.push(0, a, 0, l, 1, a, 1, a, 0, l, 1, l);
-        }
-        let r = new ye();
-        r.setAttribute("position", new Zt(e, 3)),
-        r.setAttribute("uv", new Zt(n, 2)),
-        this.waterMat = new Ke({
-          uniforms: {
-            uTime: { value: 0 },
-            uLight: { value: 1 },
-            uRain: { value: 0 },
-            uDeep: { value: Be(3112872) },
-            uShallow: { value: Be(5813460) },
-            uFoam: { value: Be(14218495) },
-            uTint: { value: Be(16777215) }
-          },
-          vertexShader:
-          "varying vec2 vUv; varying vec3 vW; void main(){ vUv=uv; vec4 wp=modelMatrix*vec4(position,1.); vW=wp.xyz; gl_Position=projectionMatrix*viewMatrix*wp; }",
-          fragmentShader: `
-        uniform float uTime, uLight, uRain; uniform vec3 uDeep, uShallow, uFoam, uTint;
-        varying vec2 vUv; varying vec3 vW;
-        float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
-        void main(){
-          float edge = min(vUv.x, 1.0-vUv.x);
-          vec3 c = mix(uShallow, uDeep, smoothstep(0.05, 0.35, edge));
-          // flowing glints
-          vec2 cell = floor(vec2(vW.x*7.0, vW.z*3.5 - uTime*2.4));
-          float g = h(cell);
-          float glint = step(0.965 - uRain*0.03, g) * step(0.12, edge);
-          c = mix(c, uFoam, glint*0.65);
-          // bank foam
-          c = mix(c, uFoam, (1.0 - smoothstep(0.0, 0.07, edge))*0.55);
-          // rain ripples
-          vec2 rc = floor(vec2(vW.x*4.0, vW.z*4.0));
-          float rr = step(0.985, h(rc + floor(uTime*3.0))) * uRain;
-          c = mix(c, uFoam, rr*0.8);
-          gl_FragColor = vec4(c * uTint * (0.25 + 0.75*uLight), 1.0);
-          #include <colorspace_fragment>
-        }`
-        });
-        let o = new Et(r, this.waterMat);
-        this.water = o, this.group.add(o);
-      }
-      buildDecor() {
-        let t = this.world.terrain,
-          e = [],
-          n = [PALETTE.flower1, PALETTE.flower2, PALETTE.flower3, PALETTE.flower4],
-          s = 1;
-        for (let a = 0; a < 900; a++) {
-          let l = hash01(s++) * 64,
-            c = hash01(s++) * 64;
-          if (!t.walkable(l, c) || t.edgeDist(l, c) < 0.8) continue;
-          let h = t.heightAt(l, c),
-            d = hash01(s++);
-          d < 0.75 ?
-          e.push(
-            part(ze(0.06, 0.22, 3), d < 0.4 ? PALETTE.grass3 : PALETTE.grass2, {
-              x: l,
-              y: h + 0.09,
-              z: c,
-              ry: d * 6
-            })
-          ) :
-          e.push(
-            part(qt(0.05, 0), n[Math.floor(hash01(s++) * 4)], {
-              x: l,
-              y: h + 0.06,
-              z: c
-            })
-          );
-        }
-        for (let a = 0; a < 260; a++) {
-          let l = hash01(s++) * 64,
-            c = hash01(s++) < 0.5 ? 0 : 1,
-            h = t.bankPoint(c, l, hash01(s++) * 0.6 + 0.1);
-          t.valleyR(h.x, h.z) > 0.95 ||
-          e.push(
-            part(ze(0.04, 0.3, 3), PALETTE.reed, {
-              x: h.x,
-              y: t.heightAt(h.x, h.z) + 0.12,
-              z: h.z,
-              rz: (hash01(s++) - 0.5) * 0.4
-            })
-          );
-        }
-        for (let a = 0; a < 1100; a++) {
-          let l = hash01(s++) * 96 - 16,
-            c = hash01(s++) * 96 - 16,
-            h = t.valleyR(l, c);
-          if (h < 0.93 || h > 1.75 || t.edgeDist(l, c) < 2) continue;
-          let d =
-            l < 0 || c < 0 || l > 64 || c > 64 ?
-            t.heightRaw(l, c) :
-            t.heightAt(l, c),
-            u = 0.8 + hash01(s++) * 0.7,
-            f = hash01(s++);
-          f < 0.7 ? (
-          e.push(
-            part(yt(0.08, 0.1, 0.5, 4), PALETTE.trunk, {
-              x: l,
-              y: d + 0.25 * u,
-              z: c,
-              sx: u,
-              sy: u,
-              sz: u
-            })
-          ),
-          e.push(
-            part(ze(0.55, 1.3, 5), f < 0.35 ? PALETTE.pine : PALETTE.leaf3, {
-              x: l,
-              y: d + (0.5 + 0.65) * u,
-              z: c,
-              sx: u,
-              sy: u,
-              sz: u,
-              ry: f * 9
-            })
-          )) : (
-          e.push(
-            part(yt(0.08, 0.1, 0.6, 4), PALETTE.trunk, {
-              x: l,
-              y: d + 0.3 * u,
-              z: c,
-              sx: u,
-              sy: u,
-              sz: u
-            })
-          ),
-          e.push(
-            part(qt(0.6, 0), f < 0.85 ? PALETTE.leaf : PALETTE.hill, {
-              x: l,
-              y: d + 0.95 * u,
-              z: c,
-              sx: u,
-              sy: u * 0.9,
-              sz: u
-            })
-          ));
-        }
-        let r = mergeParts(e),
-          o = new Et(r, he());
-        o.receiveShadow = !0, this.decor = o, this.group.add(o);
-      }
-      update(t, e, n, s) {
-        this.waterMat.uniforms.uTime.value = t,
-        this.waterMat.uniforms.uLight.value = e,
-        this.waterMat.uniforms.uRain.value = n,
-        this.waterMat.uniforms.uTint.value.copy(s);
-      }
-    };
+    GroundView = null; // CREEK: the ground is drawn by src/view/land.js (Phase 3A)
   var zs = new Map();
   function Zb(i, t) {
     let e = i + ":" + t % 4;
@@ -49613,7 +49431,8 @@ void main() {
       x = l.z - t.z,
       g = Math.hypot(p - u, x - f),
       m = Math.atan2(p - u, x - f),
-      b = 0.4 - r.baseY;
+      b = (r.waterY ?? 0.4) - r.baseY, // CREEK: stones on the creek bed
+      dk = Math.max(b, (r.bankY ?? 1.02) - 0.6 - r.baseY); // ... and the deck level with the banks
     if (d(1) || c === 0) {
       let T = d(1) ? 6 : Math.round(6 * s);
       for (let y = 0; y < T; y++) {
@@ -49633,9 +49452,9 @@ void main() {
         let S = (y + 0.5) / 4;
         for (let M of [-0.45, 0.45])
         i.push(
-          part(yt(0.06, 0.07, 1, 4), PALETTE.plank2, {
+          part(yt(0.06, 0.07, dk + 0.62 - b + 0.35, 4), PALETTE.plank2, {
             x: u + (p - u) * S + Math.cos(m) * M,
-            y: b + 0.2,
+            y: (b + dk + 0.62) / 2 - 0.1,
             z: f + (x - f) * S - Math.sin(m) * M
           })
         );
@@ -49648,7 +49467,7 @@ void main() {
           i.push(
             part(lt(1.05, 0.07, g / 10 * 0.9), M % 2 ? PALETTE.plank : PALETTE.plank2, {
               x: u + (p - u) * A,
-              y: b + 0.62 + Math.sin(A * Math.PI) * 0.12,
+              y: dk + 0.62 + Math.sin(A * Math.PI) * 0.12,
               z: f + (x - f) * A,
               ry: m
             })
@@ -49666,7 +49485,7 @@ void main() {
             i.push(
               part(yt(0.03, 0.03, 0.45, 3), PALETTE.plank2, {
                 x: u + (p - u) * A + Math.cos(m) * y,
-                y: b + 0.9 + Math.sin(A * Math.PI) * 0.12,
+                y: dk + 0.9 + Math.sin(A * Math.PI) * 0.12,
                 z: f + (x - f) * A - Math.sin(m) * y
               })
             );
@@ -49675,7 +49494,7 @@ void main() {
           i.push(
             part(lt(0.05, 0.05, g), PALETTE.plank, {
               x: (u + p) / 2 + Math.cos(m) * y,
-              y: b + 1.12,
+              y: dk + 1.12,
               z: (f + x) / 2 - Math.sin(m) * y,
               ry: m
             })
@@ -50110,10 +49929,23 @@ void main() {
         x: u + (p - u) * E + b * R,
         z: f + (x - f) * E + T * R
       }),
-      S = 0.4 - r.baseY,
+      S = (r.crestY ? r.crestY - 0.32 : 0.4) - r.baseY, // CREEK: built up to the model's crest
       M = (E, R) => o.heightAt(E + t.x, R + t.z) - r.baseY,
       A = 9,
       v = (E) => 0.06 + 0.88 * E / (A - 1);
+    // CREEK: a dam built up over the silt stands on a bank of packed mud and stones
+    if (r.waterY && e >= 1) {
+      let bot = r.waterY - 0.1 - r.baseY,
+        hgt = S - 0.25 - bot;
+      if (hgt > 0.08) {
+        let R = y(0.5);
+        i.push(part(lt(0.62, hgt, g * 0.96), PALETTE.mud, { x: R.x, y: bot + hgt / 2, z: R.z, ry: m, jitter: 0.06, seed: t.id + 7 }));
+        for (let k = 0; k < 7; k++) {
+          let P = y(0.08 + 0.84 * k / 6, 0.34);
+          i.push(part(on(0.12 + hash01(t.id + k * 3) * 0.05), k % 2 ? PALETTE.stone : PALETTE.stone2, { x: P.x, y: bot + hgt * (0.3 + 0.5 * hash01(t.id + k)), z: P.z, ry: k }));
+        }
+      }
+    }
     if (e === 0 && n && n.level === 0 && n.stage === 0) {
       let E = 0;
       for (let R in n.delivered) E += n.delivered[R];
@@ -50378,14 +50210,19 @@ void main() {
       for (let r in t.spare || {}) s += t.spare[r];
       return (
         n += "|" + s + "|" + Math.round((t.cond ?? 1) * 5),
-        t.kind === "dam" && (n += "|" + ((t.pond || 0) > 0.3 ? "p" : "")),
+        t.kind === "dam" && (n += "|" + ((t.pond || 0) > 0.3 ? "p" : "") + "|" + Math.round(creekDamCrest(this.world, t) * 20)),
+        (t.kind === "dam" || t.kind === "crossing") && (n += "|" + Math.round(creekBedAt(this.world, t.z) * 10)),
         n);
 
     }
     build(t) {
       let e = this.world,
         n = { world: e, baseY: e.terrain.heightAt(t.x, t.z) };
-      (t.kind === "crossing" || t.kind === "dam") && (n.baseY = 0.4);
+      (t.kind === "crossing" || t.kind === "dam") && ( // CREEK: on the creek model's bed, banks and crest
+      n.baseY = 0,
+      n.waterY = creekBedAt(e, t.z) + 0.1,
+      n.bankY = creekFloorAt(e, t.z),
+      n.crestY = t.kind === "dam" ? creekDamCrest(e, t) : 0);
       let s = e.terrain,
         r = [],
         o = t.building,
@@ -51035,16 +50872,16 @@ void main() {
       m.lie = ti(m.lie, p.lie, Math.min(1, t * 3)),
       m.squash = ti(m.squash, p.squash, Math.min(1, t * 12));
       let T = a.heightAt(l.x, l.z),
-        y = waterLevelAt(r, l.x, l.z),
+        y = creekWaterLevelAt(r, l.z), // CREEK: the creek's own water and bed here
         S = T;
       if (a.isWater(l.x, l.z))
       if (o && o.cross) {
         let I = r.byId[o.cross];
         S =
         I && I.kind === "dam" ?
-        0.4 + 0.42 :
-        0.4 + (I && I.level >= 2 ? 0.66 : 0.17);
-      } else S = Math.max(0.4 - 0.18, y - 0.26);
+        creekDamCrest(r, I) + 0.05 :
+        I && I.level >= 2 ? creekFloorAt(r, I.z) + 0.1 : creekBedAt(r, I ? I.z : l.z) + 0.27;
+      } else S = Math.max(creekBedAt(r, l.z) + 0.02, y - 0.26);
       if (c === "play" && o.kind === "perch") {
         let I = r.res.find(
           (H) => H.kind === "boulder" && Math.hypot(H.x - l.x, H.z - l.z) < 1.2
@@ -51809,8 +51646,8 @@ void main() {
           u[f * 3 + 2] = T,
           u[f * 3 + 1] =
           o.heightAt(
-            Math.max(0, Math.min(63, b)),
-            Math.max(0, Math.min(63, T))
+            Math.max(0, Math.min(VW - 0.1, b)), // CREEK: the bigger valley
+            Math.max(0, Math.min(VL - 0.1, T))
           ) +
           0.5 +
           Math.sin(e * 0.8 + g * 6) * 0.35 +
@@ -51880,369 +51717,7 @@ void main(){
     part(lt(0.26, 0.01, 0.06), 15268863, { z: 0.04 })]
     );
   }
-  var WaterView = class {
-    constructor(t, e) {
-      this.world = t,
-      this.scene = e,
-      this.group = new Pe(),
-      e.add(this.group),
-      this.mat = new Ke({
-        uniforms: {
-          uTime: { value: 0 },
-          uLight: { value: 1 },
-          uRain: { value: 0 },
-          uDeep: { value: Br(3112872) },
-          uShallow: { value: Br(5813460) },
-          uFoam: { value: Br(14218495) },
-          uTint: { value: Br(16777215) },
-          uPond: { value: Br(2911878) },
-          uMarsh: { value: Br(5145986) }
-        },
-        vertexShader: gM,
-        fragmentShader: xM
-      }),
-      this.ponds = new Map(),
-      this.decor = null,
-      this.decorSig = "",
-      this.lastCheck = -99,
-      this.cells = [],
-      this.edgeCells = [],
-      this.flyCenters = [];
-      let n = (s, r, o) => {
-        let a = new Ts(s, r, o);
-        return a.count = 0, a.frustumCulled = !1, this.group.add(a), a;
-      };
-      this.frogs = n(yM(), he(), 12),
-      this.flies = n(vM(), new je({ vertexColors: !0 }), 8),
-      this.bugMat = new je({ color: 15269770 }),
-      this.bugs = n(new ks(0.075, 4, 3), this.bugMat, 20),
-      this.m4 = new se(),
-      this.q = new mn(),
-      this.e = new bn(),
-      this.v = new z(),
-      this.s = new z();
-    }
-    dispose() {
-      for (let t of this.ponds.values()) this.dropPond(t);
-      this.decor && (
-      this.group.remove(this.decor), this.decor.geometry.dispose());
-      for (let t of [this.frogs, this.flies, this.bugs])
-      t.geometry.dispose(), t.dispose();
-      this.mat.dispose(), this.scene.remove(this.group);
-    }
-    dropPond(t) {
-      for (let e of [t.mesh, t.deco])
-      e && (this.group.remove(e), e.geometry.dispose());
-    }
-    buildPond(t) {
-      let e = this.world.terrain,
-        n = t.rise * t.fill,
-        s = 0.012;
-      if (n < s + 0.003) return null;
-      let r = t.z - t.len,
-        o = r + Math.pow(s / n, 2) * t.len,
-        a = [];
-      for (let S = o; S < t.z; S += 0.25) a.push(S);
-      a.push(t.z);
-      let c = 2.2 + 3.2 + t.spread * 0.3,
-        h = Math.ceil(2 * c / 0.33),
-        d = 0.6 + t.spread * 0.18,
-        u = [],
-        f = [],
-        p = [],
-        x = [],
-        g = [];
-      for (let S = 0; S < a.length; S++) {
-        let M = a[S],
-          A = e.creekX(M),
-          v = e.creekHW(M),
-          E = Math.min(1, Math.max(0, (M - r) / t.len)),
-          R = WATER_LEVEL + n * Math.sqrt(E) + 0.003,
-          P = Math.pow(
-            Math.min(1, Math.max(0, (M - o) / Math.max(0.01, t.z - o))),
-            0.7
-          );
-        for (let N = 0; N <= h; N++) {
-          let B = A - c + 2 * c * N / h,
-            D = e.edgeDist(B, M),
-            I = e.heightAt(
-              Math.min(63.99, Math.max(0, B)),
-              Math.min(63.99, Math.max(0, M))
-            ),
-            H = R;
-          D > 0 && (
-          H -=
-          Math.max(0, D - d) * 0.6 + (
-          D > 0.3 ? Math.max(0, M - (t.z - 1)) * 0.35 : 0)),
-          t.snag && D > -0.1 && (H = Math.min(H, I - 0.06, WATER_LEVEL + 0.012)),
-          u.push(B, H, M),
-          f.push((B - (A - v - 0.35)) / (2 * (v + 0.35)), M),
-          p.push(D > 0.05 && !t.snag ? 1 : P),
-          x.push(Math.min(1, Math.max(0, (R - I) / 0.3)));
-        }
-      }
-      let m = h + 1;
-      for (let S = 0; S < a.length - 1; S++)
-      for (let M = 0; M < h; M++) {
-        let A = S * m + M,
-          v = A + 1,
-          E = A + m,
-          R = E + 1;
-        g.push(A, E, v, v, E, R);
-      }
-      let b = new ye();
-      b.setAttribute("position", new Zt(u, 3)),
-      b.setAttribute("uv", new Zt(f, 2)),
-      b.setAttribute("calm", new Zt(p, 1)),
-      b.setAttribute("dep", new Zt(x, 1)),
-      b.setIndex(g);
-      let T = new Et(b, this.mat);
-      T.frustumCulled = !1;
-      let y = null;
-      if (!t.snag && t.fill > 0.6 && t.len >= 7) {
-        let S = [],
-          M = 5 + Math.round(4 * t.fill);
-        for (let v = 0; v < M; v++) {
-          let E = t.z - 0.6 - hash01(t.id * 31 + v) * (t.len - 2),
-            R = hash01(t.id * 17 + v) < 0.5 ? -1 : 1,
-            P =
-            e.creekX(E) +
-            R * (e.creekHW(E) * (0.35 + 0.5 * hash01(t.id * 7 + v))),
-            N = Math.min(1, Math.max(0, (E - r) / t.len)),
-            B = WATER_LEVEL + n * Math.sqrt(N) + 0.012,
-            D = 0.11 + hash01(t.id + v * 3) * 0.08;
-          S.push(
-            part(yt(D, D, 0.012, 7), v % 3 ? 5151290 : 6270532, {
-              x: P,
-              y: B,
-              z: E,
-              ry: hash01(v) * 6
-            })
-          ),
-          v % 4 === 1 &&
-          S.push(
-            part(qt(0.05, 0), v % 8 === 1 ? 16228804 : 16775404, {
-              x: P + 0.03,
-              y: B + 0.04,
-              z: E
-            })
-          );
-        }
-        let A = mergeParts(S);
-        A && (y = new Et(A, he()));
-      }
-      return { mesh: T, deco: y };
-    }
-    syncPonds() {
-      let t = new Set();
-      this.flyCenters = [];
-      for (let e of pondSources(this.world)) {
-        t.add(e.id);
-        let n = e.len + ":" + Math.round(e.rise * e.fill * 200),
-          s = this.ponds.get(e.id);
-        if (
-        !e.snag &&
-        e.fill > 0.5 &&
-        this.flyCenters.push({
-          x: this.world.terrain.creekX(e.z - e.len / 2),
-          z: e.z - e.len / 2,
-          y: WATER_LEVEL + e.rise * e.fill,
-          r: 1.2 + e.len * 0.25
-        }),
-        s && s.sig === n)
-
-        continue;
-        s && this.dropPond(s);
-        let r = this.buildPond(e) || {};
-        r.sig = n,
-        r.mesh && this.group.add(r.mesh),
-        r.deco && this.group.add(r.deco),
-        this.ponds.set(e.id, r);
-      }
-      for (let [e, n] of this.ponds)
-      t.has(e) || (this.dropPond(n), this.ponds.delete(e));
-    }
-    syncDecor() {
-      let t = this.world,
-        e = t.terrain,
-        n = t.wet,
-        s = 0,
-        r = 0;
-      for (let c = 0; c < n.length; c++) {
-        let h = Math.floor(n[c] * 4);
-        h && (s = (s * 31 + c * 7 + h) % 1000003, r++);
-      }
-      let o = r + ":" + s;
-      if (o === this.decorSig) return;
-      this.decorSig = o,
-      this.decor && (
-      this.group.remove(this.decor),
-      this.decor.geometry.dispose(),
-      this.decor = null);
-      let a = [];
-      this.cells = [], this.edgeCells = [];
-      for (let c = 0; c < n.length; c++) {
-        let h = n[c];
-        if (h < 0.35) continue;
-        let d = c % 64,
-          u = Math.floor(c / 64),
-          f = c * 13,
-          p = d + 0.5,
-          x = u + 0.5,
-          g = e.edgeDist(p, x);
-        if (g < 0.15 || !e.walkable(p, x)) continue;
-        let m = e.heightAt(p, x);
-        h > 0.5 && (
-        this.cells.push({ x: p, z: x, w: h, y: m }),
-        g < 1.6 && this.edgeCells.push({ x: p, z: x, y: m }));
-        let b = h > 0.7 ? 3 : h > 0.5 ? 2 : 1;
-        for (let T = 0; T < b; T++) {
-          let y = d + hash01(f + T),
-            S = u + hash01(f + T + 5),
-            M = e.heightAt(y, S);
-          a.push(
-            part(
-              ze(0.06, 0.26 + hash01(f + T + 2) * 0.12, 3),
-              T % 2 ? 4156978 : 5933630,
-              { x: y, y: M + 0.12, z: S, rz: (hash01(f + T + 9) - 0.5) * 0.4 }
-            )
-          );
-        }
-        if (h > 0.62 && hash01(f + 40) < 0.55) {
-          let T = d + hash01(f + 41),
-            y = u + hash01(f + 42),
-            S = e.heightAt(T, y);
-          for (let M = 0; M < 2; M++)
-          a.push(
-            part(yt(0.015, 0.02, 0.62, 3), PALETTE.reed, {
-              x: T + M * 0.09,
-              y: S + 0.31,
-              z: y
-            })
-          ),
-          a.push(
-            part(yt(0.035, 0.035, 0.15, 4), PALETTE.cattail, {
-              x: T + M * 0.09,
-              y: S + 0.6 + M * 0.04,
-              z: y
-            })
-          );
-        }
-        if (h > 0.8 && hash01(f + 60) < 0.35) {
-          let T = d + 0.2 + hash01(f + 61) * 0.6,
-            y = u + 0.2 + hash01(f + 62) * 0.6,
-            S = e.heightAt(T, y) + 0.02,
-            M = hash01(f + 63) * 3;
-          a.push(
-            part(lt(0.34, 0.012, 0.22), 6131608, { x: T, y: S, z: y, ry: M })
-          ),
-          a.push(
-            part(lt(0.2, 0.012, 0.3), 6131608, {
-              x: T + 0.08,
-              y: S,
-              z: y + 0.05,
-              ry: M + 0.6
-            })
-          );
-        }
-        if (h > 0.5 && h < 0.8 && hash01(f + 80) < 0.12) {
-          let T = d + hash01(f + 81),
-            y = u + hash01(f + 82);
-          a.push(
-            part(qt(0.05, 0), hash01(f + 83) < 0.5 ? 14272767 : 16774048, {
-              x: T,
-              y: e.heightAt(T, y) + 0.2,
-              z: y
-            })
-          );
-        }
-      }
-      let l = mergeParts(a);
-      l && (
-      this.decor = new Et(l, he()),
-      this.decor.receiveShadow = !0,
-      this.group.add(this.decor));
-    }
-    setInst(t, e, n, s, r, o, a, l = 0) {
-      this.e.set(l, o, 0),
-      this.q.setFromEuler(this.e),
-      this.v.set(n, s, r),
-      this.s.set(a, a, a),
-      this.m4.compose(this.v, this.q, this.s),
-      t.setMatrixAt(e, this.m4);
-    }
-    update(t, e, n, s, r) {
-      let o = this.mat.uniforms;
-      o.uTime.value = t,
-      o.uLight.value = e,
-      o.uRain.value = n,
-      o.uTint.value.copy(s),
-      t - this.lastCheck > 3 && (
-      this.lastCheck = t, this.syncPonds(), this.syncDecor());
-      let a = this.world.hydro || {},
-        l = a.frogs ?
-        Math.min(12, Math.floor((a.marsh || 0) / 7), this.edgeCells.length) :
-        0;
-      for (let u = 0; u < l; u++) {
-        let f =
-          this.edgeCells[Math.floor(hash01(u * 97 + 5) * this.edgeCells.length)],
-          p = (t * (0.06 + hash01(u) * 0.05) + hash01(u + 3)) % 1,
-          x = p < 0.05 ? Math.sin(p / 0.05 * Math.PI) : 0,
-          g = hash01(u * 7) * 6.28 + Math.floor(t * 0.06 + hash01(u + 3)) * 1.7,
-          m = Math.cos(g) * 0.3 * (hash01(u + 11) - 0.5),
-          b = Math.sin(g) * 0.3 * (hash01(u + 13) - 0.5);
-        this.setInst(
-          this.frogs,
-          u,
-          f.x + m + (hash01(u + 1) - 0.5) * 0.6,
-          f.y + 0.01 + x * 0.22,
-          f.z + b + (hash01(u + 2) - 0.5) * 0.6,
-          g,
-          1
-        );
-      }
-      this.frogs.count = l, this.frogs.instanceMatrix.needsUpdate = !0;
-      let c = 1 - r,
-        h =
-        a.flies && c > 0.5 && n < 0.5 && this.flyCenters.length ?
-        Math.min(8, 2 + Math.floor((a.marsh || 0) / 12)) :
-        0;
-      for (let u = 0; u < h; u++) {
-        let f = this.flyCenters[u % this.flyCenters.length],
-          p = t * (0.5 + hash01(u + 20) * 0.4) + hash01(u + 21) * 20,
-          x = Math.sin(p * 2.7) > 0.6 ? 1.6 : 1,
-          g =
-          f.x + Math.sin(p * 1.3 * x) * f.r * 0.6 + Math.sin(p * 3.1) * 0.25,
-          m = f.z + Math.cos(p * 0.9 * x) * f.r + Math.cos(p * 2.3) * 0.2,
-          b = f.y + 0.45 + Math.sin(p * 1.7) * 0.18,
-          T = Math.cos(p * 1.3 * x),
-          y = -Math.sin(p * 0.9 * x);
-        this.setInst(this.flies, u, g, b, m, Math.atan2(T, y), 1.1);
-      }
-      this.flies.count = h, this.flies.instanceMatrix.needsUpdate = !0;
-      let d =
-      r > 0.55 && n < 0.3 && this.cells.length ?
-      Math.min(20, Math.floor(this.cells.length / 5)) :
-      0;
-      for (let u = 0; u < d; u++) {
-        let f = this.cells[Math.floor(hash01(u * 53 + 1) * this.cells.length)],
-          p = t * 0.35 + hash01(u + 40) * 30,
-          x = 0.5 + 0.5 * Math.sin(t * (1.5 + hash01(u + 41) * 2) + hash01(u + 42) * 6);
-        this.setInst(
-          this.bugs,
-          u,
-          f.x + Math.sin(p) * 0.8,
-          f.y + 0.4 + Math.sin(p * 1.7) * 0.25 + hash01(u) * 0.4,
-          f.z + Math.cos(p * 0.8) * 0.8,
-          0,
-          0.5 + x * 0.8
-        );
-      }
-      this.bugs.count = d,
-      this.bugs.instanceMatrix.needsUpdate = !0,
-      this.bugMat.color.setRGB(1, 1, 0.5);
-    }
-  };
+  var WaterView = null; // CREEK: the water is drawn by src/view/land.js (Phase 3A)
   var _M =
     "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
     bM = `
@@ -52428,7 +51903,10 @@ void main(){
           u > 0.5 ?
           new z(-0.4, 0.8, 0.45) :
           new z(d * 0.9, 0.35 + h * 0.9, 0.45);
-        this.sun.position.set(32 + f.x * 50, f.y * 50, 32 + f.z * 50);
+        let sx = this.sunAt ? this.sunAt.x : VW / 2,
+          sz = this.sunAt ? this.sunAt.z : VL / 2; // CREEK: shadows follow what you are looking at
+        this.sun.target.position.set(sx, 0, sz);
+        this.sun.position.set(sx + f.x * 50, f.y * 50, sz + f.z * 50);
         let p = 1 - Math.min(1, h * 1.6),
           x = new wt(16773590).
           lerp(new wt(16753515), p * r * 0.8).
@@ -52471,13 +51949,14 @@ void main(){
           a.night
         ),
         r.terrain.updateWear(e);
-        let l = n.focus || { x: 32, z: 32 };
+        let l = n.focus || { x: VW / 2, z: 30 };
+        this.sunAt = { x: Math.round(l.x / 4) * 4, z: Math.round(l.z / 4) * 4 };
         r.props.sync(e, this.camera.position, {
           x: l.x,
           y:
           s.terrain.heightAt(
-            Math.max(0, Math.min(63.9, l.x)),
-            Math.max(0, Math.min(63.9, l.z))
+            Math.max(0, Math.min(VW - 0.1, l.x)),
+            Math.max(0, Math.min(VL - 0.1, l.z))
           ) + 0.5,
           z: l.z
         }),
@@ -52542,7 +52021,7 @@ void main(){
             t,
             e,
             a.rain,
-            n.focus || { x: 32, z: 32 },
+            n.focus || { x: VW / 2, z: 30 },
             a.night,
             s.terrain
           ),
@@ -52621,7 +52100,7 @@ void main(){
       this.r = t,
       this.canvas = e,
       this.hooks = n,
-      this.goal = { x: 32, z: 32, dist: 18, yaw: 0.6, pitch: 0.8 },
+      this.goal = { x: VW / 2, z: 30, dist: 18, yaw: 0.6, pitch: 0.8 },
       this.cur = { ...this.goal },
       this.follow = null,
       this.ambient = !1,
@@ -52634,7 +52113,7 @@ void main(){
     }
     setWorld(t) {
       this.world = t;
-      let e = t.meadow || { x: 32, z: 32 };
+      let e = t.meadow || { x: VW / 2, z: 30 };
       this.goal.x = this.cur.x = e.x, this.goal.z = this.cur.z = e.z;
     }
     bind() {
@@ -52652,7 +52131,7 @@ void main(){
           this.goal.dist = clamp(
             this.goal.dist * Math.exp(e.deltaY * 0.0012),
             9,
-            72
+            110
           );
         },
         { passive: !1 }
@@ -52698,11 +52177,11 @@ void main(){
           break;
         case "+":
         case "=":
-          e.dist = clamp(e.dist * 0.88, 9, 72);
+          e.dist = clamp(e.dist * 0.88, 9, 110);
           break;
         case "-":
         case "_":
-          e.dist = clamp(e.dist * 1.12, 9, 72);
+          e.dist = clamp(e.dist * 1.12, 9, 110);
           break;
         default:
           o = !1;
@@ -52751,8 +52230,8 @@ void main(){
     groundY() {
       return this.world ?
       this.world.terrain.heightAt(
-        clamp(this.cur.x, 0, 63),
-        clamp(this.cur.z, 0, 63)
+        clamp(this.cur.x, 0, VW - 1),
+        clamp(this.cur.z, 0, VL - 1)
       ) :
       1;
     }
@@ -52836,7 +52315,7 @@ void main(){
         {
           let r = this.r.groundAt(e.x, e.y, this.groundY());
           r && (this.goal.x = r.x, this.goal.z = r.z),
-          this.goal.dist = clamp(this.goal.dist * 0.6, 9, 72),
+          this.goal.dist = clamp(this.goal.dist * 0.6, 9, 110),
           this.lastTap = null;
         } else
         this.lastTap = { t: s, x: e.x, y: e.y },
@@ -52846,10 +52325,10 @@ void main(){
     }
     clampGoal() {
       let t = this.goal,
-        e = t.x - 32,
-        n = t.z - 32,
+        e = 0,
+        n = 0,
         s = Math.hypot(e, n);
-      s > 27 && (t.x = 32 + e / s * 27, t.z = 32 + n / s * 27);
+      t.x = clamp(t.x, 5, VW - 5), t.z = clamp(t.z, 4, VL - 4); // CREEK: a long valley
     }
     flyTo(t, e, n) {
       this.goal.x = t,
@@ -52997,7 +52476,7 @@ void main(){
               c = a.length ?
               a.reduce((h, d) => h + d.z, 0) / a.length :
               e.meadow.z;
-            n.x = Hr(l, 32, 0.3), n.z = Hr(c, 32, 0.3);
+            n.x = Hr(l, VW / 2, 0.2), n.z = Hr(c, VL / 2, 0.15);
           }
           n.yaw += t * 0.035 * this.orbitDir;
         }
@@ -53034,7 +52513,7 @@ void main(){
         e = this.r.camera,
         n = t.dist * (this.r.distFactor || 1),
         s = this.world ?
-        this.world.terrain.heightAt(clamp(t.x, 0, 63.9), clamp(t.z, 0, 63.9)) :
+        this.world.terrain.heightAt(clamp(t.x, 0, VW - 0.1), clamp(t.z, 0, VL - 0.1)) :
         1,
         r = Math.sin(t.pitch) * n,
         o = Math.cos(t.pitch) * n;
@@ -53476,7 +52955,7 @@ void main(){
     return t + (t === 1 ? " day ago" : " days ago");
   }
   function clockText(i) {
-    return `${dateText(i)} \xB7 ${seasonAt(i).name} \xB7 ${timeOfDayName(i.t)}`; // LIFE: the real calendar
+    return `${dateText(i)} \xB7 ${timeOfDayName(i.t)}`; // CREEK: the valley's own 8-day year
   }
   var qc = {
       eye: '<svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>',
@@ -53902,9 +53381,10 @@ void main(){
       villageHTML() {
         let t = this.w,
           e = homeWord(t),
-          n = this.curTab("v", "projects"),
+          n = this.curTab("v", "land"),
           s = "";
-        if (n === "projects") {
+        if (n === "land") s += villageLandHTML(t); // CREEK
+        else if (n === "projects") {
           let r = t.structures.filter((a) => a.building);
           s += r.length ?
           '<ul class="list">' +
@@ -53982,6 +53462,7 @@ void main(){
             "the creatures haven\u2019t agreed on a name for home yet"
           ) +
           this.tabs("v", [
+          ["land", "Land"],
           ["projects", "Projects"],
           ["words", "Words"],
           ["customs", "Customs"],
@@ -54171,7 +53652,7 @@ void main(){
         this.summary.innerHTML = `<div class="card welcome"><div class="sh-title big">Creekfolk</div>
       <div class="sh-body">
       <p>Five small creatures have just woken up in a meadow beside a creek. They have their own temperaments, needs, and curiosities, and they will figure out the valley \u2014 and each other \u2014 on their own.</p>
-      <p>Everything happens in real time, and there is no way to hurry it. A day in the valley lasts an hour; the seasons follow your own calendar. A creekfolk lives about a month: a child, then a grown-up, then a wise elder. Their children will carry on what they started.</p>
+      <p>Everything happens in real time, and there is no way to hurry it. A day in the valley lasts an hour, and a year about eight days: a wet winter and spring, when storms come and the creek runs, then a dry summer and autumn. A creekfolk lives about a month: a child, then a grown-up, then a wise elder. Their children will carry on what they started.</p>
       <p>When you close the game, the valley keeps its clock, and every moment is simulated when you return.</p>
       <p class="muted"><b>Drag</b> to look around \xB7 <b>pinch</b> or <b>scroll</b> to zoom \xB7 <b>two fingers</b> or <b>right-drag</b> to turn \xB7 <b>tap</b> a creature to follow it.</p>
       </div><div class="btnrow center"><button class="pill on" data-go>Watch them</button></div></div>`,
@@ -54449,17 +53930,7 @@ void main(){
           console.warn("save unreadable", n, o);
         }
       }
-      if (!t && this.ls)
-      for (let n of [SAVE_KEY, BACKUP_KEY]) {
-        let r = this.ls.getItem(n);
-        if (r)
-        try {
-          t = loadWorld(r), e = "legacy";
-          break;
-        } catch (o) {
-          console.warn("old save unreadable", n, o);
-        }
-      }
+      // CREEK: each build keeps its own saves and never reads an older build's
       this.store.available || this.hud.saveWarn.classList.remove("hidden");
       t ?
       (this.setWorld(t),
@@ -54522,7 +53993,7 @@ void main(){
         `Saved in this browser${this.lastSaveAt ? " (last " + Math.round((Date.now() - this.lastSaveAt) / 1e3) + "s ago)" : ""}.` :
         "This browser won\u2019t let the game save \u2014 use Export to keep a copy.";
       return {
-        text: `This valley began on ${dateText(t, 0)} and is ${e} old (seed \u201C${t.seed}\u201D). ${n} A year is a long time to trust a browser, so export a backup file now and then; it can be imported on any device.`,
+        text: `This valley began on ${realStartText(t)} and is ${e} old (seed \u201C${t.seed}\u201D). ${n} A year is a long time to trust a browser, so export a backup file now and then; it can be imported on any device.`,
         wake: this.wakeStatus
       };
     }
@@ -54688,8 +54159,11 @@ void main(){
         let n;
         try {
           n = loadWorld(e.trim());
-        } catch {
+        } catch (r) {
+          let other = r && r.message === OTHER_BUILD_TEXT; // CREEK: another build's valley
           await this.hud.dialog(
+            other ?
+            `<div class="sh-title">A valley from another version</div><p>${escapeHtml(OTHER_BUILD_TEXT)}.</p><p class="muted">Each version of Creekfolk keeps its own valleys. Open this save in the version that made it.</p>` :
             '<div class="sh-title">That didn\u2019t work</div><p>That text or file couldn\u2019t be read as a Creekfolk save.</p>',
             [{ label: "OK", value: !0 }]
           );
@@ -54727,6 +54201,22 @@ void main(){
         }]
 
       );
+    }
+    // CREEK: during a long catch-up, keep the screen awake where the browser allows it
+    // (phones pause hidden pages, and a sleeping screen hides the page)
+    async catchWake(gap) {
+      if (gap < 6 * 3600 || this.catchLock || !("wakeLock" in navigator)) return;
+      try {
+        this.catchLock = await navigator.wakeLock.request("screen");
+      } catch {}
+    }
+    releaseCatchWake() {
+      if (this.catchLock) {
+        try {
+          this.catchLock.release();
+        } catch {}
+        this.catchLock = null;
+      }
     }
     async requestWake() {
       if (!this.settings.wakeLock) {
@@ -54801,7 +54291,7 @@ void main(){
         events: [],
         levels: o.stats.levels || 0,
         started: t
-      }),
+      }, this.catchWake(a - o.t)),
       this.catching)
       {
         let h = this.catching;
@@ -54824,7 +54314,7 @@ void main(){
             this.setWorld(x), o = this.world;
           } else {
             let m = ((h.workerT ?? h.workerFrom) - h.from) / Math.max(1, h.to - h.from);
-            t - h.started > 250 && this.hud.showCatchup(!0, m, `Catching up on ${durationText(h.to - h.from)}\u2026`);
+            t - h.started > 250 && this.hud.showCatchup(!0, m, catchupLabel(h));
             return;
           }
         }
@@ -54835,11 +54325,11 @@ void main(){
         this.hud.showCatchup(
           !0,
           u,
-          `Catching up on ${durationText(h.to - h.from)}\u2026`
+          catchupLabel(h)
         ),
         d)
         {
-          this.catching = null, this.hud.showCatchup(!1);
+          this.catching = null, this.hud.showCatchup(!1), this.releaseCatchWake();
           let f = h.to - h.from;
           f > 300 &&
           this.hud.showSummary(f, h.events, (o.stats.levels || 0) - h.levels),
@@ -54944,6 +54434,868 @@ void main(){
     }
   };
 
+// ==== src/view/land.js ====
+// ==========================================================================
+// The land and its water, drawn from the creek model (Phase 3A).
+//
+// Replaces the original GroundView and WaterView. The ground's heights come from
+// world.terrain (rebuilt from the creek model after every flood); its colours from
+// what each cell is (creek bed, cut bank, valley floor, terrace, hills) crossed with
+// how green it is (world.green), how marshy (world.wet) and how worn (world.wear).
+// The creek is a ribbon whose width and height come from each node's water level, so
+// it shrinks, stops and dries in the dry season; ponds are flat water at their level;
+// water on the valley floor is one mesh over the cells where the water table stands
+// above the ground, so its edges follow the floor's hollows and side channels.
+// ==========================================================================
+
+var LAND = {
+  straw: new wt(0xb8a466),
+  dust: new wt(0x9a8058),
+  cut: new wt(0x80603f),
+  cut2: new wt(0x6a4d33),
+  bedWet: new wt(0x5a5044),
+  bedDry: new wt(0xa39276),
+  marsh1: new wt(6465610),
+  marsh2a: new wt(7314766),
+  marsh2b: new wt(8362576),
+  marsh3a: new wt(6261338),
+  marsh3b: new wt(7241548),
+  path: new wt(PALETTE.dirt),
+  path2: new wt(PALETTE.dirt2),
+  pathWet: new wt(7232060),
+};
+var LAND_KIND = { bed: 1, cut: 2, floor: 3, terrace: 4, hill: 5, rock: 6, out: 7 };
+
+GroundView = class {
+  constructor(t, e) {
+    this.world = t;
+    this.scene = e;
+    this.group = new Pe();
+    e.add(this.group);
+    this.PAD = 18;
+    this.GW = VW + 2 * this.PAD;
+    this.GL = VL + 2 * this.PAD;
+    this.ver = -1;
+    this.lastPaint = -99;
+    this.buildGround();
+    this.buildDecor();
+  }
+  dispose() {
+    this.group.traverse((t) => {
+      t.geometry && t.geometry.dispose();
+    });
+    this.scene.remove(this.group);
+  }
+  // height of a vertex in the padded grid (vx, vz in valley coordinates). Inside the
+  // creek's trench the grid is pushed well down: the trench is drawn by its own smooth
+  // mesh (syncChannel), and the grid's coarse triangles must stay under it.
+  vh(vx, vz) {
+    let T = this.world.terrain;
+    if (vx >= 0 && vz >= 0 && vx <= VW && vz <= VL) {
+      let k = vz * (VW + 1) + vx;
+      return T.h[k] - (T.cut[k] > 0.02 ? 0.6 : 0);
+    }
+    let h = T.heightRaw(vx, vz);
+    return T.uncarvedAt(vx, vz) - h > 0.02 ? h - 0.6 : h;
+  }
+  buildGround() {
+    let n = this.GW * this.GL;
+    this.pos = new Float32Array(n * 18);
+    this.col = new Float32Array(n * 18);
+    this.kind = new Uint8Array(n);
+    this.base = new Float32Array(n * 3);
+    let g = new ye();
+    g.setAttribute("position", new Le(this.pos, 3));
+    g.setAttribute("color", new Le(this.col, 3));
+    this.groundGeo = g;
+    this.fillPositions();
+    let m = new Et(g, new Qe({ vertexColors: !0, flatShading: !0 }));
+    m.receiveShadow = !0;
+    this.ground = m;
+    this.group.add(m);
+    this.paint(0, true);
+    this.syncChannel();
+  }
+  // heights for every vertex, then the triangles (the same split as the original)
+  fillPositions() {
+    let P = this.PAD,
+      VWp = this.GW + 1,
+      VLp = this.GL + 1,
+      H = this.vhs || (this.vhs = new Float32Array(VWp * VLp)),
+      p = this.pos,
+      l = 0;
+    for (let vz = 0; vz < VLp; vz++) for (let vx = 0; vx < VWp; vx++) H[vz * VWp + vx] = this.vh(vx - P, vz - P);
+    for (let d = 0; d < this.GL; d++)
+      for (let u = 0; u < this.GW; u++) {
+        let f = u - P,
+          q = d - P,
+          a = H[d * VWp + u],
+          b = H[d * VWp + u + 1],
+          c = H[(d + 1) * VWp + u],
+          e = H[(d + 1) * VWp + u + 1];
+        p[l++] = f, p[l++] = a, p[l++] = q;
+        p[l++] = f, p[l++] = c, p[l++] = q + 1;
+        p[l++] = f + 1, p[l++] = b, p[l++] = q;
+        p[l++] = f + 1, p[l++] = b, p[l++] = q;
+        p[l++] = f, p[l++] = c, p[l++] = q + 1;
+        p[l++] = f + 1, p[l++] = e, p[l++] = q + 1;
+      }
+    this.groundGeo.attributes.position.needsUpdate = !0;
+    this.groundGeo.computeVertexNormals();
+    this.groundGeo.computeBoundingSphere();
+    this.classify();
+    this.ver = this.world.terrain.version;
+  }
+  // what each cell is, and its base colour
+  classify() {
+    let w = this.world,
+      T = w.terrain,
+      cr = w.creek,
+      P = this.PAD,
+      VWp = this.GW + 1,
+      H = this.vhs,
+      tmp = new wt();
+    for (let d = 0; d < this.GL; d++)
+      for (let u = 0; u < this.GW; u++) {
+        let k = d * this.GW + u,
+          x = u - P + 0.5,
+          z = d - P + 0.5,
+          a = H[d * VWp + u],
+          b = H[d * VWp + u + 1],
+          c = H[(d + 1) * VWp + u],
+          e = H[(d + 1) * VWp + u + 1],
+          lo = Math.min(a, b, c, e),
+          hi = Math.max(a, b, c, e),
+          slope = hi - lo,
+          h01 = hash01(u * 131 + d * 17),
+          nz = T.noise.get(x * 0.35, z * 0.35),
+          kind,
+          o = Math.abs(x - T.creekX(z)),
+          node = cr ? cr.nodes[creekNodeIndex(z)] : null,
+          half = node ? 0.5 * creekTopWidth(node) : 1.2,
+          r = T.valleyR(x, z);
+        if (o < half && z > CREEK.z0 && z < CREEK.z1) kind = node && o < node.wb / 2 + 0.25 ? LAND_KIND.bed : creekTrench(node) > 0.35 ? LAND_KIND.cut : LAND_KIND.floor;
+        else if (x < 0 || z < 0 || x > VW || z > VL) kind = r > 0.92 && slope > 1.6 ? LAND_KIND.rock : LAND_KIND.out;
+        else if (r > 0.88 && slope > 1.3) kind = LAND_KIND.rock;
+        else if (r > 0.9) kind = LAND_KIND.hill;
+        else if (T.floorWeight(x, z) > 0.5) kind = LAND_KIND.floor;
+        else kind = LAND_KIND.terrace;
+        this.kind[k] = kind;
+        switch (kind) {
+          case LAND_KIND.bed:
+            tmp.copy(LAND.bedDry);
+            break;
+          case LAND_KIND.cut:
+            tmp.copy(h01 > 0.5 ? LAND.cut : LAND.cut2).multiplyScalar(0.92 + nz * 0.15);
+            break;
+          case LAND_KIND.rock:
+            tmp.copy(Be(h01 > 0.5 ? PALETTE.rock : PALETTE.rock2)).multiplyScalar(0.9 + nz * 0.2);
+            break;
+          case LAND_KIND.hill:
+          case LAND_KIND.out:
+            tmp.copy(Be(nz > 0.5 ? PALETTE.hill : PALETTE.hill2)).multiplyScalar(0.92 + h01 * 0.12);
+            break;
+          default: {
+            let f = T.noise.fbm(x * 0.06 + 20, z * 0.06, 2);
+            tmp.copy(Be(PALETTE.grass2)).lerp(Be(PALETTE.meadow), clamp((f - 0.3) * 2.2, 0, 1)).multiplyScalar(0.97 + h01 * 0.04);
+            if (kind === LAND_KIND.floor) tmp.lerp(Be(PALETTE.grass3), 0.25);
+          }
+        }
+        this.base[k * 3] = tmp.r;
+        this.base[k * 3 + 1] = tmp.g;
+        this.base[k * 3 + 2] = tmp.b;
+      }
+  }
+  // per-vertex green, marsh and wear (averaged over the cells around each vertex)
+  cornerFields() {
+    let w = this.world,
+      n = (VW + 1) * (VL + 1),
+      cg = this.cg || (this.cg = new Float32Array(n)),
+      cq = this.cq || (this.cq = new Float32Array(n)),
+      cw = this.cw || (this.cw = new Float32Array(n)),
+      G = w.green,
+      Q = w.wet,
+      Wr = w.wear;
+    for (let vz = 0; vz <= VL; vz++)
+      for (let vx = 0; vx <= VW; vx++) {
+        let sg = 0,
+          sq = 0,
+          sw = 0,
+          c = 0;
+        for (let dz = -1; dz <= 0; dz++)
+          for (let dx = -1; dx <= 0; dx++) {
+            let x = vx + dx,
+              z = vz + dz;
+            if (x < 0 || z < 0 || x >= VW || z >= VL) continue;
+            let k = z * VW + x;
+            sg += G ? G[k] : 1;
+            sq += Q ? Q[k] : 0;
+            sw += Wr ? Wr[k] : 0;
+            c++;
+          }
+        let v = vz * (VW + 1) + vx;
+        cg[v] = c ? sg / c : 1;
+        cq[v] = c ? sq / c : 0;
+        let o = c ? sw / c : 0,
+          a = clamp((o - 6) / 30, 0, 1);
+        cw[v] = a * a * (3 - 2 * a) * 0.92;
+      }
+  }
+  paint(t, force) {
+    let w = this.world,
+      cr = w.creek,
+      soil = cr ? cr.soil : 1,
+      P = this.PAD,
+      col = this.col,
+      g = new wt(),
+      cg = null,
+      cq = null,
+      cw = null,
+      wt0 = w.wt,
+      cells = cr ? creekCells(w) : null,
+      cutA = w.terrain.cut;
+    this.cornerFields();
+    cg = this.cg;
+    cq = this.cq;
+    cw = this.cw;
+    let ss = (a, b, x) => {
+      let y = clamp((x - a) / (b - a), 0, 1);
+      return y * y * (3 - 2 * y);
+    };
+    let corners = [[0, 0], [0, 1], [1, 0], [1, 0], [0, 1], [1, 1]];
+    for (let d = 0; d < this.GL; d++)
+      for (let u = 0; u < this.GW; u++) {
+        let k = d * this.GW + u,
+          kind = this.kind[k],
+          x0 = u - P,
+          z0 = d - P,
+          inside = x0 >= 0 && z0 >= 0 && x0 < VW && z0 < VL,
+          br = this.base[k * 3],
+          bg = this.base[k * 3 + 1],
+          bb = this.base[k * 3 + 2],
+          ck = inside ? z0 * VW + x0 : -1,
+          wetBed = kind === LAND_KIND.bed && inside && wt0 && cells && wt0[ck] > cells.h[ck] - 0.12;
+        for (let M = 0; M < 6; M++) {
+          let [ox, oz] = corners[M],
+            vx = x0 + ox,
+            vz = z0 + oz,
+            vin = vx >= 0 && vz >= 0 && vx <= VW && vz <= VL,
+            v = vin ? vz * (VW + 1) + vx : -1,
+            G = vin ? cg[v] : kind === LAND_KIND.out || kind === LAND_KIND.hill ? 0.35 + 0.65 * soil : soil,
+            R = vin ? cq[v] : 0,
+            E = vin ? cw[v] : 0,
+            cut = vin ? cutA[v] : 0;
+          g.setRGB(br, bg, bb);
+          if (kind !== LAND_KIND.rock) {
+            // dry season: green fades to straw, then to dusty brown
+            let dry = 1 - G;
+            if (dry > 0.02) g.lerp(LAND.straw, ss(0.05, 0.9, dry) * 0.85);
+            if (dry > 0.6) g.lerp(LAND.dust, (dry - 0.6) * 0.75);
+          }
+          if (cut > 0.06) {
+            // the creek's trench: bare cut banks, and its bed at the bottom
+            let deep = vin && cr ? creekAt(cr, vz, "fp") - creekAt(cr, vz, "bed") : 1,
+              atBed = ss(deep - 0.12, deep - 0.02, cut);
+            g.lerp(hash01(k) < 0.5 ? LAND.cut : LAND.cut2, ss(0.06, 0.3, cut) * (1 - 0.55 * G * ss(0.5, 0.2, deep)));
+            if (atBed > 0) g.lerp(wetBed || R > 0.3 ? LAND.bedWet : LAND.bedDry, atBed);
+          }
+          if (R > 0.1) {
+            let B = hash01(k * 7 + 3) < 0.5;
+            g.lerp(LAND.marsh1, ss(0.1, 0.4, R) * 0.7);
+            R > 0.4 && g.lerp(B ? LAND.marsh2a : LAND.marsh2b, ss(0.4, 0.7, R) * 0.8);
+            R > 0.7 && g.lerp(B ? LAND.marsh3a : LAND.marsh3b, ss(0.7, 1, R) * 0.6);
+          }
+          if (E > 0) g.lerp(R > 0.45 ? LAND.pathWet : E > 0.6 ? LAND.path2 : LAND.path, E);
+          if (this.overlay && vin) this.overlayColor(g, this.overlay, vx, vz, G, R, E);
+          let s = M < 3 ? 1 : 0.97,
+            N = (k * 6 + M) * 3;
+          col[N] = g.r * s;
+          col[N + 1] = g.g * s;
+          col[N + 2] = g.b * s;
+        }
+      }
+    this.groundGeo.attributes.color.needsUpdate = !0;
+    // the grass tufts dry with the land
+    if (this.tuftMat) {
+      let dry = 1 - (cr ? 0.5 * cr.greenNow + 0.5 * soil : 1);
+      this.tuftMat.color.setRGB(1 + 0.45 * dry, 1 + 0.12 * dry, 1 - 0.45 * dry);
+    }
+  }
+  buildDecor() {
+    let t = this.world.terrain,
+      e = [],
+      tufts = [],
+      n = [PALETTE.flower1, PALETTE.flower2, PALETTE.flower3, PALETTE.flower4],
+      s = 1;
+    for (let a = 0; a < 2700; a++) {
+      let l = hash01(s++) * VW,
+        c = hash01(s++) * VL;
+      if (!t.walkable(l, c) || t.edgeDist(l, c) < 0.8) continue;
+      let h = t.heightAt(l, c),
+        d = hash01(s++);
+      d < 0.75 ?
+      tufts.push(
+        part(ze(0.06, 0.22, 3), d < 0.4 ? PALETTE.grass3 : PALETTE.grass2, {
+          x: l,
+          y: h + 0.09,
+          z: c,
+          ry: d * 6
+        })
+      ) :
+      e.push(
+        part(qt(0.05, 0), n[Math.floor(hash01(s++) * 4)], {
+          x: l,
+          y: h + 0.06,
+          z: c
+        })
+      );
+    }
+    // trees on the hills around the valley
+    for (let a = 0; a < 2600; a++) {
+      let l = hash01(s++) * (VW + 36) - 18,
+        c = hash01(s++) * (VL + 36) - 18,
+        h = t.valleyR(l, c);
+      if (h < 0.93 || h > 1.6 || Math.abs(l - t.creekX(c)) < 4) continue;
+      let d = l < 0 || c < 0 || l > VW || c > VL ? t.heightRaw(l, c) : t.heightAt(l, c),
+        u = 0.8 + hash01(s++) * 0.7,
+        f = hash01(s++);
+      f < 0.7 ?
+      (e.push(part(yt(0.08, 0.1, 0.5, 4), PALETTE.trunk, { x: l, y: d + 0.25 * u, z: c, sx: u, sy: u, sz: u })),
+      e.push(part(ze(0.55, 1.3, 5), f < 0.35 ? PALETTE.pine : PALETTE.leaf3, { x: l, y: d + 1.15 * u, z: c, sx: u, sy: u, sz: u, ry: f * 9 }))) :
+      (e.push(part(yt(0.08, 0.1, 0.6, 4), PALETTE.trunk, { x: l, y: d + 0.3 * u, z: c, sx: u, sy: u, sz: u })),
+      e.push(part(qt(0.6, 0), f < 0.85 ? PALETTE.leaf : PALETTE.hill, { x: l, y: d + 0.95 * u, z: c, sx: u, sy: u * 0.9, sz: u })));
+    }
+    this.decorVer = t.version;
+    let r = mergeParts(e);
+    if (r) {
+      let o = new Et(r, he());
+      o.receiveShadow = !0;
+      this.decor = o;
+      this.group.add(o);
+    }
+    let tg = mergeParts(tufts);
+    if (tg) {
+      this.tuftMat = this.tuftMat || new Qe({ vertexColors: !0, flatShading: !0 });
+      let o = new Et(tg, this.tuftMat);
+      o.receiveShadow = !0;
+      this.tufts = o;
+      this.group.add(o);
+    }
+  }
+  // the developer menu's overlays: wetness, worn paths, the creek's stage, land capacity
+  overlayColor(g, kind, vx, vz, G, R, E) {
+    let grey = 0.3 * g.r + 0.5 * g.g + 0.2 * g.b,
+      c = LAND.ovTmp || (LAND.ovTmp = new wt()),
+      a = 0.8;
+    if (kind === "wet") c.setRGB(0.15, 0.25 + 0.35 * R, 0.3 + 0.7 * R);
+    else if (kind === "wear") c.setRGB(0.25 + 0.75 * clamp(E * 1.3, 0, 1), 0.2, 0.2);
+    else if (kind === "stage") {
+      if (this.world.terrain.floorWeight(vx, vz) < 0.3 && Math.abs(vx - this.world.terrain.creekX(vz)) > 4) return;
+      let st = creekStageAt(this.world, vz);
+      c.set({ 0: 0x2d6cdf, I: 0x2bb3a8, II: 0xd9453b, III: 0xf08a24, IV: 0xe8c33a, V: 0x4fae4a }[st] || 0x888888);
+      a = 0.65;
+    } else if (kind === "feed") {
+      let f = clamp(0.55 * G + 0.45 * R, 0, 1);
+      c.setRGB(0.55 - 0.4 * f, 0.3 + 0.55 * f, 0.15);
+    } else return;
+    g.setRGB(grey, grey, grey).lerp(c, a);
+  }
+  // the creek has changed shape: new heights; the small decor is set down on them again
+  refreshDecor() {
+    for (let m of [this.decor, this.tufts]) if (m) this.group.remove(m), m.geometry.dispose();
+    this.decor = this.tufts = null;
+    this.buildDecor();
+  }
+  // The creek's trench as its own mesh along the centre line, so its banks are smooth
+  // curves instead of the ground grid's steps. Its outer lip lies just over the ground.
+  syncChannel() {
+    let w = this.world,
+      T = w.terrain,
+      cr = w.creek;
+    if (!cr) return;
+    let ns = cr.nodes,
+      pos = [],
+      col = [],
+      idx = [],
+      tmp = new wt(),
+      P = this.PAD,
+      prev = -1,
+      cols = 0,
+      ground = (x, z) => {
+        // the ground's own colour at the nearest grid corner
+        let u = clamp(Math.round(x) + P, 0, this.GW - 1),
+          d = clamp(Math.round(z) + P, 0, this.GL - 1),
+          N = (d * this.GW + u) * 18;
+        return tmp.setRGB(this.col[N], this.col[N + 1], this.col[N + 2]);
+      };
+    for (let z = -16; z <= VL + 16; z += 0.5) {
+      let f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
+        i = Math.floor(f),
+        n = f - i < 0.5 ? ns[i] : ns[i + 1],
+        cx = T.creekX(z),
+        hw = n.wb / 2,
+        Ht = Math.max(n.fp - n.bed, 0.05),
+        Hz = n.bw > 0.05 ? clamp(n.bz - n.bed, 0, Ht - 0.03) : 0,
+        x1 = hw + n.m * Hz,
+        x3 = x1 + (Hz > 0 ? n.bw / 2 : 0),
+        edge = x3 + n.m * (Ht - Hz),
+        offs = Hz > 0 ? [0, hw, x1, x3, edge, edge + 0.6, edge + 1.5] : [0, hw, edge, edge + 0.6, edge + 1.5],
+        wetBed = n.wl > n.bed + 0.005,
+        row = [];
+      for (let side of [-1, 1])
+        for (let k = side < 0 ? offs.length - 1 : 1; side < 0 ? k >= 0 : k < offs.length; k += side < 0 ? -1 : 1) row.push([side * offs[k], k, offs.length]);
+      cols = row.length;
+      let base = pos.length / 3;
+      for (let [o, k, L] of row) {
+        let x = cx + o,
+          up = T.uncarvedAt(x, z),
+          lip = k >= L - 2,
+          y = lip ? up + 0.03 : Math.min(T.section(z, Math.abs(o)), up + 0.01);
+        pos.push(x, y, z);
+        if (lip) ground(x, z);
+        else if (Math.abs(o) <= hw + 0.01) tmp.copy(wetBed ? LAND.bedWet : LAND.bedDry);
+        else if (k === L - 3) ground(x + Math.sign(o) * 0.6, z).lerp(LAND.cut, 0.35);
+        else tmp.copy(hash01(i * 7 + k) < 0.5 ? LAND.cut : LAND.cut2);
+        col.push(tmp.r, tmp.g, tmp.b);
+      }
+      if (prev >= 0)
+        for (let k = 0; k < cols - 1; k++) {
+          let a = prev + k,
+            b = base + k;
+          idx.push(a, b, a + 1, a + 1, b, b + 1);
+        }
+      prev = base;
+    }
+    if (this.channel) this.group.remove(this.channel), this.channel.geometry.dispose();
+    let g = new ye();
+    g.setAttribute("position", new Zt(pos, 3));
+    g.setAttribute("color", new Zt(col, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    let m = new Et(g.toNonIndexed(), this.chanMat || (this.chanMat = new Qe({ vertexColors: !0, flatShading: !0 })));
+    g.dispose();
+    m.geometry.computeVertexNormals();
+    m.receiveShadow = !0;
+    this.channel = m;
+    this.group.add(m);
+  }
+  update() {}
+  updateWear(t) {
+    let T = this.world.terrain,
+      changed = T.version !== this.ver;
+    if (changed) this.fillPositions();
+    if (changed && t - (this.lastDecor || -99) > 20) (this.lastDecor = t), this.refreshDecor();
+    if (!changed && t - this.lastPaint < 2) return;
+    this.lastPaint = t;
+    this.paint(t);
+    this.syncChannel();
+  }
+};
+
+// ---- water ----------------------------------------------------------------
+
+var LAND_WATER_VS = `
+attribute float calm; attribute float dep;
+varying vec2 vUv; varying vec3 vW; varying float vCalm; varying float vDep;
+void main(){ vUv = uv; vCalm = calm; vDep = dep; vec4 wp = modelMatrix * vec4(position, 1.); vW = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`;
+var LAND_WATER_FS = `
+uniform float uTime, uLight, uRain; uniform vec3 uDeep, uShallow, uFoam, uTint, uPond, uMarsh;
+varying vec2 vUv; varying vec3 vW; varying float vCalm; varying float vDep;
+float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
+void main(){
+  float edge = clamp(min(vUv.x, 1.0 - vUv.x), 0.0, 0.5);
+  vec3 run = mix(uShallow, uDeep, smoothstep(0.05, 0.35, edge) * smoothstep(0.03, 0.25, vDep));
+  vec3 still = mix(uMarsh, uPond, smoothstep(0.02, 0.3, vDep));
+  vec3 c = mix(run, still, vCalm);
+  vec2 cell = floor(vec2(vW.x*7.0, vW.z*3.5 - uTime*2.4*(1.0 - 0.9*vCalm)));
+  float g = h(cell);
+  float glint = step(0.965 - uRain*0.03 + vCalm*0.02, g) * step(0.1, edge + vCalm);
+  c = mix(c, uFoam, glint*0.6*(1.0 - 0.5*vCalm));
+  c = mix(c, uFoam, (1.0 - smoothstep(0.0, 0.07, edge))*0.45*(1.0 - vCalm));
+  vec2 rc = floor(vec2(vW.x*4.0, vW.z*4.0));
+  float rr = step(0.985, h(rc + floor(uTime*3.0))) * uRain;
+  c = mix(c, uFoam, rr*0.8);
+  gl_FragColor = vec4(c * uTint * (0.25 + 0.75*uLight), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+WaterView = class {
+  constructor(t, e) {
+    this.world = t;
+    this.scene = e;
+    this.group = new Pe();
+    e.add(this.group);
+    this.mat = new Ke({
+      uniforms: {
+        uTime: { value: 0 },
+        uLight: { value: 1 },
+        uRain: { value: 0 },
+        uDeep: { value: Br(3112872) },
+        uShallow: { value: Br(5813460) },
+        uFoam: { value: Br(14218495) },
+        uTint: { value: Br(16777215) },
+        uPond: { value: Br(2911878) },
+        uMarsh: { value: Br(5145986) },
+      },
+      vertexShader: LAND_WATER_VS,
+      fragmentShader: LAND_WATER_FS,
+    });
+    this.ribbon = null;
+    this.sheet = null;
+    this.decor = null;
+    this.ribbonSig = "";
+    this.sheetSig = "";
+    this.decorSig = "";
+    this.lastCheck = -99;
+    this.cells = [];
+    this.edgeCells = [];
+    this.flyCenters = [];
+    let n = (s, r, o) => {
+      let a = new Ts(s, r, o);
+      return (a.count = 0), (a.frustumCulled = !1), this.group.add(a), a;
+    };
+    this.frogs = n(yM(), he(), 12);
+    this.flies = n(vM(), new je({ vertexColors: !0 }), 8);
+    this.bugMat = new je({ color: 15269770 });
+    this.bugs = n(new ks(0.075, 4, 3), this.bugMat, 20);
+    this.m4 = new se();
+    this.q = new mn();
+    this.e = new bn();
+    this.v = new z();
+    this.s = new z();
+  }
+  dispose() {
+    for (let m of [this.ribbon, this.sheet, this.decor]) m && (this.group.remove(m), m.geometry.dispose());
+    for (let t of [this.frogs, this.flies, this.bugs]) t.geometry.dispose(), t.dispose();
+    this.mat.dispose();
+    this.scene.remove(this.group);
+  }
+  mesh(pos, uv, calm, dep, idx) {
+    let b = new ye();
+    b.setAttribute("position", new Zt(pos, 3));
+    b.setAttribute("uv", new Zt(uv, 2));
+    b.setAttribute("calm", new Zt(calm, 1));
+    b.setAttribute("dep", new Zt(dep, 1));
+    b.setIndex(idx);
+    let m = new Et(b, this.mat);
+    m.frustumCulled = !1;
+    return m;
+  }
+  // the creek: a ribbon along its centre line, as wide and as high as its water
+  syncRibbon() {
+    let w = this.world,
+      cr = w.creek,
+      T = w.terrain,
+      ns = cr.nodes,
+      own = cr._pondOwner,
+      sig = T.version + ":";
+    for (let n of ns) sig += Math.round(n.wl * 100) + ",";
+    if (sig === this.ribbonSig) return;
+    this.ribbonSig = sig;
+    if (this.ribbon) this.group.remove(this.ribbon), this.ribbon.geometry.dispose(), (this.ribbon = null);
+    let pos = [],
+      uv = [],
+      calm = [],
+      dep = [],
+      idx = [],
+      A = 4,
+      prev = -1;
+    for (let z = -18; z <= VL + 18; z += 0.5) {
+      let f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
+        i = Math.floor(f),
+        t = f - i,
+        a = ns[i],
+        b = ns[i + 1],
+        step = Math.abs(a.wl - b.wl) > 0.05, // over a dam the water steps down, it doesn't slope
+        wl = step ? (t < 0.5 ? a.wl : b.wl) : a.wl + (b.wl - a.wl) * t,
+        bed = a.bed + (b.bed - a.bed) * t,
+        y = wl - bed,
+        nn = t < 0.5 ? a : b;
+      if (y < 0.004) {
+        prev = -1;
+        continue;
+      }
+      if (prev >= 0 && Math.abs(wl - this.prevWl) > 0.06) prev = -1; // the water steps down over a dam
+      this.prevWl = wl;
+      let half = Math.min(0.5 * creekWidthAt(nn, y), 0.5 * creekTopWidth(nn) + 0.1) * 0.94,
+        cx = T.creekX(z),
+        still = own && own[t < 0.5 ? i : i + 1] >= 0 && cr._pondNow[t < 0.5 ? i : i + 1] > bed ? 1 : 0,
+        base = pos.length / 3;
+      for (let k = 0; k <= A; k++) {
+        let u = k / A;
+        pos.push(cx - half + 2 * half * u, wl + 0.003, z);
+        uv.push(u, z);
+        calm.push(still);
+        dep.push(Math.min(1, y / 0.35));
+      }
+      if (prev >= 0)
+        for (let k = 0; k < A; k++) {
+          let p = prev + k,
+            q = base + k;
+          idx.push(p, q, p + 1, p + 1, q, q + 1);
+        }
+      prev = base;
+    }
+    if (idx.length) (this.ribbon = this.mesh(pos, uv, calm, dep, idx)), this.group.add(this.ribbon);
+  }
+  // water standing on the valley floor (ponds over their banks, side channels, marsh pools)
+  syncSheet() {
+    let w = this.world,
+      T = w.terrain,
+      W = w.wt,
+      c = creekCells(w);
+    if (!W) return;
+    let draw = this.sheetDraw || (this.sheetDraw = new Uint8Array(CELLS)),
+      n = 0,
+      hsh = T.version;
+    for (let k = 0; k < CELLS; k++) {
+      let on = c.d[k] > 0.15 && W[k] > c.h[k] - 0.06;
+      if (on) {
+        // the water reaches above the lowest corner of the cell
+        let x = k % VW,
+          z = (k / VW) | 0,
+          H = T.h,
+          lo = Math.min(H[z * (VW + 1) + x], H[z * (VW + 1) + x + 1], H[(z + 1) * (VW + 1) + x], H[(z + 1) * (VW + 1) + x + 1]);
+        on = W[k] > lo + 0.004;
+      }
+      draw[k] = on ? 1 : 0;
+      if (on) (n++), (hsh = (hsh * 31 + k * 7 + Math.round(W[k] * 50)) % 1000003);
+    }
+    let sig = n + ":" + hsh;
+    if (sig === this.sheetSig) return;
+    this.sheetSig = sig;
+    if (this.sheet) this.group.remove(this.sheet), this.sheet.geometry.dispose(), (this.sheet = null);
+    if (!n) return;
+    // a vertex takes the mean water level of the drawn cells around it
+    let V = (VW + 1) * (VL + 1),
+      vs = this.vSum || (this.vSum = new Float32Array(V)),
+      vc = this.vCnt || (this.vCnt = new Uint8Array(V)),
+      vi = this.vIdx || (this.vIdx = new Int32Array(V));
+    vs.fill(0);
+    vc.fill(0);
+    vi.fill(-1);
+    for (let k = 0; k < CELLS; k++) {
+      if (!draw[k]) continue;
+      let x = k % VW,
+        z = (k / VW) | 0;
+      for (let dz = 0; dz <= 1; dz++)
+        for (let dx = 0; dx <= 1; dx++) {
+          let v = (z + dz) * (VW + 1) + x + dx;
+          vs[v] += W[k];
+          vc[v]++;
+        }
+    }
+    let pos = [],
+      uv = [],
+      calm = [],
+      dep = [],
+      idx = [];
+    for (let k = 0; k < CELLS; k++) {
+      if (!draw[k]) continue;
+      let x = k % VW,
+        z = (k / VW) | 0,
+        ids = [];
+      for (let [dx, dz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+        let v = (z + dz) * (VW + 1) + x + dx;
+        if (vi[v] < 0) {
+          let y = vs[v] / vc[v];
+          vi[v] = pos.length / 3;
+          pos.push(x + dx, y + 0.004, z + dz);
+          uv.push(0.5, z + dz);
+          calm.push(1);
+          dep.push(clamp((y - T.h[v]) / 0.3, 0, 1));
+        }
+        ids.push(vi[v]);
+      }
+      idx.push(ids[0], ids[2], ids[1], ids[1], ids[2], ids[3]);
+    }
+    this.sheet = this.mesh(pos, uv, calm, dep, idx);
+    this.group.add(this.sheet);
+  }
+  // reeds, cattails, lily pads and flowers where the ground is marsh
+  syncDecor() {
+    let t = this.world,
+      e = t.terrain,
+      n = t.wet,
+      c0 = creekCells(t),
+      s = 0,
+      r = 0;
+    for (let c = 0; c < n.length; c++) {
+      let h = Math.floor(n[c] * 4);
+      h && ((s = (s * 31 + c * 7 + h) % 1000003), r++);
+    }
+    let o = r + ":" + s + ":" + e.version;
+    if (o === this.decorSig) return;
+    this.decorSig = o;
+    this.decor && (this.group.remove(this.decor), this.decor.geometry.dispose(), (this.decor = null));
+    let a = [];
+    this.cells = [];
+    this.edgeCells = [];
+    for (let c = 0; c < n.length; c++) {
+      let h = n[c];
+      if (h < 0.35 || c0.d[c] <= 0.1) continue;
+      let d = c % VW,
+        u = Math.floor(c / VW),
+        f = c * 13,
+        p = d + 0.5,
+        x = u + 0.5;
+      if (!e.walkable(p, x)) continue;
+      let m = e.heightAt(p, x),
+        open = t.wt && t.wt[c] > c0.h[c] + 0.02;
+      h > 0.5 && (this.cells.push({ x: p, z: x, w: h, y: m }), c0.d[c] < 3 && this.edgeCells.push({ x: p, z: x, y: m }));
+      let b = open ? 1 : h > 0.7 ? 3 : h > 0.5 ? 2 : 1;
+      for (let T = 0; T < b; T++) {
+        let y = d + hash01(f + T),
+          S = u + hash01(f + T + 5),
+          M = e.heightAt(y, S);
+        a.push(part(ze(0.06, 0.26 + hash01(f + T + 2) * 0.12, 3), T % 2 ? 4156978 : 5933630, { x: y, y: M + 0.12, z: S, rz: (hash01(f + T + 9) - 0.5) * 0.4 }));
+      }
+      if (h > 0.62 && hash01(f + 40) < 0.5) {
+        let T = d + hash01(f + 41),
+          y = u + hash01(f + 42),
+          S = e.heightAt(T, y);
+        for (let M = 0; M < 2; M++)
+          a.push(part(yt(0.015, 0.02, 0.62, 3), PALETTE.reed, { x: T + M * 0.09, y: S + 0.31, z: y })),
+          a.push(part(yt(0.035, 0.035, 0.15, 4), PALETTE.cattail, { x: T + M * 0.09, y: S + 0.6 + M * 0.04, z: y }));
+      }
+      if (open && hash01(f + 60) < 0.3) {
+        let T = d + 0.2 + hash01(f + 61) * 0.6,
+          y = u + 0.2 + hash01(f + 62) * 0.6,
+          S = t.wt[c] + 0.012,
+          M = hash01(f + 63) * 3;
+        a.push(part(lt(0.34, 0.012, 0.22), 6131608, { x: T, y: S, z: y, ry: M }));
+        a.push(part(lt(0.2, 0.012, 0.3), 6131608, { x: T + 0.08, y: S, z: y + 0.05, ry: M + 0.6 }));
+        hash01(f + 64) < 0.35 && a.push(part(qt(0.05, 0), hash01(f + 65) < 0.5 ? 16228804 : 16775404, { x: T + 0.03, y: S + 0.04, z: y }));
+      }
+      if (!open && h > 0.5 && h < 0.8 && hash01(f + 80) < 0.12) {
+        let T = d + hash01(f + 81),
+          y = u + hash01(f + 82);
+        a.push(part(qt(0.05, 0), hash01(f + 83) < 0.5 ? 14272767 : 16774048, { x: T, y: e.heightAt(T, y) + 0.2, z: y }));
+      }
+    }
+    let l = mergeParts(a);
+    l && ((this.decor = new Et(l, he())), (this.decor.receiveShadow = !0), this.group.add(this.decor));
+    // dragonflies hunt over the ponds
+    this.flyCenters = [];
+    let cr = t.creek;
+    for (let id in cr.dams) {
+      let d = cr.dams[id],
+        nd = cr.nodes[d.i];
+      if (d.pl > nd.bed + 0.12) this.flyCenters.push({ x: e.creekX(nd.z - 4), z: nd.z - 4, y: d.pl, r: 2.5 });
+    }
+  }
+  setInst(t, e, n, s, r, o, a, l = 0) {
+    this.e.set(l, o, 0);
+    this.q.setFromEuler(this.e);
+    this.v.set(n, s, r);
+    this.s.set(a, a, a);
+    this.m4.compose(this.v, this.q, this.s);
+    t.setMatrixAt(e, this.m4);
+  }
+  update(t, e, n, s, r) {
+    let o = this.mat.uniforms;
+    o.uTime.value = t;
+    o.uLight.value = e;
+    o.uRain.value = n;
+    o.uTint.value.copy(s);
+    if (t - this.lastCheck > 1) {
+      this.lastCheck = t;
+      this.syncRibbon();
+      this.syncSheet();
+      if (!this.lastDecor || t - this.lastDecor > 4) (this.lastDecor = t), this.syncDecor();
+    }
+    let a = this.world.hydro || {},
+      l = a.frogs ? Math.min(12, Math.floor((a.marsh || 0) / 7), this.edgeCells.length) : 0;
+    for (let u = 0; u < l; u++) {
+      let f = this.edgeCells[Math.floor(hash01(u * 97 + 5) * this.edgeCells.length)],
+        p = (t * (0.06 + hash01(u) * 0.05) + hash01(u + 3)) % 1,
+        x = p < 0.05 ? Math.sin((p / 0.05) * Math.PI) : 0,
+        g = hash01(u * 7) * 6.28 + Math.floor(t * 0.06 + hash01(u + 3)) * 1.7,
+        m = Math.cos(g) * 0.3 * (hash01(u + 11) - 0.5),
+        b = Math.sin(g) * 0.3 * (hash01(u + 13) - 0.5);
+      this.setInst(this.frogs, u, f.x + m + (hash01(u + 1) - 0.5) * 0.6, f.y + 0.01 + x * 0.22, f.z + b + (hash01(u + 2) - 0.5) * 0.6, g, 1);
+    }
+    this.frogs.count = l;
+    this.frogs.instanceMatrix.needsUpdate = !0;
+    let c = 1 - r,
+      h = a.flies && c > 0.5 && n < 0.5 && this.flyCenters.length ? Math.min(8, 2 + Math.floor((a.marsh || 0) / 12)) : 0;
+    for (let u = 0; u < h; u++) {
+      let f = this.flyCenters[u % this.flyCenters.length],
+        p = t * (0.5 + hash01(u + 20) * 0.4) + hash01(u + 21) * 20,
+        x = Math.sin(p * 2.7) > 0.6 ? 1.6 : 1,
+        g = f.x + Math.sin(p * 1.3 * x) * f.r * 0.6 + Math.sin(p * 3.1) * 0.25,
+        m = f.z + Math.cos(p * 0.9 * x) * f.r + Math.cos(p * 2.3) * 0.2,
+        b = f.y + 0.45 + Math.sin(p * 1.7) * 0.18,
+        T = Math.cos(p * 1.3 * x),
+        y = -Math.sin(p * 0.9 * x);
+      this.setInst(this.flies, u, g, b, m, Math.atan2(T, y), 1.1);
+    }
+    this.flies.count = h;
+    this.flies.instanceMatrix.needsUpdate = !0;
+    let d = r > 0.55 && n < 0.3 && this.cells.length ? Math.min(20, Math.floor(this.cells.length / 5)) : 0;
+    for (let u = 0; u < d; u++) {
+      let f = this.cells[Math.floor(hash01(u * 53 + 1) * this.cells.length)],
+        p = t * 0.35 + hash01(u + 40) * 30,
+        x = 0.5 + 0.5 * Math.sin(t * (1.5 + hash01(u + 41) * 2) + hash01(u + 42) * 6);
+      this.setInst(this.bugs, u, f.x + Math.sin(p) * 0.8, f.y + 0.4 + Math.sin(p * 1.7) * 0.25 + hash01(u) * 0.4, f.z + Math.cos(p * 0.8) * 0.8, 0, 0.5 + x * 0.8);
+    }
+    this.bugs.count = d;
+    this.bugs.instanceMatrix.needsUpdate = !0;
+    this.bugMat.color.setRGB(1, 1, 0.5);
+  }
+};
+
+// Water helpers for the creatures and structures views.
+function creekWaterLevelAt(w, z) {
+  let cr = w.creek;
+  return cr ? creekAt(cr, z, "wl") : WATER_LEVEL;
+}
+function creekBedAt(w, z) {
+  let cr = w.creek;
+  return cr ? creekAt(cr, z, "bed") : WATER_LEVEL - 0.3;
+}
+function creekFloorAt(w, z) {
+  let cr = w.creek;
+  return cr ? creekAt(cr, z, "fp") : WATER_LEVEL + 0.65;
+}
+function creekDamCrest(w, s) {
+  let d = w.creek && w.creek.dams[s.id];
+  return d ? d.crest : creekBedAt(w, s.z) + 0.3;
+}
+
+// ---- the village panel's Land tab ------------------------------------------
+
+function villageLandHTML(w) {
+  let cr = w.creek,
+    s = seasonAt(w),
+    parts = capacityParts(w),
+    pop = w.creatures.filter((c) => !c.visitor).length,
+    dr = cr.driest.slice(-6),
+    inV = cr.nodes.filter((n) => n.z >= 0 && n.z <= VL),
+    st = {};
+  for (let n of inV) st[n.stage] = (st[n.stage] || 0) + 1;
+  let healed = ((st["0"] || 0) + (st.V || 0) + (st.I || 0)) / inV.length,
+    filling = (st.IV || 0) / inV.length,
+    dams = w.structures.filter((x) => x.kind === "dam" && x.level > 0),
+    held = dams.filter((x) => !x.leaks).length,
+    flowing = cr.flowLen,
+    h = "";
+  h += `<h4>What the land can feed</h4><p>The valley can feed about <b>${parts.feed}</b> creekfolk${parts.shelter < parts.feed ? `, though there is only shelter for ${parts.shelter}` : ""}. ${pop} live here now.</p>`;
+  h += `<p class="muted">A cut-down creek that dries out every summer feeds about twenty. As it heals, and stays wet through the dry season, it can feed more.</p>`;
+  h += `<h4>At the driest time of year</h4>`;
+  if (dr.length) {
+    let last = dr[dr.length - 1];
+    h += `<p>At the driest point of last year, <b>${escapeHtml(creekShareWords(last.wet))}</b> of the valley floor stayed wet.</p>`;
+    if (dr.length > 1) h += `<p class="muted">The last few years at their driest: ${dr.map((d) => escapeHtml(creekShareWords(d.wet))).join(" → ")}.</p>`;
+  } else h += `<p>The valley hasn’t come through a dry season yet.</p>`;
+  h += `<h4>The creek now</h4><p>${escapeHtml(dateText(w))}: ${s.wetSeason ? "the wet season, when storms come and the creek runs" : "the dry season"}. `;
+  h += flowing >= VL - 4 ? "The creek is running the whole length of the valley." : flowing > 8 ? `The creek runs for ${flowing > VL / 2 ? "most" : "part"} of the valley, then sinks into its bed.` : "The creek has stopped flowing; only pools hold water.";
+  h += ` ${escapeHtml(creekShareWords(cr.wetNow))} of the floor is wet right now.</p>`;
+  h += `<p>${healed > 0.8 ? "Almost the whole creek has healed: it has filled its old trench and spread back over its floor." : healed > 0.3 ? "In long stretches the creek has filled its old trench and reaches its floor again." : filling > 0.3 ? "Behind the dams the creek is filling its trench back up with gravel and mud." : "The creek is cut down into a trench below its old floor, so floods can’t spread out and the floor dries."}</p>`;
+  if (dams.length) h += `<p class="muted">${dams.length} dam${dams.length > 1 ? "s" : ""} across the creek${held < dams.length ? `, ${dams.length - held} of them not holding (the water below is too far down)` : ""}. Dams built up: ${w.stats.raises || 0} times.</p>`;
+  return h;
+}
+
 // ==== src/view/store.js ====
 // ==========================================================================
 // Saves in IndexedDB.
@@ -54951,9 +55303,15 @@ void main(){
 // A year is a long time to trust a browser with a valley, so saves go to
 // IndexedDB (much roomier than localStorage) under two keys: "main", written
 // every 20 seconds and when the page hides, and "backup", written at most every
-// 10 minutes. A valley saved by the first Creekfolk in localStorage is moved
-// over on first load. Export/import of a backup file still works as before.
+// 10 minutes. Export/import of a backup file still works as before.
+//
+// Every build has its own database (Phase 3A): "creekfolk-<BUILD_VERSION>", and
+// the dev build "creekfolk-<BUILD_VERSION>-dev", so a new version never opens an
+// old version's valley and a dev jump can never touch a real one. The dev build's
+// database also keeps snapshots taken before every jump ("snapshots" store).
 // ==========================================================================
+
+var VALLEY_DB = "creekfolk-" + BUILD_VERSION + (DEV_BUILD ? "-dev" : "");
 
 var ValleyStore = class {
   constructor() {
@@ -54964,12 +55322,15 @@ var ValleyStore = class {
     return new Promise((resolve) => {
       let req;
       try {
-        req = indexedDB.open("creekfolk", 1);
+        req = indexedDB.open(VALLEY_DB, 1);
       } catch (e) {
         resolve(null);
         return;
       }
-      req.onupgradeneeded = () => req.result.createObjectStore("saves");
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore("saves");
+        req.result.createObjectStore("snapshots");
+      };
       req.onsuccess = () => {
         this.db = req.result;
         resolve(this.db);
@@ -54978,25 +55339,45 @@ var ValleyStore = class {
       req.onblocked = () => resolve(null);
     });
   }
-  async get(key) {
+  async get(key, store = "saves") {
     let db = await this.ready;
     if (!db) return null;
     return new Promise((resolve) => {
-      let tx = db.transaction("saves", "readonly"),
-        r = tx.objectStore("saves").get(key);
+      let tx = db.transaction(store, "readonly"),
+        r = tx.objectStore(store).get(key);
       r.onsuccess = () => resolve(r.result ?? null);
       r.onerror = () => resolve(null);
     });
   }
-  async put(key, value) {
+  async put(key, value, store = "saves") {
     let db = await this.ready;
     if (!db) throw new Error("IndexedDB is not available");
     return new Promise((resolve, reject) => {
-      let tx = db.transaction("saves", "readwrite");
-      tx.objectStore("saves").put(value, key);
+      let tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).put(value, key);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
+    });
+  }
+  async keys(store = "snapshots") {
+    let db = await this.ready;
+    if (!db) return [];
+    return new Promise((resolve) => {
+      let tx = db.transaction(store, "readonly"),
+        r = tx.objectStore(store).getAllKeys();
+      r.onsuccess = () => resolve(r.result || []);
+      r.onerror = () => resolve([]);
+    });
+  }
+  async del(key, store = "snapshots") {
+    let db = await this.ready;
+    if (!db) return;
+    return new Promise((resolve) => {
+      let tx = db.transaction(store, "readwrite");
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
     });
   }
   get available() {
@@ -55058,28 +55439,43 @@ var CatchupWorker = {
   },
 };
 
+// The words under the catch-up bar.
+function catchupLabel(h) {
+  let gap = h.to - h.from;
+  return `Catching up on ${durationText(gap)}\u2026${gap > 6 * 3600 ? " Keep the screen on until it\u2019s done." : ""}`;
+}
+
 // ==== src/view/dev.js ====
 // ==========================================================================
-// The hidden developer menu.
+// The developer menu.
 //
-// Open it with Ctrl+Shift+D (Cmd+Shift+D on a Mac), or add #dev to the address.
-// Players never see it. It can move the clock forward (by an hour, a day, a
-// week, or 1-12 months, or to a chosen date); every jump is replayed in full
-// detail through the same catch-up as a real absence, so it doubles as a test
-// of catch-up. It also shows the population and lets you read any mind.
+// In creekfolk.html it is hidden: Ctrl+Shift+D (Cmd+Shift+D on a Mac), or add
+// #dev to the address. In creekfolk-dev.html (DEV_BUILD) a Dev button is always
+// on screen and works on a phone; that build keeps its own saves, so nothing done
+// here can touch a real valley.
+//
+// It moves the clock forward (an hour, a day, a week, 1, 3, 6 or 12 months, or to a
+// chosen date). Every jump is replayed in full through the same catch-up as a real
+// absence, so it doubles as a test of catch-up, and the menu shows how fast the last
+// jump ran (read it on a phone to measure the phone). The dev build saves a snapshot
+// before every jump and can restore any of the last ten. It can also give a gift now,
+// make things happen (a storm, a big flood, a birth, a passing, a visitor), pause the
+// valley's clock, draw overlays on the ground, and read any mind.
 //
 // The clock offset is a per-browser setting (localStorage), never part of the
 // valley's save.
 // ==========================================================================
-var DEV_KEY = "creekfolk.dev.v1";
+var DEV_KEY = "creekfolk.dev." + BUILD_VERSION + (DEV_BUILD ? "-dev" : ""); // CREEK: each build keeps its own clock offset
 var DEV_OFFSET = 0;
 try {
   DEV_OFFSET = +JSON.parse(localStorage.getItem(DEV_KEY) || "{}").offset || 0;
 } catch (e) {}
 
-// "Now", as the valley sees it: real time plus the developer offset.
+var DEV_PAUSED = null; // real time when the dev menu paused the valley's clock
+
+// "Now", as the valley sees it: real time plus the developer offset (frozen while paused).
 function devNow() {
-  return Date.now() + DEV_OFFSET;
+  return (DEV_PAUSED ?? Date.now()) + DEV_OFFSET;
 }
 
 var DevMenu = class {
@@ -55096,18 +55492,74 @@ var DevMenu = class {
       }
     });
     if (location.hash === "#dev") setTimeout(() => this.toggle(true), 800);
+    this.snaps = [];
+    this.note = "";
+    if (DEV_BUILD) {
+      // a Dev button that is always there, for phones too
+      let b = document.createElement("button");
+      b.id = "devbtn";
+      b.textContent = "Dev";
+      b.style.cssText = "position:fixed;left:12px;top:58px;z-index:49;font:600 13px/1 system-ui,sans-serif;padding:7px 12px;border-radius:999px;border:1px solid #574d68;background:rgba(20,18,26,.85);color:#e9e4f0;cursor:pointer";
+      b.onclick = () => this.toggle();
+      document.body.appendChild(b);
+      this.listSnaps();
+    }
+  }
+  async listSnaps() {
+    if (!DEV_BUILD) return;
+    let ks = (await this.app.store.keys("snapshots")).map(String).sort();
+    this.snaps = ks.reverse();
+  }
+  // before a jump: keep the valley as it is now, with the clock offset that goes with it
+  async snapshot(why) {
+    if (!DEV_BUILD || !this.app.world) return;
+    let w = this.app.world,
+      key = `${new Date().toISOString().slice(0, 19).replace("T", " ")} · ${dateText(w)} · ${why}`;
+    try {
+      await this.app.store.put(key, JSON.stringify({ offset: DEV_OFFSET, save: saveWorld(w) }), "snapshots");
+      let ks = (await this.app.store.keys("snapshots")).map(String).sort();
+      for (let k of ks.slice(0, Math.max(0, ks.length - 10))) await this.app.store.del(k, "snapshots");
+      await this.listSnaps();
+    } catch (e) {
+      console.warn("snapshot failed", e);
+    }
+  }
+  async restore(key) {
+    let raw = await this.app.store.get(key, "snapshots");
+    if (!raw) return;
+    let o = JSON.parse(raw),
+      w = loadWorld(o.save);
+    if (this.app.catching) return;
+    this.setOffset(o.offset || 0);
+    DEV_PAUSED = null;
+    this.app.setWorld(w);
+    this.app.save();
+    this.note = "Restored: " + key;
+    this.render(true);
   }
   setOffset(ms) {
-    DEV_OFFSET = Math.max(0, Math.round(ms));
+    DEV_OFFSET = Math.round(ms);
     try {
       localStorage.setItem(DEV_KEY, JSON.stringify({ offset: DEV_OFFSET }));
     } catch (e) {}
   }
-  jump(ms) {
-    if (this.app.catching) return;
+  async jump(ms) {
+    if (this.app.catching || this.jumping) return;
+    this.jumping = true;
+    await this.snapshot("before +" + durationText(ms / 1000));
+    this.jumping = false;
     this.jumpStarted = { at: performance.now(), from: this.app.world.t };
     this.setOffset(DEV_OFFSET + ms);
     this.render();
+  }
+  pause(on) {
+    if (on && DEV_PAUSED == null) DEV_PAUSED = Date.now();
+    if (!on && DEV_PAUSED != null) {
+      // the valley's clock picks up where it stopped
+      this.setOffset(DEV_OFFSET - (Date.now() - DEV_PAUSED));
+      DEV_PAUSED = null;
+    }
+    this.render(true);
   }
   jumpMonths(n) {
     let d = new Date(devNow());
@@ -55166,6 +55618,20 @@ var DevMenu = class {
     if (b.dataset.follow) {
       this.app.select(+b.dataset.follow);
     }
+    let w = this.app.world;
+    if (b.dataset.gift && w && !this.app.catching) {
+      w.giftLast = -1e9; // no waiting in the developer menu
+      let r = giveGift(w, b.dataset.gift);
+      this.note = r ? `Gave: ${b.dataset.gift}` : "That gift couldn't be given.";
+    }
+    if (b.dataset.trigger && w && !this.app.catching) this.note = "Made it happen: " + devTrigger(w, b.dataset.trigger);
+    if (b.dataset.overlay != null) {
+      let g = this.app.renderer.views && this.app.renderer.views.terrain;
+      if (g) (g.overlay = b.dataset.overlay || null), (g.lastPaint = -99);
+    }
+    if (b.dataset.pause != null) this.pause(b.dataset.pause === "1");
+    if (b.dataset.restore) this.restore(b.dataset.restore);
+    this.render(true);
   }
   change(e) {
     if (e.target.id === "dev-who") {
@@ -55205,19 +55671,29 @@ var DevMenu = class {
 <table>
 <tr><td class="muted">real now</td><td>${new Date().toLocaleString()}</td></tr>
 <tr><td class="muted">valley now</td><td>${new Date(devNow()).toLocaleString()} ${off > 0 ? `<span class="devwarn">(+${off.toFixed(2)} days)</span>` : ""}</td></tr>
-<tr><td class="muted">valley date</td><td>${escapeHtml(dateText(w))}, ${seasonAt(w).name} (${(seasonAt(w).progress * 100).toFixed(0)}% through), ${timeOfDayName(w.t)}</td></tr>
-<tr><td class="muted">valley age</td><td>${(w.t / D).toFixed(2)} days · began ${escapeHtml(dateText(w, 0))}</td></tr>
+<tr><td class="muted">valley date</td><td>${escapeHtml(dateText(w))} (${(seasonAt(w).progress * 100).toFixed(0)}% through ${seasonAt(w).name}), ${timeOfDayName(w.t)} · ${seasonAt(w).wetSeason ? "wet season" : "dry season"}</td></tr>
+<tr><td class="muted">valley age</td><td>${(w.t / D).toFixed(2)} real days · began ${escapeHtml(realStartText(w))}</td></tr>
 <tr><td class="muted">catch-up</td><td>${catching ? `running ${catching.worker ? "in the worker" : "on the page"}: ${durationText(catching.to - catching.from)}` : "idle"}</td></tr>
-${lc ? `<tr><td class="muted">last jump</td><td>${durationText(lc.sim)} in ${lc.secs.toFixed(1)} s = ${Math.round(lc.rate).toLocaleString()}× real time ${lc.worker ? "(worker)" : "(page)"}, ${lc.pop} creekfolk</td></tr>` : ""}
+${lc ? `<tr><td class="muted">last jump</td><td>${durationText(lc.sim)} in ${lc.secs.toFixed(1)} s = ${Math.round(lc.rate).toLocaleString()}× real time ${lc.worker ? "(worker)" : "(page)"}, ${lc.pop} creekfolk · 30 days would take about ${(30 * 86400 / lc.rate / 60).toFixed(1)} min here</td></tr>` : ""}
 </table>
+${this.note ? `<div class="devwarn">${escapeHtml(this.note)}</div>` : ""}
 <h5>Jump ahead (replayed in full)</h5>
 <div class="row"><button data-j="1">+1 hour</button><button data-j="24">+1 day</button><button data-j="168">+1 week</button></div>
-<div class="row">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => `<button data-m="${m}">+${m} mo</button>`).join("")}</div>
+<div class="row">${[1, 3, 6, 12].map((m) => `<button data-m="${m}">+${m} month${m > 1 ? "s" : ""}</button>`).join("")}</div>
+<div class="row">${DEV_PAUSED != null ? `<button data-pause="0">resume the valley's clock</button><span class="devwarn">paused</span>` : `<button data-pause="1">pause the valley's clock</button>`}</div>
+${catching ? `<div class="devwarn">Keep the screen on until the catch-up is done: phones pause pages that are hidden.</div>` : ""}
+${DEV_BUILD ? `<h5>Snapshots (taken before every jump)</h5>${this.snaps.length ? this.snaps.map((k) => `<div class="row"><button data-restore="${escapeHtml(k)}">restore</button><span class="muted">${escapeHtml(k)}</span></div>`).join("") : '<div class="muted">None yet.</div>'}` : ""}
+<h5>Make it happen</h5>
+<div class="row">${["rain", "seeds", "warm", "found"].map((k) => `<button data-gift="${k}">gift: ${k}</button>`).join("")}</div>
+<div class="row"><button data-trigger="storm">storm</button><button data-trigger="flood">big flood</button><button data-trigger="birth">birth</button><button data-trigger="passing">passing</button><button data-trigger="visitor">visitor</button><button disabled title="Phase 3C">beavers</button><button disabled title="Phase 3C">the Returning</button></div>
+<h5>Overlays</h5>
+<div class="row">${[["", "none"], ["wet", "wetness"], ["wear", "worn paths"], ["stage", "creek stage"], ["feed", "land capacity"]].map(([k, l]) => `<button data-overlay="${k}">${l}</button>`).join("")}</div>
+${devCreekHTML(w)}
 <div class="row"><input id="dev-date" type="datetime-local"><button data-go="1">go to date</button>${off > 0 ? `<button data-reset>reset offset</button>` : ""}</div>
 ${off > 0 ? `<div class="muted">Resetting the offset can't rewind the valley: it keeps running from where it is, so its calendar stays ahead of the real one.</div>` : ""}
 <h5>Population</h5>
 <table>
-<tr><td class="muted">living</td><td>${w.creatures.length} (children ${sc.child}, adults ${sc.adult}, elders ${sc.elder}) · room for ${cap}</td></tr>
+<tr><td class="muted">living</td><td>${w.creatures.length} (children ${sc.child}, adults ${sc.adult}, elders ${sc.elder}) · room for ${cap} (shelter ${capacityParts(w).shelter}, the land feeds ${capacityParts(w).feed})</td></tr>
 <tr><td class="muted">so far</td><td>born ${w.stats.births || 0} · passed on ${w.stats.passings || 0} · downstream ${w.stats.departed || 0} · grove trees ${w.res.filter((r) => r.kind === "grove").length}</td></tr>
 <tr><td class="muted">pairs</td><td>${escapeHtml(pairs.join(", ") || "none")}</td></tr>
 <tr><td class="muted">next passing</td><td>${nextPass ? `${escapeHtml(nextPass.c.name)} in ${nextPass.left.toFixed(2)} days` : "-"}</td></tr>
@@ -55233,6 +55709,29 @@ ${this.inspect && w.byId[this.inspect] ? mindHTML(w, w.byId[this.inspect]) : `<d
     body.innerHTML = html;
   }
 };
+
+// The creek, in numbers.
+function devCreekHTML(w) {
+  let cr = w.creek;
+  if (!cr) return "";
+  let st = {},
+    inV = cr.nodes.filter((n) => n.z >= 0 && n.z <= VL);
+  for (let n of inV) st[n.stage] = (st[n.stage] || 0) + 1;
+  let Ht = inV.reduce((a, n) => a + n.fp - n.bed, 0) / inV.length,
+    dams = w.structures.filter((s) => s.kind === "dam" && s.level > 0).map((s) => {
+      let d = cr.dams[s.id],
+        nd = d && cr.nodes[d.i];
+      return d ? `z${Math.round(s.z)} L${s.level} crest ${(d.crest - nd.bed).toFixed(2)}m pond ${(d.pl - nd.bed).toFixed(2)}m${d.hold ? "" : " LEAKS"}${s.silted ? " silted" : ""}${d.raised ? ` raised ${d.raised}` : ""}${d.apron ? ` apron ${d.apron}` : ""}` : "";
+    });
+  return `<h5>Creek</h5><table>
+<tr><td class="muted">water</td><td>flowing ${cr.flowLen} m of ${VL} · inflow ${(cr.Qin * 1000).toFixed(2)} L/s · topsoil ${cr.soil.toFixed(2)} · ${cr.flood ? `flood (${cr.flood.T}-year)` : "no flood"}</td></tr>
+<tr><td class="muted">floor now</td><td>wet ${(cr.wetNow * 100).toFixed(1)}% · green ${(cr.greenNow * 100).toFixed(0)}%</td></tr>
+<tr><td class="muted">driest</td><td>${cr.driest.slice(-8).map((d) => `y${d.year} ${(d.wet * 100).toFixed(0)}%`).join(" · ") || "-"}</td></tr>
+<tr><td class="muted">trench</td><td>${Ht.toFixed(2)} m deep on average · stages ${Object.entries(st).sort().map(([k, v]) => `${k}:${v}`).join(" ")} · floods ${cr.floods}</td></tr>
+<tr><td class="muted">feed</td><td>${creekFeed(w)} (health ${cr.health ?? "-"}) · know "downstream": ${w.creatures.filter((c) => c.know.downstream).length}</td></tr>
+<tr><td class="muted">dams</td><td>${dams.join("<br>") || "-"}</td></tr>
+</table>`;
+}
 
 // Everything we know about one mind, as plain text.
 function mindHTML(w, c) {

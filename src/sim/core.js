@@ -461,6 +461,7 @@
             hwB = this.hwOf(cr.nodes[i + 1]);
           this.lut[n * 4 + 1] = hwA + (hwB - hwA) * t;
         }
+          this.cut || (this.cut = new Float32Array(this.h.length));
         for (let z = 0; z <= VL; z++) {
           let fp = this.fpAt(z),
             cx = this.creekX(z);
@@ -471,6 +472,7 @@
               h = w * floor + (1 - w) * Math.max(this.terr[k], floor) + this.hill[k],
               s = this.section(z, Math.abs(x - cx));
             this.h[k] = s < h ? s : h;
+            this.cut[k] = s < h ? h - s : 0; // how deep the creek has cut here (for drawing)
           }
         }
         this.version++;
@@ -506,6 +508,29 @@
           d = this.h[a * n + o + 1],
           u = this.h[(a + 1) * n + o],
           f = this.h[(a + 1) * n + o + 1];
+        return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
+      }
+      // the ground at (x, z) as if the creek's trench were not there (for drawing the
+      // trench as its own smooth mesh): bilinear over the grid like the ground itself
+      uncarvedAt(t, e) {
+        if (t < 0 || e < 0 || t >= VW || e >= VL || !this.cut) {
+          let b = this.baseAt(t, e),
+            fp = this._nodes ? this.fpAt(e) : this.fp0(e),
+            floor = fp + b.micro;
+          return b.wF * floor + (1 - b.wF) * Math.max(b.terr, floor) + b.hill;
+        }
+        let n = this.N,
+          o = Math.floor(t),
+          a = Math.floor(e),
+          l = t - o,
+          c = e - a,
+          H = this.h,
+          C = this.cut,
+          v = (k) => H[k] + C[k],
+          h = v(a * n + o),
+          d = v(a * n + o + 1),
+          u = v((a + 1) * n + o),
+          f = v((a + 1) * n + o + 1);
         return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
       }
       // on the valley floor (the bottomland that can turn to wetland): 0..1
