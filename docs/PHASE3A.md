@@ -75,7 +75,45 @@ browser allows it.
 _(filled in from the runs below)_
 
 ## Honest notes
-_(filled in)_
+- **The whole floor is not marshy all year by month 9.** The arc reaches "most of it" at
+  the driest point around months 5 to 7 in my runs, and keeps rising slowly. Getting the
+  last of the floor wet is what the beavers are for in 3C; without them a valley seems to
+  level off somewhere between half and three quarters.
+- **Dams come faster than the table.** Creekfolk build 11 to 14 dams by day 30 to 40
+  (the table says "several by months 1 to 2"). The healing is still paced by mud and by
+  building dams up, which is slow, so the arc keeps its shape; but the creek fills up with
+  dams early. Easy to slow down if you'd rather.
+- **The creek's main channel doesn't move.** Creek Care's bends migrate; here the main
+  channel keeps its starting course (so it can never undercut a home), and the wandering
+  comes from the side channels on the floor instead.
+- **Time is compressed, so some rates are chosen, not measured.** A valley year is 8 real
+  days. Flows are real (cubic metres per second) but evaporation, seepage and the slow
+  water from the hills are set per valley day so the year behaves as the author's table
+  asks: a first pool lasts through the dry season, a cut-down valley dries out, a healed
+  one doesn't. Sediment yields are tuning knobs (`CREEK.fineYield`, `gravelYield`), not
+  calibrated to a real watershed.
+- **"Build downstream first" is learned fast and never lost.** An elder works it out in the
+  first one or two weeks in every run, and it's taught to everyone. No skill was lost in
+  any run again.
+- **The population lags the land.** What the land can feed reaches 31 to 32 by month 6;
+  the population moves between about 15 and 28 (with a little help, births are faster
+  while there is room). "Close to 36 by months 4 to 6" isn't reached.
+- **Looks are 3A-level.** The creek, ponds, marsh and side channels are drawn from the
+  model, but the wet season can look more like a lake than a marsh, the water edges follow
+  a 1 m grid, and the cut banks are simple. Phase 4 is the place for this.
+- **Phones: not measured by me.** I have no phone here. The CPU-throttled number below is
+  a stand-in; the dev build shows the real number on your phone after any jump ("30 days
+  would take about N min here").
+- **Not built yet (later parts):** beavers and the Returning (3C; disabled buttons in the
+  dev menu), the sky calendar (there was none before; `daysToMidwinter()` is ready for it),
+  then-and-now (the day-one creek is saved, ready for 3C).
 
 ## What I'd do next
-_(filled in)_
+- **3B: belief and the temple.** The creek as the giver; requests from `giftNeed`
+  ("the gardens are dry"); believers gathering at the giving place when a gift is due;
+  offerings left for you; "the creek gives at dawn, every twenty-four days"; the new
+  gifts (goats, bees, fish, birds, flower and fruit seeds, snow day, starry night,
+  rainbow, a fallen tree, clay, stones, a dream); the temple's three stages paced by your
+  giving; the one who believes in you.
+- Before that, if you want: slow the first dams down, or speed up the population so the
+  valley gets closer to what the land can feed.

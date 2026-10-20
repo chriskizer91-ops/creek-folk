@@ -89,11 +89,12 @@ for (let day = 0; day < days; day += 0.25) {
       inV = cr.nodes.filter((n) => n.z >= 0 && n.z <= S.VL),
       Ht = inV.reduce((a, n) => a + (n.fp - n.bed), 0) / inV.length,
       near = inV.filter((n) => n.fp - n.bed < 0.5).length / inV.length,
+      bump = S.creekBumpiness(w),
       ponds = Object.values(cr.dams).map((d) => `${(d.pl - cr.nodes[d.i].bed).toFixed(2)}${d.hold ? "" : "!"}${d.crest > cr.nodes[d.i].fp ? "^" : ""}`).join(","),
-      row = { day: Math.round(day + 0.25), year: s.year, season: s.name, flow: cr.flowLen, wet: cr.wetNow, green: cr.greenNow, soil: +cr.soil.toFixed(2), Qin: cr.Qin, Ht: +Ht.toFixed(3), near: +near.toFixed(3), floods: cr.floods, feed: S.creekFeed(w), stages: stageCount() };
+      row = { day: Math.round(day + 0.25), year: s.year, season: s.name, flow: cr.flowLen, wet: cr.wetNow, green: cr.greenNow, soil: +cr.soil.toFixed(2), Qin: cr.Qin, Ht: +Ht.toFixed(3), near: +near.toFixed(3), floods: cr.floods, feed: S.creekFeed(w), stages: stageCount(), roughBed: bump.bed, roughFloor: bump.floor };
     rows.push(row);
     console.log(
-      `day ${String(row.day).padStart(3)} y${s.year} ${s.name.padEnd(6)} flow ${String(cr.flowLen).padStart(3)}m  wet ${(cr.wetNow * 100).toFixed(1).padStart(5)}%  green ${(cr.greenNow * 100).toFixed(0).padStart(3)}%  soil ${cr.soil.toFixed(2)}  trench ${Ht.toFixed(2)}m  filled ${(near * 100).toFixed(0)}%  floods ${cr.floods}  feed ${row.feed}  [${stageCount()}]  ponds ${ponds}`,
+      `day ${String(row.day).padStart(3)} y${s.year} ${s.name.padEnd(6)} flow ${String(cr.flowLen).padStart(3)}m  wet ${(cr.wetNow * 100).toFixed(1).padStart(5)}%  green ${(cr.greenNow * 100).toFixed(0).padStart(3)}%  soil ${cr.soil.toFixed(2)}  trench ${Ht.toFixed(2)}m  filled ${(near * 100).toFixed(0)}%  floods ${cr.floods}  feed ${row.feed}  rough ${row.roughBed}/${row.roughFloor}  [${stageCount()}]  ponds ${ponds}`,
     );
   }
 }

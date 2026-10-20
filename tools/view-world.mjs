@@ -11,7 +11,7 @@ const page_ = process.env.PAGE || 'dist/creekfolk.html';
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
 const logs = [];
-page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+page.on("pageerror", (e) => logs.push(`[pageerror] ${e.stack || e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
 await page.goto('file://' + process.cwd() + '/' + page_);
 await page.waitForFunction(() => window.__creek && window.__creek.world, null, { timeout: 30000 });
@@ -23,6 +23,7 @@ await page.evaluate(async (s) => {
 }, save);
 await page.reload();
 await page.waitForFunction(() => window.__creek && window.__creek.world, null, { timeout: 60000 });
+logs.length = 0; // errors before the reload come from blanking the old valley on purpose
 await page.evaluate(() => document.querySelectorAll('[data-go], .summary button').forEach((b) => b.click()));
 let k = 0;
 for (const [x, z, dist, yaw, pitch] of views) {

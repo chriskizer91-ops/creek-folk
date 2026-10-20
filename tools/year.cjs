@@ -54,6 +54,7 @@ if (process.argv[2] === "--child") {
       floods: cr.floods,
       stages: st,
       downstream: w.creatures.filter((c) => c.know.downstream).length,
+      bump: S.creekBumpiness(w),
     };
   };
   for (let d = 1; d <= days; d++) {
@@ -152,7 +153,7 @@ function next() {
   running++;
   const ch = fork(__filename, ["--child", seed, String(days), start]);
   ch.on("message", (m) => {
-    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s)${m.creek ? ` | creek: wet now ${(m.creek.wet * 100).toFixed(0)}%, at the driest ${m.creek.driest == null ? "-" : (m.creek.driest * 100).toFixed(0) + "%"}, trench ${m.creek.trench}m, dams ${m.creek.dams}, raised ${m.creek.raises}, feed ${m.creek.feed}, downstream-knowers ${m.creek.downstream}` : ""}`);
+    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s)${m.creek ? ` | creek: wet now ${(m.creek.wet * 100).toFixed(0)}%, at the driest ${m.creek.driest == null ? "-" : (m.creek.driest * 100).toFixed(0) + "%"}, trench ${m.creek.trench}m, dams ${m.creek.dams}, raised ${m.creek.raises}, feed ${m.creek.feed}, bumpy ${m.creek.bump.bed}/${m.creek.bump.floor}, downstream-knowers ${m.creek.downstream}` : ""}`);
     if (m.type === "done") results.push(m.out);
   });
   ch.on("exit", (code) => {

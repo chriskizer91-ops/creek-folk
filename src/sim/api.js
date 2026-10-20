@@ -38,5 +38,6 @@ var CreekSim = {
   creekRaiseDam,
   creekPondLevels,
   creekCells,
+  creekBumpiness,
   devTrigger,
 };

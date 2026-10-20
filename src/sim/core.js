@@ -407,7 +407,14 @@
         let n = this.noise,
           d = Math.abs(x - this.axisX(z)),
           fhw = this.floorHW(z),
-          micro = 0.12 * (2 * n.fbm(x * 0.21 + 7, z * 0.21 + 3, 2) - 1) + 0.04 * (2 * n.get(x * 0.7, z * 0.7 + 11) - 1),
+          // the floor's relief: long shallow swales down the valley (old channel scars),
+          // smaller hummocks, and a little roughness; about +-0.17 m, so a pond held a
+          // hand above the floor spreads along the hollows instead of straight across
+          micro =
+            0.02 +
+            0.38 * (2 * n.fbm(x * 0.11 + 7, z * 0.035 + 3, 3) - 1) +
+            0.07 * (2 * n.fbm(x * 0.25 + 1, z * 0.25 + 5, 2) - 1) +
+            0.025 * (2 * n.get(x * 0.7, z * 0.7 + 11) - 1),
           rise = 0.75 * smoothstep(fhw - 1, fhw + 4, d) + 0.014 * Math.max(0, d - fhw - 4) + 0.5 * (n.fbm(x * 0.06 + 20, z * 0.06, 3) - 0.5) * smoothstep(fhw, fhw + 6, d),
           terr = this.fp0(z) + rise,
           wF = 1 - smoothstep(fhw - 1.5, fhw + 2.5, d),

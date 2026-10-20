@@ -476,7 +476,7 @@ float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
 void main(){
   float edge = clamp(min(vUv.x, 1.0 - vUv.x), 0.0, 0.5);
   vec3 run = mix(uShallow, uDeep, smoothstep(0.05, 0.35, edge) * smoothstep(0.03, 0.25, vDep));
-  vec3 still = mix(uMarsh, uPond, smoothstep(0.02, 0.3, vDep));
+  vec3 still = mix(uMarsh, uPond, smoothstep(0.15, 0.85, vDep)); // a hand of water over the floor reads as marsh, not lake
   vec3 c = mix(run, still, vCalm);
   vec2 cell = floor(vec2(vW.x*7.0, vW.z*3.5 - uTime*2.4*(1.0 - 0.9*vCalm)));
   float g = h(cell);
@@ -506,7 +506,7 @@ WaterView = class {
         uFoam: { value: Br(14218495) },
         uTint: { value: Br(16777215) },
         uPond: { value: Br(2911878) },
-        uMarsh: { value: Br(5145986) },
+        uMarsh: { value: Br(0x5b8a68) },
       },
       vertexShader: LAND_WATER_VS,
       fragmentShader: LAND_WATER_FS,
