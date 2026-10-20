@@ -16,7 +16,7 @@ const arg = (k, d) => {
 
 if (process.argv[2] === "--child") {
   // ---- one valley ----
-  const S = require(path.join(__dirname, "../dist/sim.cjs"));
+  const S = require(process.env.SIM ? path.resolve(process.env.SIM) : path.join(__dirname, "../dist/sim.cjs")); // SIM: a frozen copy for long batches
   if (process.env.LIFE) Object.assign(S.LIFE, JSON.parse(process.env.LIFE)); // tuning experiments
   const [seed, days, startISO] = [process.argv[3], +process.argv[4], process.argv[5]];
   const calStart = Date.parse(startISO + "T12:00:00Z");
@@ -30,7 +30,15 @@ if (process.argv[2] === "--child") {
   // every:<hours> (a gift about every so many real hours, give or take half an hour;
   // every:48 is every other day). every:<hours>:stop:<day> stops on that day.
   const policy = process.env.GIFTS || "none";
-  const every = policy.startsWith("every:") ? +policy.split(":")[1] : null;
+  // sched:<hours>@<day>,... changes the rhythm on those days (0 hours: no gifts), e.g.
+  // sched:48@0,96@90 (every other day, then every four days) or sched:48@0,0@100,48@112.
+  const sched = policy.startsWith("sched:") ? policy.slice(6).split(",").map((p) => p.split("@").map(Number)) : null;
+  const every = policy.startsWith("every:") ? +policy.split(":")[1] : sched ? sched[0][0] : null;
+  const everyAt = (t) => {
+    let h = every;
+    if (sched) for (const [hh, dd] of sched) if (t >= dd * 86400) h = hh;
+    return h;
+  };
   const stopDay = policy.includes("stop:") ? +policy.split("stop:")[1] : Infinity;
   const kinds = Object.keys(S.GIFT_KINDS);
   let giftRng = 7;
@@ -78,7 +86,15 @@ if (process.argv[2] === "--child") {
         S.runUntil(w, nextGift);
         give();
         lastGiftT = nextGift;
-        nextGift = Math.max(lastGiftT + 12 * 3600 + 60, lastGiftT + every * 3600 + (rnd() - 0.5) * 3600);
+        nextGift = Math.max(lastGiftT + 12 * 3600 + 60, lastGiftT + (everyAt(lastGiftT) || 1e6) * 3600 + (rnd() - 0.5) * 3600);
+        if (sched && !everyAt(nextGift)) {
+          const seg = sched.find(([hh, dd]) => dd * D > nextGift && hh > 0);
+          nextGift = seg ? seg[1] * D + 3600 * rnd() : Infinity;
+        }
+        if (sched && everyAt(nextGift) !== everyAt(lastGiftT) && everyAt(lastGiftT)) {
+          const seg = sched.find(([hh, dd]) => dd * D > lastGiftT && dd * D <= nextGift);
+          if (seg && seg[0] > 0) nextGift = Math.min(nextGift, Math.max(lastGiftT + 12 * 3600 + 60, seg[1] * D + seg[0] * 3600 * rnd()));
+        }
       }
     } else if (policy !== "none" && d < stopDay)
       for (const h of [9, 21]) {
@@ -136,17 +152,17 @@ if (process.argv[2] === "--child") {
       lost: w.stats.skillsLost || 0,
       relearned: w.hist.filter((e) => /has learned again/.test(e.text)).length,
       visits: w.stats.visits || 0,
-      gifts: (w.gifts || []).length,
+      gifts: w.stats.gifts || (w.gifts || []).length,
       believers: w.creatures.filter((c) => c.beliefs && c.beliefs.giver > 0.5).length,
       giver: S.giverName(w),
       customs: Object.keys(w.customs || {}).filter((k) => (k === "passing" ? w.customs[k].custom : k === "seasons" ? w.customs[k].n >= 2 : true)),
-      firstMythDay: (w.hist.find((e) => e.kind === "myth") || { t: null }).t / D || null,
+      firstMythDay: w.stats.firstMyth != null ? w.stats.firstMyth / D : (w.hist.find((e) => e.kind === "myth") || { t: null }).t / D || null,
       samples: w.hist.filter((e) => ["myth", "custom", "belief", "visit", "lost", "place", "forgotten"].includes(e.kind)).slice(-14).map((e) => `${(e.t / D).toFixed(1)} ${e.text}`),
     },
     creekDriest: w.creek.driest,
     great: (() => {
       const g = (x) => x && { started: +(x.started / D).toFixed(1), parts: x.parts, state: x.state, stages: x.stageTimes.map((t) => +(t / D).toFixed(1)), done: x.done ? +(x.done / D).toFixed(1) : null, made: x.made, partDays: x.partTimes.map((t) => +(t / D).toFixed(1)) };
-      return { temple: g(w.temple), ancestors: g(w.ancestors), spring: w.spring && w.spring.found ? +(w.spring.found / D).toFixed(1) : null, springHeard: w.spring && w.spring.heard ? +(w.spring.heard / D).toFixed(1) : null, givingPlace: !!w.givingPlace, firstBeliever: (w.hist.find((e) => e.kind === "belief" && /has come to believe/.test(e.text)) || { t: null }).t / D || null, believers: S.believers(w).length, alive: w.creatures.filter((c) => !c.visitor).length, offerings: (w.offerings || {}).total || 0, requests: w.stats.requests || 0, answered: w.stats.answered || 0, beyond: (w.beyondEver || []).map((b) => `${b.name}@${(b.t / D).toFixed(0)}${b.from ? "<" + b.from : ""}`), fauna: w.fauna ? { flowers: w.fauna.flowers.map((f) => f.kind), fruits: w.fauna.fruits, birds: w.fauna.birds, fish: w.fauna.fish, goats: w.fauna.goats.length, hives: w.fauna.hives.length } : null, giftKinds: w.giftKinds || {} };
+      return { temple: g(w.temple), ancestors: g(w.ancestors), spring: w.spring && w.spring.found ? +(w.spring.found / D).toFixed(1) : null, springHeard: w.spring && w.spring.heard ? +(w.spring.heard / D).toFixed(1) : null, givingPlace: !!w.givingPlace, firstBeliever: w.firstBelieverAt != null ? w.firstBelieverAt / D : null, believers: S.believers(w).length, alive: w.creatures.filter((c) => !c.visitor).length, offerings: (w.offerings || {}).total || 0, requests: w.stats.requests || 0, answered: w.stats.answered || 0, beyond: (w.beyondEver || []).map((b) => `${b.name}@${(b.t / D).toFixed(0)}${b.from ? "<" + b.from : ""}`), fauna: w.fauna ? { flowers: w.fauna.flowers.map((f) => f.kind), fruits: w.fauna.fruits, birds: w.fauna.birds, fish: w.fauna.fish, goats: w.fauna.goats.length, hives: w.fauna.hives.length } : null, giftKinds: w.giftKinds || {} };
     })(),
     knowledge: Object.fromEntries(["mud", "planting", "clay", "glowcap", "tools", "dams", "downstream"].map((k) => [k, w.creatures.filter((c) => c.know[k]).length])),
     structures: w.structures.map((s) => s.kind + ":" + s.level).sort().join(" "),
@@ -245,7 +261,8 @@ function checkTargets(rs, days) {
   const policy = process.env.GIFTS || "none";
   if (policy === "every:48" && days >= 330) add("An every-other-day giver finishes the temple in month 11.", rs.filter((r) => r.great.temple && r.great.temple.done >= 300 && r.great.temple.done <= 330).length >= Math.ceil(rs.length / 2), rs.map((r) => (r.great.temple && r.great.temple.done) || "-").join(","));
   if (policy === "none" && days >= 330) add("A valley with no gifts finishes its own great project.", rs.every((r) => r.great.ancestors && r.great.ancestors.done), rs.map((r) => (r.great.ancestors && r.great.ancestors.done) || "-").join(","));
-  if (policy !== "none" && days >= 60) add("Most of the village believes the creek gives (with a giver).", rs.every((r) => r.great.believers > r.great.alive / 2), rs.map((r) => `${r.great.believers}/${r.great.alive}`).join(","));
+  const ev = policy.startsWith("every:") ? +policy.split(":")[1] : null;
+  if (ev && ev <= 48 && days >= 60) add("Most of the village believes the creek gives (with a giver).", rs.every((r) => r.great.believers > r.great.alive / 2), rs.map((r) => `${r.great.believers}/${r.great.alive}`).join(","));
   console.log("\nTargets:");
   for (const t of T) console.log(`  ${t.pass ? "PASS" : "FAIL"}  ${t.why}  [${t.detail}]`);
 }

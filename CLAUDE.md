@@ -142,8 +142,8 @@ Phase 1 view edits; later edits were made directly.
   standing request (`world.request`) until the next gift; giving it is an answered
   request. When a gift is due, believers keep watch at the Giving Place (goal `watch`)
   and sometimes leave an offering for the giver (`world.offerings`). Every gift is a
-  notch on the Giving Stone (`stats.gifts`). After 3 days with no gift: "the creek is
-  resting" and a lantern (`world.lantern`). Rhythm is noticed in valley days and the
+  notch on the Giving Stone (`stats.gifts`). After 3 days with no gift (or 1.5 times the
+  rhythm they know, `restAfter`): "the creek is resting" and a lantern (`world.lantern`). Rhythm is noticed in valley days and the
   valley hour (`giftRhythm`, `rhythmText`): "the creek gives at dawn, every twenty-four
   days".
 - **Gifts**: 17 kinds in four groups (`GIFT_KINDS`, `giftNeedWhy`): weather (rain, warm
@@ -167,7 +167,8 @@ Phase 1 view edits; later edits were made directly.
   elder wonders after day 60, or a dream); an explorer walks out past the head of the
   valley (action `journey`, act type `away`, hidden) and finds it; later believers go
   now and then and bring back spring water.
-- **The one who believes in you**: after 100 gifts with steady giving, one creekfolk
+- **The one who believes in you**: after 100 gifts and about five months since the first
+  (`GIFT.beyondGifts`, `GIFT.beyondDays`), with steady giving, one creekfolk
   (`beliefs.beyond`) is sure the gifts come from someone beyond the valley; it waves when
   the page opens (view only, `waveFor`). Passed to a child or young friend (`passBeyond`).
 - Core hooks are marked `// BELIEF:`.

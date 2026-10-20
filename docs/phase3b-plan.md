@@ -159,10 +159,20 @@ valley ends up different. Gifts still never decide survival.
   to the author's expected months.
 - **One standing request at a time**, until the next gift (or a day), rather than a new
   one every hour.
-- **Offerings are occasional** (about one watch in three), so a player who comes every
+- **Offerings are occasional** (about one watch in five), so a player who comes every
   other day finds a few new ones, not dozens.
+- **The one who believes in you waits for five months** as well as a hundred gifts (the
+  author's "about 5 months of consistent giving (100 or more gifts)"); with only the count,
+  a twice-a-day giver met them in month 2.
 - **The temple's ground is kept clear** (`TEMPLE_ROOM` 9.5 m around the Giving Place): its
   crown reaches about 9 m toward the sunrise, and gifts placed near the village (a hive)
   had ended up inside the hall.
 - **Sky gifts are drawn where a top-down player can see them**: stars reflected in every
   pond and pool, a rainbow sized to the view just beyond what you're looking at.
+- **"The creek is resting" follows the rhythm they know**: after three days, or half again
+  their usual gap, whichever is longer. Otherwise a player who reliably comes every four
+  days found the lantern lit, and the "resting" lines in the log, every single time.
+- **A player who only ever gives every four days never starts the temple** (it needs seven
+  gifts in fourteen days; they give three or four), so that valley builds the Hall of the
+  Ancestors, as the brief says for valleys that never reach the threshold. Half speed is
+  for a temple already begun, when the giving slows. The year runs test both.

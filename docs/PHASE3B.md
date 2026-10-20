@@ -45,7 +45,8 @@ last few gifts came at the same interval they notice it, and if they also came a
 time of day, that too: "Tuck has noticed that the creek gives at dawn, every forty-eight
 days." If your rhythm changes, they notice the new one.
 
-**When you're away.** After three real days with no gift: "The gifts haven't come for a
+**When you're away.** After three real days with no gift (or half again the gap they're
+used to, if you usually come less often than that): "The gifts haven't come for a
 while. 'The creek is resting,' Wren says. They left a lantern burning at the Giving Place,
 so the creek will know where to find them." The lantern burns until the next gift. Belief
 fades very slowly. Nothing asks what they did wrong.
@@ -105,8 +106,8 @@ believer makes the journey now and then and brings back a little of its water. T
 belief takes the "someone watching" idea into the creek: the gifts come from where the
 creek begins.
 
-**The one who believes in you.** After a hundred gifts, with steady giving, one creekfolk
-becomes sure the gifts come from someone beyond the valley. It still thanks the creek, "but
+**The one who believes in you.** After about five months of steady giving (and at least a
+hundred gifts), one creekfolk becomes sure the gifts come from someone beyond the valley. It still thanks the creek, "but
 when they think no one is looking, they wave at the sky". When you open the game (or come
 back to the tab after a while), it turns to face the camera and waves, and a note says so.
 Its friends think it's an odd idea but are fond of it. When it passes or goes downstream,
@@ -125,7 +126,51 @@ every gift, plus "the creek answers now", "find the spring", "one believes in yo
 _(filled in from the year runs)_
 
 ## Honest notes
-_(filled in)_
+- **Daily and twice-a-day givers finish sooner than you expected.** The pace table (1.2
+  and 1.4 times full speed) and the expected months (about month 10 and month 8.5) don't
+  quite agree: with every other day tuned to mid month 11, the table's multipliers put
+  daily nearer month 9 and twice a day nearer month 7.5 to 8 (see Measured). I followed the
+  table. If you'd rather have your months, the multipliers would be about 1.08 and 1.2, or
+  each part could carry more fixed building time; either is a one-line change
+  (`paceOfRate` or `TEMPLE.feelPerPart` plus cure times in `temple.js`).
+- **Building is fast once a part is unlocked.** Labour and materials take hours, not days,
+  even for the crown's great stones, because by then the village has little else to build.
+  The waits that matter are curing clay (most of a real day for a hall wall) and the dry
+  season for the crown. Labour and materials are never the bottleneck, as you asked; the
+  creek's answer sets the pace. If a part ever can't find a material for five days they
+  make do (it happened 0 times in the year runs unless noted under Measured).
+- **A fix that touches every building.** Work already under way when a stage started
+  curing used to finish it at once, so clay never really dried (an old bug from the
+  original game). Now work done while something cures doesn't count. Mud huts, kilns and
+  the rest take a little longer to finish; the year runs below include it.
+- **Belief is not a dial you can watch move much.** Most of the village believes within
+  about two weeks of steady giving, and about one grown-up in seven stays a doubter. After
+  that the temple's pace depends only on the gifts, as the brief says ("the creekfolk can't
+  tell whether the game is open; they only see gifts arrive").
+- **Requests are mostly for rain and a warm day**, because those are what the valley
+  usually needs most. Materials are asked for when a build is short of them; living things
+  rarely, since they are never needed.
+- **What you see from above.** The game's camera looks down, so a starry night shows as
+  stars reflected in every pond and pool (and in the sky only if you tilt the camera up),
+  and the rainbow is drawn as an arc just beyond whatever you're looking at.
+- **Looks are 3B-level.** The temple, goats, hive, fish and birds are simple shapes; the
+  fruits all look alike. Phase 4 is where they get their art.
+- **The wave happens when the page opens** or when you come back to the tab after a
+  minute away. It can't know whether you are actually looking.
+- **Not built yet (3C):** beavers (the crown doesn't wait for them), goats having kids,
+  the Returning and the procession to the Spring, the sky calendar, then-and-now, the
+  soundscape, and limits for very long running beyond what 3B keeps bounded (offerings
+  are counted, not stored; the forty most recent are drawn; carvings keep the last sixty).
+- **Phones: still not measured by me.** See the catch-up numbers below for this machine.
 
 ## What I'd do next
-_(filled in)_
+- **3C: life and the ending.** Beavers arriving when the floor is wetland (and taking over
+  dam-tending, which frees hands for the crown), the Returning on their midwinter with the
+  sun through the sun gate, glowing fish up the creek to the Spring, lanterns for those who
+  passed; looks you can trace through families, homes, the grove's trees growing all year,
+  goats with kids, herons, the soundscape, then-and-now, and two-year runs showing memory
+  and save size stay flat.
+- Before that, if you want: change the daily and twice-a-day pace to land on your months,
+  or tune births and leaving so the population follows what the land can feed (from 3A).
+- One thing only you can measure: catch-up on your phone (Dev, +1 week, then read "30 days
+  would take about N min here").

@@ -25,7 +25,8 @@ var GIFT = {
   requestGap: 3 * 3600, // at least this long between requests
   watchGap: 2 * 3600, // a creekfolk keeps watch at most this often
   watchers: 3, // at most this many keep watch at once
-  beyondGifts: 100, // gifts before one of them believes in someone beyond the valley
+  beyondGifts: 100, // gifts before one of them believes in someone beyond the valley ...
+  beyondDays: 150, // ... and about five months since the first gift
   offeringsShown: 40, // offerings drawn at the Giving Place
 };
 
@@ -268,6 +269,7 @@ function giveGift(w, kind) {
   w.gifts.push({ t: Math.round(w.t), kind, what, need: +need.toFixed(2), ...(req ? { asked: req.by } : {}) });
   if (w.gifts.length > 200) w.gifts.splice(0, w.gifts.length - 200);
   w.stats.gifts = (w.stats.gifts || 0) + 1;
+  if (w.firstGiftAt == null) w.firstGiftAt = Math.round(w.t);
   w.giftKinds = w.giftKinds || {};
   w.giftKinds[kind] = (w.giftKinds[kind] || 0) + 1;
   if (req) giftAnswered(w, req, kind);
@@ -389,6 +391,7 @@ function noticeGift(w, c, kind, what, need, mult = 1) {
     w.stats.believers = (w.stats.believers || 0) + 1;
     if (!w.firstBeliever) {
       w.firstBeliever = c.id;
+      w.firstBelieverAt = Math.round(w.t);
       logEvent(w, 3, `${c.name} has come to believe that the creek gives them what they need. "The creek keeps us," they say, "and we keep the creek."`, [c.id], c, "belief");
       chooseGivingPlace(w, c);
     }
@@ -466,6 +469,12 @@ function numberWords(n) {
 var HOUR_PHRASE = { dawn: "at dawn", morning: "in the morning", midday: "at midday", afternoon: "in the afternoon", dusk: "at dusk", night: "in the night" };
 
 // The rhythm of the last few gifts, if there is one: { days, when } (when may be null).
+// How long without a gift before they say the creek is resting: three days, or half again
+// the rhythm they know, so a player who comes every four days isn't "away" every time.
+function restAfter(w) {
+  return Math.max(GIFT.restDays * 86400, w.giftRhythm ? 1.5 * w.giftRhythm.days * getDayLength() : 0);
+}
+
 function giftRhythm(w, n = 4) {
   let g = (w.gifts || []).slice(-(n + 1));
   if (g.length < n + 1) return null;
@@ -480,7 +489,7 @@ function giftRhythm(w, n = 4) {
 }
 
 function rhythmText(r) {
-  return `the creek gives${r.when ? " " + HOUR_PHRASE[r.when] : ""}, every ${numberWords(r.days)} days`;
+  return `the creek gives${r.when ? " " + HOUR_PHRASE[r.when] + "," : ""} every ${numberWords(r.days)} days`;
 }
 
 function noticePattern(w) {
@@ -598,7 +607,7 @@ ACTIONS.offer = {
     let b = beliefsOf(c);
     if (b.offeredFor === w.giftLast || !w.givingPlace) return "skip";
     b.offeredFor = w.giftLast; // one chance each time a gift is due
-    if (!w.rng.chance(0.3)) return "skip";
+    if (!w.rng.chance(0.2)) return "skip";
     return makeAct(w, c, "give", 4, { lookX: w.givingPlace.x, lookZ: w.givingPlace.z });
   },
   end(w, c) {
@@ -700,7 +709,7 @@ var BEYOND_LINES = [
 
 function beyondTick(w) {
   let total = w.stats.gifts || 0;
-  if (total < GIFT.beyondGifts) return;
+  if (total < GIFT.beyondGifts || !(w.gifts || []).length || w.t - (w.firstGiftAt ?? w.gifts[0].t) < GIFT.beyondDays * 86400) return;
   let have = w.creatures.filter((c) => !c.visitor && c.beliefs && c.beliefs.beyond);
   if (have.length >= 1) return; // one at a time; it can be passed on (up to two for a while)
   let recent = (w.gifts || []).filter((g) => w.t - g.t < 14 * 86400).length;
@@ -761,7 +770,7 @@ function giftTick(w) {
   giftRequests(w);
   beyondTick(w);
   let g = w.gifts || [];
-  if (g.length >= 3 && !w.giftsStopped && w.t - w.giftLast > GIFT.restDays * 86400) {
+  if (g.length >= 3 && !w.giftsStopped && w.t - w.giftLast > restAfter(w)) {
     w.giftsStopped = Math.round(w.t);
     let c = believers(w).filter((c) => c.stage !== "child").sort((a, b) => b.beliefs.giver - a.beliefs.giver)[0];
     w.lantern = { t: Math.round(w.t), by: c ? c.id : null };

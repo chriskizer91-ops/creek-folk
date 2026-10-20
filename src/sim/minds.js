@@ -323,6 +323,7 @@ function checkMyths(w) {
     let key = JSON.stringify([top.v.who, top.v.n, top.v.where, top.v.why, top.v.big || 0]);
     if (sameTold(w, s, top.v, s.truth) || w.myths[k] === key) continue;
     if (!(k in w.myths)) w.stats.mythStories = (w.stats.mythStories || 0) + 1;
+    if (w.stats.firstMyth == null) w.stats.firstMyth = Math.round(w.t);
     w.myths[k] = key;
     w.stats.myths = (w.stats.myths || 0) + 1;
     // Every myth shows in the village's stories; the important ones, at most one a day, in the history.
