@@ -27,7 +27,7 @@ var TEMPLE = {
   startGifts: 7, // gifts in the last startWindow days to begin
   startWindow: 14, // real days
   minDay: 7, // the temple can't begin before week 2
-  feelPerPart: 7.8, // real days of "the creek has answered" per part, at full speed
+  feelPerPart: 8.25, // real days of "the creek has answered" per part, at full speed
   firstFeel: 0.7, // the first part comes sooner: they're eager
   stopDays: 6, // no gift for this long: the temple stops
   greatDay: 30, // a valley with no temple by now begins its own great project

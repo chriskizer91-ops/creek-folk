@@ -143,3 +143,26 @@ valley ends up different. Gifts still never decide survival.
 - A pace check in Node: the temple's feeling and unlock schedule for each giving rhythm.
 - Year runs, 330 days: every other day, daily, twice a day, every four days, none.
 - Browser: the gift sheet, every gift, the Temple tab, the dev menu.
+
+## What changed while building it
+- **Doubters are relative to their own valley.** A fixed openness threshold made one
+  valley all believers and another almost none (temperaments differ between valleys).
+  Now the least open grown-ups of each valley (about one in seven, `doubtLine`) stay
+  doubters, and they talk themselves back down if they ever believed.
+- **Locked parts take no work.** Work already under way when a part finished landed on
+  the next, still-locked part and finished it at once (parts came in pairs). Labour, heavy
+  lifts and the labour action now ignore a locked part.
+- **The pace is sequential.** The feeling that the creek has answered builds only while
+  the next part waits; building a part doesn't count toward the next. That is how the
+  author's description reads, and it lets the material clocks (curing, the dry season)
+  add a little fixed time to every pace, which brings daily and twice-a-day givers closer
+  to the author's expected months.
+- **One standing request at a time**, until the next gift (or a day), rather than a new
+  one every hour.
+- **Offerings are occasional** (about one watch in three), so a player who comes every
+  other day finds a few new ones, not dozens.
+- **The temple's ground is kept clear** (`TEMPLE_ROOM` 9.5 m around the Giving Place): its
+  crown reaches about 9 m toward the sunrise, and gifts placed near the village (a hive)
+  had ended up inside the hall.
+- **Sky gifts are drawn where a top-down player can see them**: stars reflected in every
+  pond and pool, a rainbow sized to the view just beyond what you're looking at.

@@ -36,7 +36,8 @@ function requestLine(w) {
   if (!r || w.t >= r.until) return "";
   let c = w.byId[r.by],
     k = GIFT_KINDS[r.kind];
-  return `<p class="ask"><b>${escapeHtml(c ? c.name : r.name)} asked the creek for ${escapeHtml((k.phrase || k.label).replace(/^an? /, "").replace(/^a /, ""))}</b> <small>"${escapeHtml(r.why[0].toUpperCase() + r.why.slice(1))}."</small></p>`;
+  let ask = { rain: "rain", seeds: "seeds", warm: "a warm day", snow: "snow", stars: "a night of stars", rainbow: "a sign", flowers: "flowers", fruit: "fruit trees", goats: "animals", bees: "bees", fish: "fish", bird: "birdsong", greattree: "timber", clay: "clay", stones: "stones", found: "something to find", dream: "a dream" }[r.kind] || k.label.toLowerCase();
+  return `<p class="ask"><b>${escapeHtml(c ? c.name : r.name)} asked the creek for ${escapeHtml(ask)}.</b> <small>"${escapeHtml(r.why[0].toUpperCase() + r.why.slice(1))}," they said.</small></p>`;
 }
 
 function offeringsLine(w) {

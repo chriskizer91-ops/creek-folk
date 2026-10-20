@@ -161,6 +161,14 @@ if (process.argv[2] === "--child") {
 }
 
 // ---- the coordinator ----
+// A run can be skipped by a marker file (runs/skip-<policy>), for long batch scripts.
+{
+  const pol = (process.env.GIFTS || "none").replace(/[^a-z0-9]/gi, "");
+  if (!process.env.FORCE && fs.existsSync(path.join(__dirname, `../runs/skip-${pol}`))) {
+    console.log(`skipped (runs/skip-${pol})`);
+    process.exit(0);
+  }
+}
 const seeds = +arg("seeds", 4),
   days = +arg("days", 365),
   start = arg("start", "2026-10-20"),

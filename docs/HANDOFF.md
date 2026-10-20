@@ -13,14 +13,14 @@ what is done.
 5. The plan for the part you are on, e.g. `docs/phase3a-plan.md`.
 
 ## Where things stand
-_Last updated: 2026-10-20, Phase 3A done and shown to the author; waiting for their go-ahead on 3B._
+_Last updated: 2026-10-20, Phase 3B built; being measured (year runs) before showing the author._
 
 | Part | State | Branch |
 |---|---|---|
 | Phase 1: foundation | done, shown to the author | `main` (`releases/creekfolk-phase1.html`) |
 | Phase 2: minds | done, shown to the author | `main` (`releases/creekfolk-phase2.html`) |
-| Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`) | `phase-3a` |
-| Phase 3B: belief and the temple | not started | |
+| Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`); merged | `main` |
+| Phase 3B: belief and the temple | built; final measurements and report in progress (`docs/phase3b-plan.md`, `docs/PHASE3B.md`) | `phase-3b` |
 | Phase 3C: life and the ending | not started | |
 | Phase 4: visuals | not started | |
 | Phase 5: year tests (two years) | not started | |

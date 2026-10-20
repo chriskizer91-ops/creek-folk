@@ -2378,7 +2378,7 @@
   }
   function finishHeavy(i, t, e) {
     let n = i.byId[t.obj.id];
-    if (finishPlans(e), !n || !n.building || n.building.locked) return !1; // BELIEF: no work on a part waiting for the creek
+    if (finishPlans(e), !n || !n.building || n.building.locked || n.building.cureLeft > 0) return !1; // BELIEF: no work on a part waiting for the creek, or curing
     let s = t.t1 - t.t0;
     for (let h of e) {
       let d = workSpeed(h);
@@ -4800,7 +4800,7 @@
   }
   function addLabor(i, t, e, n) {
     let s = i.byId[e.sid];
-    if (!s || !s.building || n <= 0 || s.building.locked) return !1; // BELIEF: a temple part waiting for the creek takes no work
+    if (!s || !s.building || n <= 0 || s.building.locked || s.building.cureLeft > 0) return !1; // BELIEF: a temple part waiting for the creek takes no work; nor does anything curing (work still under way would finish it before it had dried)
     let r = n * e.speed;
     return (
       s.building.labor += r,
