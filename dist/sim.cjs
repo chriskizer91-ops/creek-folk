@@ -1,5 +1,5 @@
 "use strict";
-var BUILD_VERSION = "3a", DEV_BUILD = false;
+var BUILD_VERSION = "3b", DEV_BUILD = false;
 // ==== src/sim/core.js ====
   function hashSeed(i) {
     let t = String(i),
@@ -1880,7 +1880,9 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
         crossing: "branch",
         chimes: "reeds",
         lookout: "branch",
-        dam: "branch"
+        dam: "branch",
+        temple: "stone", // BELIEF
+        ancestors: "stone"
       }[i.kind] || "branch");
 
   }
@@ -2379,7 +2381,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
   }
   function finishHeavy(i, t, e) {
     let n = i.byId[t.obj.id];
-    if (finishPlans(e), !n || !n.building) return !1;
+    if (finishPlans(e), !n || !n.building || n.building.locked || n.building.cureLeft > 0) return !1; // BELIEF: no work on a part waiting for the creek, or curing
     let s = t.t1 - t.t0;
     for (let h of e) {
       let d = workSpeed(h);
@@ -3816,7 +3818,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     labor: {
       start(i, t, e) {
         let n = i.byId[e.sid];
-        if (!n || !n.building || n.building.cureLeft > 0) return null;
+        if (!n || !n.building || n.building.cureLeft > 0 || n.building.locked) return null; // BELIEF
         let s = currentStage(n);
         if (!matsComplete(n)) return null;
         let r = stageLaborNeeded(n) - n.building.labor;
@@ -3841,7 +3843,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     heavy: {
       start(i, t, e) {
         let n = i.byId[e.sid];
-        if (!n || !n.building || n.building.cureLeft > 0 || !matsComplete(n)) return null;
+        if (!n || !n.building || n.building.cureLeft > 0 || n.building.locked || !matsComplete(n)) return null; // BELIEF
         let s = waitingFor(i, "heavy", n.id, t);
         return s.length ?
         startJoint(i, [...s, t], "heavyj", { t: "heavy", id: n.id }, t) :
@@ -4801,7 +4803,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
   }
   function addLabor(i, t, e, n) {
     let s = i.byId[e.sid];
-    if (!s || !s.building || n <= 0) return !1;
+    if (!s || !s.building || n <= 0 || s.building.locked || s.building.cureLeft > 0) return !1; // BELIEF: a temple part waiting for the creek takes no work; nor does anything curing (work still under way would finish it before it had dried)
     let r = n * e.speed;
     return (
       s.building.labor += r,
@@ -4856,13 +4858,14 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       );
       return;
     }
-    if (
+    if (STRUCTURES[t.kind].great && greatPartDone(i, t, n.level, n.stage), // BELIEF: a part of a great project (temple.js)
     n.stage++,
     n.labor = 0,
     n.delivered = {},
     n.cured = !1,
     n.cureLeft = 0,
     n.cureUntil = null,
+    STRUCTURES[t.kind].great && (n.locked = !0),
     n.stage >= s.stages.length)
     {
       levelDone(i, t);
@@ -4874,6 +4877,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       l > 0 && (n.delivered[a] = l, t.spare[a] -= l);
     }
     (s.stages.length > 2 || stageLabor(r, tierScale(n.level)) > 1500) &&
+    !STRUCTURES[t.kind].great && // BELIEF: temple.js says it in its own words
     logEvent(
       i,
       1,
@@ -5423,6 +5427,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       let A = shareOption(i, t);
       A && u("share", A.score, A);
     }
+    for (let [x, g] of beliefOptions(i, t)) u(x, g.score, g); // BELIEF: watch, goats, the spring, stars, snow (gift.js)
     u("wander", 0.1), d.sort((x, g) => g.score - x.score);
     for (let x of d) {
       let g = planFor(i, t, x.goal, x.arg);
@@ -5476,7 +5481,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       case "rest":
         return planRest(i, t);
     }
-    return null;
+    return n && n.plan ? n.plan : null; // BELIEF: goals from gift.js and temple.js carry their own plan
   }
   var REGROW_RATES = {
     tree: 1 / 34,
@@ -5588,7 +5593,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     }
     let c = SOURCE_KIND[e];
     if (!c) return o;
-    for (let h of seenByKind(i, t)[c] || []) {
+    for (let h of Array.isArray(c) ? c.flatMap((k) => seenByKind(i, t)[k] || []) : seenByKind(i, t)[c] || []) { // BELIEF: timber has two sources
       let d = expectedAmount(i, t, h);
       if (d < 1) continue;
       let u = Math.min(a, Math.floor(d)),
@@ -6108,9 +6113,10 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     return !e.owner || e.owner === t.id ? !0 : relation(t, e.owner).warmth > 0.45;
   }
   function workStepFor(i, t, e, n = !1) {
-    if (!e.building || e.building.cureLeft > 0) return null;
+    if (!e.building || e.building.cureLeft > 0 || e.building.locked) return null; // BELIEF: a temple part waits for the creek's answer
     let s = currentStage(e);
     if (!s || s.wet && i.weather.rain > 1) return null;
+    if (s.dryseason && seasonAt(i).wetSeason) return null; // BELIEF: great stones move only in the dry season
     if (matsComplete(e))
     return n ?
     null :
@@ -6162,7 +6168,8 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       0.2 * clamp(relation(t, s.founder).warmth, 0, 1) +
       0.25 * (qValue(t, "work|" + s.kind) - 0.5),
       o.interest && (a += 0.3 * (t.interests[o.interest] || 0)),
-      o.likes && (a += 0.25 * (t.interests[o.likes] || 0))),
+      o.likes && (a += 0.25 * (t.interests[o.likes] || 0)),
+      o.great && (a += o.great === "temple" ? 0.55 * ((t.beliefs && t.beliefs.giver) || 0) : 0.3)), // BELIEF: the great projects
       r.type === "heavy" && (
       a *= 0.65 + 0.7 * Math.max(qValue(t, "heavy|duo"), qValue(t, "heavy|solo"))),
       a *= 1 / (1 + r.cost / 140),
@@ -6315,7 +6322,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     return !1;
   }
   function openProjects(i) {
-    return i.structures.filter((t) => t.building && !t.owner).length;
+    return i.structures.filter((t) => t.building && !t.owner && !STRUCTURES[t.kind].great).length; // BELIEF: the great projects don't take a slot
   }
   function foundOption(i, t) {
     let e = null,
@@ -6479,6 +6486,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       let a = STRUCTURES[o.kind].radius + n + 1.4;
       if ((o.x - t) ** 2 + (o.z - e) ** 2 < a * a) return !1;
     }
+    if (i.givingPlace && s !== "dam" && s !== "crossing" && (i.givingPlace.x - t) ** 2 + (i.givingPlace.z - e) ** 2 < (n + TEMPLE_ROOM) ** 2) return !1; // BELIEF: room for the temple
     for (let o of i.res) {
       if (o.kind === "sprout" || o.kind === "orchard" && o.stage <= 1)
       continue;
@@ -7212,6 +7220,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     n === "rain" ?
     s = o < WEATHER.storm * sw * sw ? "storm" : o < 0.75 ? "cloudy" : "rain" :
     s = "rain",
+    e.force && (s = e.force, e.force = null), // BELIEF: a gift can say what the weather turns to next
     r = {
       clear: t.range(2400, 6600) * (1.7 - 0.9 * sw),
       cloudy: t.range(900, 2700),
@@ -7368,6 +7377,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
         a.level >= 3 ?
         0.8 :
         1.15 :
+        a.kind === "temple" || a.kind === "ancestors" ? 0.25 : // BELIEF: the great projects are kept well
         1;
         if (
         a.cond = Math.max(
@@ -7427,6 +7437,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       for (let l in a.desire) a.desire[l] = Math.min(2, a.desire[l] * 0.99965);
       growDesires(i, a, r, o), a.workFatigue = Math.max(0, a.workFatigue - 0.002);
     }
+    faunaMinute(i); // BELIEF: goats wander and graze (fauna.js)
     if (i.tick % 10 === 5 && socialTick(i), i.tick % 1440 === 7)
     for (let a of i.creatures)
     for (let l in a.seen) i.byId[l] || delete a.seen[l];
@@ -7599,7 +7610,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
   function tendGarden(i, t, e) {
     let n = builtLevelDef(t);
     if (!t.beds) return;
-    let s = n && n.growth || 1,
+    let s = (n && n.growth || 1) * beeBoost(i, t.x, t.z), // BELIEF: bees (fauna.js)
       r = i.tick % 10 === 4 ? Math.max(wetNear(i, t.x, t.z, 1.5), seepAt(i, t.x, t.z)) : t.dampSoil || 0; // CREEK: seepage
     i.tick % 10 === 4 && (
     t.dampSoil = +r.toFixed(3),
@@ -9288,6 +9299,7 @@ function lifeTick(w) {
   housing(w);
   mindsTick(w); // stories, myths, visitors (minds.js)
   giftTick(w); // gifts that stopped, found objects (gift.js)
+  templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -9452,6 +9464,7 @@ function bear(w, a, b) {
   for (let k in c.interests) c.interests[k] = +clamp((a.interests[k] + b.interests[k]) / 2 + w.rng.normal() * 0.12, 0.05, 0.95).toFixed(3);
   c.fearWater = +clamp(0.35 + c.temp.caution * 0.4, 0.05, 0.9).toFixed(3);
   initLife(w, c, w.t, { parents: [a.id, b.id], gen: Math.max(a.gen || 0, b.gen || 0) + 1 });
+  inheritBelief(w, c, a, b); // BELIEF: children grow up with their family's belief (gift.js)
   if (nm.honors) c.honors = nm.honors;
   c.home = null;
   c.sleepSpot = home ? { x: home.x, z: home.z } : null;
@@ -9553,6 +9566,8 @@ function passOn(w, c) {
   let age = ageDays(w, c),
     near = w.creatures.filter((o) => o !== c && o.act && o.plan && o.plan.goal === "vigil" && o.plan.with === c.id);
   let rec = lineageRecord(w, c);
+  w.lastPassing = Math.round(w.t);
+  passBeyond(w, c); // BELIEF: the one who believes in you passes it on (gift.js)
   rec.died = Math.round(w.t);
   rec.age = +age.toFixed(1);
   rec.children = (c.children || []).slice();
@@ -9729,6 +9744,7 @@ function depart(w, c) {
   let near = w.creatures.filter((o) => o !== c && o.plan && o.plan.goal === "vigil" && (o.plan.with === c.id || (c.leaving && o.plan.with === c.leaving.with)));
   let rec = lineageRecord(w, c);
   rec.left = Math.round(w.t);
+  passBeyond(w, c); // BELIEF: the one who believes in you passes it on before going
   rec.age = +ageDays(w, c).toFixed(1);
   rec.children = (c.children || []).slice();
   rec.partner = c.partner;
@@ -9941,6 +9957,8 @@ function arriveTraveler(w) {
   logEvent(w, 3, `A traveler came up the creek from somewhere downstream: ${c.name}. They looked around for a long while, and stayed.`, [c.id], at, "arrival");
   remember(w, c, "life", "I followed the creek upstream and found this valley. I think I will stay.", 0.9, { x: at.x, z: at.z, pv: 0.3 });
   newStory(w, "arrival", { who: c.name }, at, 2, witnessesNear(w, at, 14, [c])); // MINDS
+  let spring = springNews(w, c); // BELIEF: a traveler may bring news of the spring
+  if (spring) logEvent(w, 3, `${c.name} says that ${spring}.`, [c.id], at, "spring");
   c.asleep = false;
   c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 8, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
   schedule(w, w.t + 8, "A", c.id, c.tok);
@@ -10042,7 +10060,7 @@ function sameVersion(a, b) {
 function storyText(w, s, v) {
   let where = v.where ? ` at ${v.where}` : "",
     big = v.big || 0,
-    sent = ["founding", "storm", "gift", "frogs"].includes(s.kind),
+    sent = ["founding", "storm", "gift", "frogs", "spring"].includes(s.kind),
     why = v.why === "giver" ? (sent ? `, sent by ${giverName(w)}` : `, with the blessing of ${giverName(w)}`) : v.why === "creek" ? ", because the creek wished it" : v.why === "elders" ? ", as the elders had said it would" : "";
   switch (s.kind) {
     case "founding":
@@ -10067,6 +10085,15 @@ function storyText(w, s, v) {
       return `The frogs came back to the marsh${where}${why}${big ? ", singing all at once on the same night" : ""}.`;
     case "lost":
       return `Once, long ago, the creekfolk knew ${SKILL_TEXT[v.what] || v.what}${v.who ? `; ${v.who} was the last who did` : ""}.`;
+    // BELIEF (Phase 3B)
+    case "temple":
+      return `The creekfolk began the ${v.what}${v.where ? ` at ${v.where}` : ""}${why}${big ? (big >= 2 ? ", and the creek sang all night" : ", on the first warm morning of the year") : ""}.`;
+    case "temple-wait":
+      return `The ${v.what} stood half-built while the creek rested${why}${big ? (big >= 2 ? ", and not a single stone was lost" : ", and the lantern never went out") : ""}.`;
+    case "temple-done":
+      return `The ${v.what} was finished${v.n ? ` after ${daysWord(v.n)}` : ""}${why}${big ? (big >= 2 ? ", and the creek ran gold that evening" : ", and everyone slept on its steps") : ""}.`;
+    case "spring":
+      return `${v.who} walked up past the head of the valley and found the spring where the creek begins${why}${big ? (big >= 2 ? ", and drank from it, and came back a head taller" : ", and the water was warm as milk") : ""}.`;
   }
   return "Something happened, long ago.";
 }
@@ -10090,13 +10117,13 @@ function retell(w, teller, listener, s, v) {
   let rng = w.rng,
     l = teller.lore[s.id],
     age = (w.t - s.t) / 86400,
-    p = MINDS.driftBase * (l.first ? 0.5 : 1) * (1 + Math.min(1.5, age / 20)) * (listener.stage === "child" ? 1.4 : 1) * (teller.stage === "elder" ? 0.8 : 1) * (0.7 + 0.6 * teller.temp.curiosity);
+    p = MINDS.driftBase * (s.carved ? 0.5 : 1) * (l.first ? 0.5 : 1) * (1 + Math.min(1.5, age / 20)) * (listener.stage === "child" ? 1.4 : 1) * (teller.stage === "elder" ? 0.8 : 1) * (0.7 + 0.6 * teller.temp.curiosity);
   if (!rng.chance(p)) return v;
   let nv = { ...v },
     ops = [];
   if (nv.n != null) ops.push("n");
   if (nv.who != null && s.kind !== "founding") ops.push("who", "who");
-  if (["founding", "storm", "gift", "frogs", "discovery", "built"].includes(s.kind)) ops.push("why");
+  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring"].includes(s.kind)) ops.push("why");
   ops.push("big", "big");
   if (s.x != null) ops.push("where");
   let op = rng.pick(ops);
@@ -10223,6 +10250,10 @@ function shortAbout(w, s) {
     gift: "the gift",
     frogs: "the frogs coming back",
     lost: "what was forgotten",
+    temple: "how the great work began",
+    "temple-wait": "the time the creek rested",
+    "temple-done": "the great work's finishing",
+    spring: "who found the spring",
   }[s.kind] || "the old days";
 }
 
@@ -10260,6 +10291,7 @@ function checkMyths(w) {
     let key = JSON.stringify([top.v.who, top.v.n, top.v.where, top.v.why, top.v.big || 0]);
     if (sameTold(w, s, top.v, s.truth) || w.myths[k] === key) continue;
     if (!(k in w.myths)) w.stats.mythStories = (w.stats.mythStories || 0) + 1;
+    if (w.stats.firstMyth == null) w.stats.firstMyth = Math.round(w.t);
     w.myths[k] = key;
     w.stats.myths = (w.stats.myths || 0) + 1;
     // Every myth shows in the village's stories; the important ones, at most one a day, in the history.
@@ -10518,7 +10550,7 @@ function visits(w, force = false) {
   register(w, c);
   w.creatures.push(c);
   w.stats.visits = (w.stats.visits || 0) + 1;
-  let news = w.rng.pick(DOWNSTREAM_NEWS);
+  let news = springNews(w, c) || w.rng.pick(DOWNSTREAM_NEWS); // BELIEF: news of the spring comes first
   logEvent(w, 3, `${c.name} came back up the creek to visit! They say ${news}.`, [c.id], edge, "visit");
   newStory(w, "news", { who: c.name, what: news }, edge, 2, [c]);
   for (let o of w.creatures) {
@@ -10591,25 +10623,297 @@ function mindsTick(w) {
   }
 }
 
+// ==== src/sim/fauna.js ====
+// ==========================================================================
+// Gifts that live (Phase 3B): new flowers, fruit trees, goats, bees, fish and
+// birds. Each gift of a kind brings a new species the valley didn't have, so
+// over a year every valley fills with the ones its player chose. Nothing here
+// decides anyone's survival: flowers and birds are for joy, bees help the
+// gardens, goats are tended for company (never for meat), fish live in the
+// ponds the creekfolk made.
+//
+// State lives in world.fauna (plain data, saved with the world). Goats move a
+// little every world tick; everything uses the world's seeded random numbers.
+// ==========================================================================
+
+var FAUNA_KINDS = {
+  flower: [["bluebell", "bluebells"], ["poppy", "poppies"], ["marigold", "marigolds"], ["lupin", "lupins"], ["daisy", "daisies"], ["iris", "irises"]],
+  fruit: [["plum", "plums"], ["apple", "apples"], ["pear", "pears"], ["cherry", "cherries"], ["quince", "quinces"]],
+  bird: [["wren", "wrens"], ["swallow", "swallows"], ["kingfisher", "kingfishers"], ["finch", "finches"], ["lark", "larks"], ["owl", "owls"]],
+  fish: [["minnow", "minnows"], ["trout", "trout"], ["sunfish", "sunfish"], ["loach", "loaches"]],
+};
+
+var FAUNA = {
+  flowerPatches: 6,   // patches a new flower starts with
+  flowerMax: 14,      // patches one kind can spread to
+  flowerSpreadDays: 3, // about this often a flower spreads to a new patch
+  goatSpeed: 0.35,    // m/s
+  beeBoost: 1.25,     // garden growth near a hive
+  beeRange: 20,       // m
+};
+
+function faunaOf(w) {
+  return w.fauna || (w.fauna = { flowers: [], fruits: [], birds: [], fish: [], goats: [], hives: [], pasture: null, wool: 0 });
+}
+
+function faunaLabel(group, id) {
+  let k = FAUNA_KINDS[group].find((e) => e[0] === id);
+  return k ? k[1] : id;
+}
+
+// The next species of a group this valley doesn't have yet (or null when it has them all).
+function faunaNext(w, group) {
+  let f = faunaOf(w),
+    have = { flower: f.flowers.map((x) => x.kind), fruit: f.fruits, bird: f.birds, fish: f.fish }[group],
+    left = FAUNA_KINDS[group].filter((k) => !have.includes(k[0]));
+  return left.length ? w.rng.pick(left)[0] : null;
+}
+
+// Somewhere pleasant near where they live: on the terrace, away from the water.
+function faunaSpot(w, near, r, extra = {}) {
+  let T = w.terrain,
+    avoid = w.givingPlace ? [{ x: w.givingPlace.x, z: w.givingPlace.z, r: TEMPLE_ROOM }] : [];
+  return T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r }, offFloor: true, minEdge: 3, avoid, ...extra }) || T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: r * 1.6 }, minEdge: 2, avoid });
+}
+// The ground kept clear around the Giving Place for the temple (it reaches about 9 m
+// toward their midwinter sunrise).
+var TEMPLE_ROOM = 9.5;
+
+function villageCentre(w) {
+  let homes = w.structures.filter((s) => s.kind === "home" && s.level > 0);
+  if (!homes.length) return w.meadow;
+  return { x: homes.reduce((a, s) => a + s.x, 0) / homes.length, z: homes.reduce((a, s) => a + s.z, 0) / homes.length };
+}
+
+// ---------------------------------------------------------------------------
+// The gifts. Each returns { what, spot } for the gift's log and story, or null.
+// ---------------------------------------------------------------------------
+function giveFlowers(w) {
+  let kind = faunaNext(w, "flower"),
+    f = faunaOf(w),
+    centre = villageCentre(w);
+  let fl = kind ? { kind, t: Math.round(w.t), patches: [] } : f.flowers.length ? w.rng.pick(f.flowers) : null;
+  if (!fl) return null;
+  if (kind) f.flowers.push(fl);
+  let add = kind ? FAUNA.flowerPatches : 3;
+  for (let i = 0; i < add && fl.patches.length < FAUNA.flowerMax + 4; i++) {
+    let p = faunaSpot(w, i % 2 ? centre : w.meadow, 18);
+    if (p) fl.patches.push({ x: +p.x.toFixed(2), z: +p.z.toFixed(2), r: +w.rng.range(0.8, 1.6).toFixed(2), n: w.rng.int(5, 9) });
+  }
+  let spot = fl.patches[0] || w.meadow;
+  return { what: kind ? `seeds of ${faunaLabel("flower", kind)}` : `more ${faunaLabel("flower", fl.kind)}`, spot, kind: fl.kind, isNew: !!kind };
+}
+
+function giveFruitTree(w) {
+  let kind = faunaNext(w, "fruit") || w.rng.pick(FAUNA_KINDS.fruit)[0],
+    f = faunaOf(w),
+    centre = villageCentre(w),
+    first = null;
+  if (!f.fruits.includes(kind)) f.fruits.push(kind);
+  for (let i = 0; i < 3; i++) {
+    let p = faunaSpot(w, centre, 14, { minEdge: 3.5 });
+    if (!p) continue;
+    let o = register(w, { id: w.nextId++, kind: "orchard", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), stage: 1, grow: 0, amt: 0, max: 5, canopy: 0.4, fruit: kind, gift: true });
+    w.res.push(o);
+    first = first || o;
+  }
+  if (!first) return null;
+  return { what: `three young ${kind} trees`, spot: first, kind };
+}
+
+function giveGoats(w) {
+  let f = faunaOf(w),
+    centre = villageCentre(w);
+  if (!f.pasture) {
+    let p = faunaSpot(w, centre, 22, { minEdge: 5 });
+    if (!p) return null;
+    f.pasture = { x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
+  }
+  let at = f.pasture,
+    names = [];
+  for (let i = 0; i < 2; i++) {
+    let nm = newName(w, []).name,
+      g = { id: (f.goatSeq = (f.goatSeq || 0) + 1), name: nm, x: +(at.x + w.rng.range(-1.5, 1.5)).toFixed(2), z: +(at.z + w.rng.range(-1.5, 1.5)).toFixed(2), coat: w.rng.int(0, 3), born: Math.round(w.t) };
+    g.px = g.x;
+    g.pz = g.z;
+    g.pt = Math.round(w.t);
+    g.tn = Math.round(w.t);
+    f.goats.push(g);
+    names.push(nm);
+  }
+  if (f.goats.length > 12) f.goats.splice(0, f.goats.length - 12);
+  return { what: "a pair of goats", spot: at, names };
+}
+
+function giveBees(w) {
+  let f = faunaOf(w),
+    g = w.structures.find((s) => s.kind === "garden" && s.level > 0 && !f.hives.some((h) => dist2d(h.x, h.z, s.x, s.z) < 8)),
+    near = g || villageCentre(w),
+    p = faunaSpot(w, near, 5, { minEdge: 3 });
+  if (!p) return null;
+  f.hives.push({ x: +p.x.toFixed(2), z: +p.z.toFixed(2), t: Math.round(w.t) });
+  if (f.hives.length > 6) f.hives.shift();
+  return { what: "a hive of bees", spot: p };
+}
+
+function giveFish(w) {
+  let kind = faunaNext(w, "fish") || w.rng.pick(FAUNA_KINDS.fish)[0],
+    f = faunaOf(w);
+  if (!f.fish.includes(kind)) f.fish.push(kind);
+  let d = Object.values(w.creek.dams || {}).sort((a, b) => b.pl - w.creek.nodes[b.i].bed - (a.pl - w.creek.nodes[a.i].bed))[0];
+  let z = d ? w.creek.nodes[d.i].z - 3 : VL * 0.4,
+    spot = { x: w.terrain.creekX(z), z };
+  return { what: faunaLabel("fish", kind), spot, kind, ponds: !!d };
+}
+
+function giveBird(w) {
+  let kind = faunaNext(w, "bird") || w.rng.pick(FAUNA_KINDS.bird)[0],
+    f = faunaOf(w);
+  if (!f.birds.includes(kind)) f.birds.push(kind);
+  return { what: faunaLabel("bird", kind), spot: null, kind };
+}
+
+// More of the valley's own materials, close to where they're needed.
+function giveGreatTree(w) {
+  let near = villageCentre(w),
+    p = faunaSpot(w, near, 12, { minEdge: 3.5 });
+  if (!p) return null;
+  let o = register(w, { id: w.nextId++, kind: "greatlog", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 40, max: 40, timber: 14, ry: +w.rng.range(0, 3.14).toFixed(2), gift: true });
+  w.res.push(o);
+  return { what: "a great fallen tree", spot: o };
+}
+
+function giveClayBank(w) {
+  let near = w.givingPlace ? { x: w.givingPlace.x, z: w.givingPlace.z } : villageCentre(w),
+    p = faunaSpot(w, near, 14, { minEdge: 2 });
+  if (!p) return null;
+  let o = register(w, { id: w.nextId++, kind: "clay", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 36, max: 40, gift: true });
+  w.res.push(o);
+  return { what: "a bank of good clay", spot: o };
+}
+
+function giveStones(w) {
+  let near = w.givingPlace ? { x: w.givingPlace.x, z: w.givingPlace.z } : villageCentre(w),
+    p = faunaSpot(w, near, 13, { minEdge: 2.5 });
+  if (!p) return null;
+  let o = register(w, { id: w.nextId++, kind: "stones", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: w.terrain.side(p.x, p.z), amt: 36, max: 36, gift: true });
+  w.res.push(o);
+  return { what: "a pile of stones", spot: o };
+}
+
+// ---------------------------------------------------------------------------
+// Living things over time
+// ---------------------------------------------------------------------------
+
+// Every world tick (60 s): goats wander and graze near their pasture; at night they
+// settle close together.
+function faunaMinute(w) {
+  let f = w.fauna;
+  if (!f || !f.goats.length || !f.pasture) return;
+  let T = w.terrain,
+    night = isNight(w.t);
+  for (let g of f.goats) {
+    if (w.t < g.tn) continue;
+    let r = night ? 1.5 : 5.5,
+      tx = f.pasture.x + w.rng.range(-r, r),
+      tz = f.pasture.z + w.rng.range(-r, r);
+    if (!T.walkable(tx, tz) || T.edgeDist(tx, tz) < 1.5) continue;
+    let d = dist2d(g.x, g.z, tx, tz);
+    g.px = g.x;
+    g.pz = g.z;
+    g.pt = Math.round(w.t);
+    g.x = +tx.toFixed(2);
+    g.z = +tz.toFixed(2);
+    // walk there, then graze a while
+    g.tn = Math.round(w.t + d / FAUNA.goatSpeed + w.rng.range(night ? 600 : 40, night ? 1500 : 220));
+  }
+}
+
+// Every few valley hours (from the gift tick): flowers spread to new patches.
+function faunaSlow(w) {
+  let f = w.fauna;
+  if (!f) return;
+  for (let fl of f.flowers) {
+    if (fl.patches.length >= FAUNA.flowerMax || !w.rng.chance(LIFE.tick / (FAUNA.flowerSpreadDays * 86400))) continue;
+    let from = w.rng.pick(fl.patches),
+      p = faunaSpot(w, from, 6);
+    if (p) fl.patches.push({ x: +p.x.toFixed(2), z: +p.z.toFixed(2), r: +w.rng.range(0.7, 1.4).toFixed(2), n: w.rng.int(4, 8) });
+  }
+}
+
+// Gardens near a hive grow faster.
+function beeBoost(w, x, z) {
+  let f = w.fauna;
+  if (!f || !f.hives.length) return 1;
+  for (let h of f.hives) if (dist2d(h.x, h.z, x, z) < FAUNA.beeRange) return FAUNA.beeBoost;
+  return 1;
+}
+
+// A creekfolk who likes animals or growing things may go and tend the goats.
+function goatOption(w, c) {
+  let f = w.fauna;
+  if (!f || !f.goats.length || isNight(w.t) || c.stage === "elder" && c.needs.energy < 0.5) return null;
+  if (w.creatures.some((o) => o !== c && o.plan && o.plan.goal === "goats")) return null;
+  let g = w.rng.pick(f.goats),
+    like = 0.25 * c.interests.growing + 0.2 * c.temp.sociability + (c.stage === "child" ? 0.25 : 0),
+    score = (0.08 + like) * clamp((0.8 - c.needs.fun) / 0.8, 0.2, 1);
+  return {
+    score,
+    plan: { goal: "goats", steps: [{ do: "walk", x: g.x + 0.6, z: g.z + 0.6, near: 0.5, why: "goats" }, { do: "tendgoat", id: g.id }] },
+  };
+}
+
+ACTIONS.tendgoat = {
+  start(w, c, step) {
+    let f = w.fauna,
+      g = f && f.goats.find((x) => x.id === step.id);
+    if (!g) return null;
+    return makeAct(w, c, "groom", 25, { lookX: g.x, lookZ: g.z });
+  },
+  end(w, c, a, step) {
+    let f = w.fauna,
+      g = f && f.goats.find((x) => x.id === step.id);
+    c.needs.fun = clamp(c.needs.fun + 0.18, 0, 1);
+    c.needs.social = clamp(c.needs.social + 0.06, 0, 1);
+    feel(c, w, "joy", 0.3);
+    if (f) f.wool = +(f.wool + 0.05).toFixed(2);
+    if (g && !(c.counts.goats > 0)) remember(w, c, "goats", `I brushed ${g.name} the goat. Soft, and a bit smelly.`, 0.5);
+    c.counts.goats = (c.counts.goats || 0) + 1;
+    return true;
+  },
+};
+
 // ==== src/sim/gift.js ====
 // ==========================================================================
 // The player's gift, and what the creekfolk come to believe about it.
 //
-// Once every 12 real hours the player may give the valley one gift: a gentle
-// rain, a scatter of seeds, a warm day, or a found object. Gifts help things
-// grow; they never decide whether anyone survives.
+// Once every 12 real hours (twelve valley days) the player may give the valley
+// one gift. Gifts help things grow; they never decide whether anyone survives.
 //
-// The creekfolk notice. Each one explains a gift its own way (luck, the creek,
-// or someone watching), and repeated gifts that arrive when they're needed make
-// "someone" more likely. Believers coin a word for the giver (it spreads like
-// any other word), thank it with a gesture that can become a village custom,
-// notice when gifts come regularly, argue with doubters, and wonder what they
-// did wrong when the gifts stop.
+// Phase 3B: the creekfolk come to believe the creek gives them. The feeling is
+// gratitude and kinship ("the creek keeps us; we keep the creek"), not fear.
+// Doubters say it's luck. Believers:
+//   - say out loud what the valley needs (requests the player can read), and an
+//     answered request strengthens belief more than a random gift;
+//   - keep watch at the Giving Place when a gift is due, and leave small
+//     offerings there for the giver, which collect over the year;
+//   - mark each giving day with a notch on the Giving Stone, and notice the
+//     rhythm ("the creek gives at dawn, every twenty-four days");
+//   - when the gifts stop, say "the creek is resting" and leave a lantern lit.
+// After about a hundred gifts, one of them becomes sure the gifts come from
+// someone beyond the valley, and waves at the sky (the camera) when you look.
 // ==========================================================================
 
 var GIFT = {
   every: 12 * 3600, // seconds between gifts
-  stopDays: 3,      // after this long without a gift (once there have been a few), it feels like they stopped
+  restDays: 3, // after this long without a gift (once there have been a few), the creek is resting
+  requestLife: 24 * 3600, // a request stands until the next gift, or this long
+  requestGap: 3 * 3600, // at least this long between requests
+  watchGap: 2 * 3600, // a creekfolk keeps watch at most this often
+  watchers: 3, // at most this many keep watch at once
+  beyondGifts: 100, // gifts before one of them believes in someone beyond the valley ...
+  beyondDays: 150, // ... and about five months since the first gift
+  offeringsShown: 40, // offerings drawn at the Giving Place
 };
 
 var FOUND_THINGS = [
@@ -10623,15 +10927,44 @@ var FOUND_THINGS = [
   "a little copper key",
 ];
 
+// The gifts the player can choose from, in four groups.
+var GIFT_GROUPS = [
+  ["weather", "Weather"],
+  ["living", "Living things"],
+  ["materials", "Materials"],
+  ["wonder", "Wonder"],
+];
+var GIFT_KINDS = {
+  rain: { group: "weather", label: "A gentle rain", hint: "waters the gardens and fills the ponds", phrase: "a gentle rain", all: true },
+  warm: { group: "weather", label: "A warm day", hint: "dries everyone off and helps things grow", phrase: "a warm day", all: true },
+  snow: { group: "weather", label: "A snow day", hint: "a day of snow to play in", phrase: "a snow day", all: true },
+  stars: { group: "weather", label: "A starry night", hint: "a clear night full of stars", phrase: "a night full of stars", all: true },
+  rainbow: { group: "weather", label: "A rainbow", hint: "a short shower, then a rainbow", phrase: "a rainbow", all: true, sign: 1.6 },
+  seeds: { group: "living", label: "A scatter of seeds", hint: "something to plant, and something to eat", phrase: "a scatter of seeds" },
+  flowers: { group: "living", label: "Flower seeds", hint: "a kind of flower the valley hasn't seen" },
+  fruit: { group: "living", label: "A fruit tree", hint: "young trees of a new fruit" },
+  goats: { group: "living", label: "A pair of goats", hint: "to tend and keep company" },
+  bees: { group: "living", label: "Bees", hint: "a hive by the gardens" },
+  fish: { group: "living", label: "Fish", hint: "a new kind of fish for the ponds" },
+  bird: { group: "living", label: "A new bird", hint: "a kind of bird the valley hasn't heard", all: true },
+  greattree: { group: "materials", label: "A fallen great tree", hint: "timber for something big" },
+  clay: { group: "materials", label: "A bank of good clay", hint: "for walls, tiles and bells" },
+  stones: { group: "materials", label: "A pile of stones", hint: "for building" },
+  found: { group: "wonder", label: "Something to find", hint: "a small mystery in the grass" },
+  dream: { group: "wonder", label: "A dream", hint: "one of them wakes with an idea", phrase: "a dream" },
+};
+
 function giftText(what) {
-  let t = { rain: "a gentle rain", seeds: "a scatter of seeds", warm: "a warm day" }[what] || what;
+  let t = (GIFT_KINDS[what] && GIFT_KINDS[what].phrase) || what;
   return t[0].toUpperCase() + t.slice(1);
 }
 
+// What they call the one who gives: their own word for the creek-that-gives once it has
+// spread among the believers, otherwise simply the creek.
 function giverName(w) {
   let believers = w.creatures.filter((c) => c.beliefs && c.beliefs.giver > 0.5).length;
   let v = vocabularySummary(w).find((e) => e.concept === "giver");
-  return v && believers >= 2 && v.users >= Math.ceil(believers / 2) ? `"${v.word}"` : "the one who sends gifts";
+  return v && believers >= 2 && v.users >= Math.ceil(believers / 2) ? `"${v.word}"` : "the creek";
 }
 
 function giftReady(w) {
@@ -10646,46 +10979,122 @@ function beliefsOf(c) {
   return (c.beliefs = c.beliefs || { giver: 0, seen: 0, lastSeen: null, pattern: false, thanks: null });
 }
 
-// How much the valley needed this gift right now (0..1).
-function giftNeed(w, kind) {
-  let alive = w.creatures.filter((c) => !c.visitor);
-  if (kind === "rain") {
-    let dryFor = w.weather.rain > 0 ? 0 : w.t - (w.weather.since || 0);
-    let thirsty = w.structures.some((s) => s.kind === "garden" && s.beds && s.beds.some((b) => b.state === "growing" && b.water < 0.35));
-    return clamp(dryFor / (3 * VALLEY_DAY), 0, 1) * 0.6 + (thirsty ? 0.4 : 0);
-  }
-  if (kind === "seeds") {
-    let food = alive.reduce((a, c) => a + c.needs.food, 0) / Math.max(1, alive.length);
-    return clamp((0.6 - food) * 2.5, 0, 1);
-  }
-  if (kind === "warm") {
-    let s = seasonAt(w),
-      wet = alive.filter((c) => c.wet > 0.4).length / Math.max(1, alive.length);
-    return clamp((1 - s.warmth) * 0.7 + wet * 0.6 + (w.weather.rain > 0 ? 0.2 : 0), 0, 1);
-  }
-  return 0.5;
+function believers(w) {
+  return w.creatures.filter((c) => !c.visitor && c.beliefs && c.beliefs.giver > 0.5);
 }
 
-// The gift arrives. Returns a short description for the player.
+// Most of the living believe the creek gives.
+function mostBelieve(w) {
+  let alive = w.creatures.filter((c) => !c.visitor).length;
+  return alive > 0 && believers(w).length > alive / 2;
+}
+
+// ---------------------------------------------------------------------------
+// What the valley needs (0..1), and how they would say it.
+// ---------------------------------------------------------------------------
+function giftNeed(w, kind) {
+  return giftNeedWhy(w, kind).need;
+}
+
+function giftNeedWhy(w, kind) {
+  let alive = w.creatures.filter((c) => !c.visitor),
+    s = seasonAt(w),
+    f = w.fauna || {},
+    n = (need, why) => ({ need: clamp(need, 0, 1), why });
+  switch (kind) {
+    case "rain": {
+      let dryFor = w.weather.rain > 0 ? 0 : w.t - (w.weather.since || 0),
+        thirsty = w.structures.some((x) => x.kind === "garden" && x.beds && x.beds.some((b) => b.state === "growing" && b.water < 0.35)),
+        stopped = w.creek && !s.wetSeason && w.creek.flowLen != null && w.creek.flowLen < VL * 0.6;
+      return n(clamp(dryFor / (3 * VALLEY_DAY), 0, 1) * 0.45 + (thirsty ? 0.35 : 0) + (stopped ? 0.25 : 0), thirsty ? "the gardens are dry" : stopped ? "the creek has stopped running" : "it hasn't rained in a long time");
+    }
+    case "seeds": {
+      let food = alive.reduce((a, c) => a + c.needs.food, 0) / Math.max(1, alive.length);
+      return n((0.6 - food) * 2.5, "everyone is hungry");
+    }
+    case "warm": {
+      let wet = alive.filter((c) => c.wet > 0.4).length / Math.max(1, alive.length);
+      return n((1 - s.warmth) * 0.6 + wet * 0.6 + (w.weather.rain > 0 ? 0.15 : 0), wet > 0.3 ? "everyone is cold and wet" : "it's so cold");
+    }
+    case "snow":
+      return n(0.12 + (s.name === "winter" ? 0.18 : 0) + 0.15 * clamp(alive.filter((c) => c.stage === "child").length / 4, 0, 1), "the little ones want to see snow");
+    case "stars": {
+      let grief = w.lastPassing && w.t - w.lastPassing < 12 * 3600;
+      return n(0.1 + (grief ? 0.35 : 0), grief ? "someone has passed, and they want to see the stars" : "they'd like to see the stars");
+    }
+    case "rainbow": {
+      let b = believers(w).length / Math.max(1, alive.length);
+      return n(0.12 + (b > 0.15 && b < 0.5 ? 0.25 : 0), "they're hoping for a sign");
+    }
+    case "flowers":
+      return n((f.flowers || []).length ? 0.1 : 0.3, "the meadow has no flowers");
+    case "fruit": {
+      let fruitTrees = w.res.filter((r) => r.kind === "orchard").length;
+      return n((fruitTrees < 3 ? 0.3 : 0.08) + (alive.reduce((a, c) => a + c.needs.food, 0) / Math.max(1, alive.length) < 0.5 ? 0.15 : 0), "they want trees their grandchildren can pick from");
+    }
+    case "goats":
+      return n((f.goats || []).length ? 0.05 : 0.2, "the children want animals to look after");
+    case "bees":
+      return n(w.structures.some((x) => x.kind === "garden" && x.level > 0) && !(f.hives || []).length ? 0.4 : 0.05, "the gardens need bees");
+    case "fish":
+      return n(Object.keys((w.creek && w.creek.dams) || {}).length >= 2 && !(f.fish || []).length ? 0.42 : 0.06, "there are no fish in the ponds");
+    case "bird":
+      return n((f.birds || []).length < 2 ? 0.16 : 0.05, "the mornings are quiet");
+    case "greattree":
+      return n(materialShort(w, "timber") ? 0.7 : 0.08, "the builders need timber");
+    case "clay":
+      return n(materialShort(w, "clay") ? 0.5 : 0.06, "the builders need clay");
+    case "stones":
+      return n(materialShort(w, "stone") ? 0.55 : 0.06, "the builders need stones");
+    case "found":
+      return n(0.2, "the children want something to find");
+    case "dream": {
+      let lost = Object.keys(w.lost || {}).length,
+        waiting = w.temple && w.temple.state === "stopped";
+      return n(lost ? 0.6 : waiting ? 0.45 : 0.1, lost ? "they have forgotten something they used to know" : waiting ? "they're waiting for a sign" : "they wish for an idea");
+    }
+  }
+  return n(0.3, "");
+}
+
+// A building in progress is waiting on a material nobody can find.
+function materialShort(w, mat) {
+  for (let s of w.structures) {
+    if (!s.building || s.building.locked || !currentStage(s)) continue;
+    let need = stageNeeds(s)[mat];
+    if (!need || (s.building.delivered[mat] || 0) >= need) continue;
+    if (mat === "timber" && !w.res.some((r) => (r.kind === "greatlog" || (r.kind === "timbertree" && r.grow >= 1)) && r.amt > 0)) return true;
+    if (mat !== "timber" && !w.res.some((r) => r.kind === SOURCE_KIND[mat] && r.amt >= 3)) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// The gift arrives. Returns a short description for the player, or null.
+// ---------------------------------------------------------------------------
 function giveGift(w, kind) {
-  if (!giftReady(w)) return null;
-  let need = giftNeed(w, kind),
+  if (!giftReady(w) || !GIFT_KINDS[kind]) return null;
+  let info = giftNeedWhy(w, kind),
+    need = info.need,
     T = w.terrain,
     spot = null,
     alive = w.creatures.filter((c) => !c.visitor),
-    what = kind;
-  w.giftLast = w.t;
-  w.gifts = w.gifts || [];
+    what = kind,
+    extra = null,
+    e = w.weather,
+    setWeather = (state, rain, dur, force) => {
+      e.cum = rainTotal(w, w.t);
+      e.cumT = w.t;
+      e.state = state;
+      e.rain = rain;
+      e.since = w.t;
+      e.until = w.t + dur;
+      e.tok = (e.tok || 0) + 1;
+      e.force = force || null; // BELIEF: what the weather turns to next (changeWeather)
+      schedule(w, e.until, "R", 0, e.tok);
+    };
   if (kind === "rain") {
-    let e = w.weather;
-    e.cum = rainTotal(w, w.t);
-    e.cumT = w.t;
-    e.state = "rain";
-    e.rain = 1;
-    e.since = w.t;
-    e.until = w.t + 0.4 * VALLEY_DAY;
-    e.tok = (e.tok || 0) + 1;
-    schedule(w, e.until, "R", 0, e.tok);
+    setWeather("rain", 1, 0.4 * VALLEY_DAY);
     logEvent(w, 2, "A gentle rain began to fall out of a clear sky.", [], null, "gift");
   } else if (kind === "seeds") {
     let g = findStructure(w, "garden", (s) => s.level > 0);
@@ -10695,73 +11104,189 @@ function giveGift(w, kind) {
     for (let r of w.res) if (r.kind === "bush" && r.amt < r.max) r.amt = Math.min(r.max, r.amt + 2);
     logEvent(w, 2, "Seeds were found scattered in the grass, where there had been none.", [], spot, "gift");
   } else if (kind === "warm") {
-    let e = w.weather;
-    if (e.rain > 0) {
-      e.cum = rainTotal(w, w.t);
-      e.cumT = w.t;
-      e.state = "clear";
-      e.rain = 0;
-      e.since = w.t;
-      e.until = w.t + VALLEY_DAY;
-      e.tok = (e.tok || 0) + 1;
-      schedule(w, e.until, "R", 0, e.tok);
-    }
+    if (e.rain > 0) setWeather("clear", 0, VALLEY_DAY);
     for (let c of w.creatures) (c.wet = 0), (c.needs.comfort = clamp(c.needs.comfort + 0.3, 0, 1)), (c.needs.fun = clamp(c.needs.fun + 0.1, 0, 1));
     for (let s of w.structures) if (s.kind === "garden" && s.beds) for (let b of s.beds) if (b.state === "growing") b.grow = Math.min(1, b.grow + 0.25);
     for (let r of w.res) if (r.kind === "orchard" && r.stage < 3) r.grow = Math.min(0.99, (r.grow || 0) + 0.15);
     logEvent(w, 2, `A warm, golden day settled over the valley${seasonAt(w).warmth < 0.4 ? ", though it was the cold time of year" : ""}.`, [], null, "gift");
+  } else if (kind === "snow") {
+    if (e.rain > 0 || e.state === "cloudy") setWeather("clear", 0, VALLEY_DAY);
+    w.snow = { t0: Math.round(w.t), until: Math.round(w.t + VALLEY_DAY) };
+    for (let c of w.creatures) c.needs.fun = clamp(c.needs.fun - 0.15, 0, 1); // everyone wants to go and play in it
+    logEvent(w, 3, "Snow began to fall, soft and slow, and the whole valley turned white.", [], null, "gift");
+  } else if (kind === "stars") {
+    // the coming night (or this one) is clear, with every star out
+    let now = dayPhase(w.t),
+      toDusk = now < 0.82 ? (0.82 - now) * getDayLength() : 0,
+      from = w.t + toDusk,
+      until = from + (toDusk ? 0.38 : Math.max(0.05, (1.2 - now) % 1)) * getDayLength();
+    setWeather("clear", 0, until - w.t);
+    w.starry = { from: Math.round(from), until: Math.round(until) };
+    logEvent(w, 2, toDusk ? "The sky cleared, and promised a night full of stars." : "The clouds rolled away, and the night filled with stars.", [], null, "gift");
+  } else if (kind === "rainbow") {
+    setWeather("rain", 0.6, 0.1 * VALLEY_DAY, "clear");
+    w.rainbow = { from: Math.round(w.t + 0.1 * VALLEY_DAY), until: Math.round(w.t + 0.32 * VALLEY_DAY) };
+    logEvent(w, 3, "A quick shower passed over the valley, and behind it a rainbow arched from one side to the other.", [], null, "gift");
   } else if (kind === "found") {
     what = w.rng.pick(FOUND_THINGS);
     spot = T.randomPoint(w.rng, { near: { x: w.meadow.x, z: w.meadow.z, r: 14 }, minEdge: 1.5 }) || { x: w.meadow.x, z: w.meadow.z };
     let it = dropItem(w, "gift", spot.x, spot.z, 1);
     it.thing = what;
     logEvent(w, 2, `Something glinted in the grass that hadn't been there before.`, [], spot, "gift");
-  } else return null;
+  } else if (kind === "dream") {
+    let r = giftDream(w);
+    if (!r) return null;
+    spot = r.spot;
+    extra = r;
+  } else {
+    let r = { flowers: giveFlowers, fruit: giveFruitTree, goats: giveGoats, bees: giveBees, fish: giveFish, bird: giveBird, greattree: giveGreatTree, clay: giveClayBank, stones: giveStones }[kind](w);
+    if (!r) return null;
+    what = r.what;
+    spot = r.spot;
+    extra = r;
+    logEvent(w, 3, giftArrivalText(w, kind, r), [], spot, "gift");
+  }
+  w.giftLast = w.t;
+  w.gifts = w.gifts || [];
 
-  w.gifts.push({ t: Math.round(w.t), kind, what, need: +need.toFixed(2) });
+  // Was it what they asked for?
+  let req = w.request && w.t < w.request.until && w.request.kind === kind ? w.request : null;
+  if (w.request) (w.request = null), (w.lastRequest = w.t); // a gift settles the standing request
+  w.gifts.push({ t: Math.round(w.t), kind, what, need: +need.toFixed(2), ...(req ? { asked: req.by } : {}) });
   if (w.gifts.length > 200) w.gifts.splice(0, w.gifts.length - 200);
   w.stats.gifts = (w.stats.gifts || 0) + 1;
+  if (w.firstGiftAt == null) w.firstGiftAt = Math.round(w.t);
+  w.giftKinds = w.giftKinds || {};
+  w.giftKinds[kind] = (w.giftKinds[kind] || 0) + 1;
+  if (req) giftAnswered(w, req, kind);
   if (w.giftsStopped) {
     w.giftsStopped = null;
-    logEvent(w, 3, "The gifts have come back! Even the doubters looked up.", [], null, "gift");
-    for (let c of alive) if (beliefsOf(c).giver > 0.3) feel(c, w, "joy", 0.6), remember(w, c, "gift", "The gifts came back. We weren't forgotten after all.", 0.8);
+    w.lantern = null;
+    logEvent(w, 3, "The creek gave again. Those who had kept the lantern lit said they had known it would.", [], w.givingPlace || null, "gift");
+    for (let c of alive) if (beliefsOf(c).giver > 0.3) feel(c, w, "joy", 0.6), remember(w, c, "gift", "The creek was only resting. It gives again.", 0.8);
   }
+  if (w.stats.gifts === 1 && spot) namePlace(w, "the Place of the First Gift", spot, "firstgift", 2.5, null, true);
 
-  // Who noticed, and what they made of it.
-  let observers = kind === "rain" || kind === "warm" ? alive.filter((c) => !c.asleep) : witnessesNear(w, spot, 16).filter((c) => !c.visitor);
-  for (let c of observers) noticeGift(w, c, kind, what, need);
-  if (w.gifts.length === 1 || need > 0.55 || kind === "found")
-    newStory(w, "gift", { what, needed: need > 0.5, where: spot && placeNear(w, spot.x, spot.z, 4) ? placeNear(w, spot.x, spot.z, 4).name : null }, spot, w.gifts.length === 1 ? 2 : 1, observers);
+  // Who noticed, and what they made of it. They all live by the creek: news of a gift
+  // reaches everyone; those who saw it with their own eyes are moved most.
+  let mult = (req ? 2 : 1) * (GIFT_KINDS[kind].sign || 1),
+    seers = GIFT_KINDS[kind].all || !spot ? alive.filter((c) => !c.asleep) : witnessesNear(w, spot, 16).filter((c) => !c.visitor);
+  for (let c of alive) noticeGift(w, c, kind, what, need, mult * (seers.includes(c) ? 1 : c.asleep ? 0.45 : 0.6));
+  if (w.gifts.length === 1 || need > 0.55 || req || kind === "found" || kind === "rainbow" || extra && extra.isNew)
+    newStory(w, "gift", { what, needed: need > 0.5 || !!req, where: spot && placeNear(w, spot.x, spot.z, 4) ? placeNear(w, spot.x, spot.z, 4).name : null }, spot, w.gifts.length === 1 ? 2 : 1, seers);
+  // Those keeping watch at the Giving Place saw it come.
+  for (let c of alive) if (c.plan && c.plan.goal === "watch" && !c.asleep) feel(c, w, "joy", 0.7), emote(c, w, "star", 4), (c.beliefs.watchedGift = (c.beliefs.watchedGift || 0) + 1);
   noticePattern(w);
   thanksCustom(w);
-  return { kind, what, need };
+  if (typeof templeOnGift === "function") templeOnGift(w);
+  return { kind, what, need, asked: req ? req.by : null };
 }
 
-function noticeGift(w, c, kind, what, need) {
+function giftArrivalText(w, kind, r) {
+  switch (kind) {
+    case "flowers":
+      return r.isNew ? `Flowers nobody had seen before came up near the homes: ${faunaLabel("flower", r.kind)}.` : `More ${faunaLabel("flower", r.kind)} came up around the valley.`;
+    case "fruit":
+      return `Three young ${r.kind} trees were standing near the homes in the morning, where there had been none.`;
+    case "goats":
+      return `Two goats wandered into the valley and stayed. The creekfolk named them ${r.names.join(" and ")}.`;
+    case "bees":
+      return "A hive of bees settled by the gardens, humming.";
+    case "fish":
+      return `There are fish in the water now: ${faunaLabel("fish", r.kind)}, flashing in the ${r.ponds ? "ponds" : "creek"}.`;
+    case "bird":
+      return `A new bird came to the valley: ${faunaLabel("bird", r.kind)}, singing in the trees.`;
+    case "greattree":
+      return "In the night a great tree came down near the village, as if it had chosen where to lie.";
+    case "clay":
+      return "A bank of fine, sticky clay was found near the village, where the ground had been ordinary yesterday.";
+    case "stones":
+      return "A pile of good stones lay in the grass near the village, as if someone had gathered them.";
+  }
+  return "Something new came to the valley.";
+}
+
+// A dream: one of them wakes with an idea that matters now.
+function giftDream(w) {
+  let pool = w.creatures.filter((c) => !c.visitor && c.stage !== "child" && !c.farewell && !c.leaving);
+  if (!pool.length) return null;
+  let c = pool.slice().sort((a, b) => (b.asleep ? 1 : 0) - (a.asleep ? 1 : 0) || b.temp.curiosity - a.temp.curiosity)[0],
+    lost = Object.keys(w.lost || {});
+  if (lost.length) {
+    let k = w.rng.pick(lost);
+    discover(w, c, k, null);
+    storyDiscovery(w, c, k);
+    logEvent(w, 3, `${c.name} dreamed of the old days, and woke knowing again how ${SKILL_TEXT[k]}.`, [c.id], c, "gift");
+    remember(w, c, "dream", `I dreamed I knew how ${SKILL_TEXT[k]}. When I woke, I still did.`, 0.9);
+    return { what: "a dream", spot: null, dreamer: c.id, idea: "skill" };
+  }
+  if (w.temple && typeof templeDream === "function" && templeDream(w, c)) return { what: "a dream", spot: null, dreamer: c.id, idea: "temple" };
+  if (w.spring && !w.spring.found && !w.spring.journey) {
+    w.spring.heard = w.spring.heard || Math.round(w.t);
+    w.spring.dreamer = c.id;
+    logEvent(w, 3, `${c.name} dreamed of the place where the creek begins: water rising out of the ground, cold and clear. They mean to go and find it.`, [c.id], c, "gift");
+    remember(w, c, "dream", "I dreamed of where the creek begins. I have to go and see.", 0.9);
+    return { what: "a dream", spot: null, dreamer: c.id, idea: "spring" };
+  }
+  let kinds = STRUCTURE_KINDS.filter((k) => !STRUCTURES[k].personal);
+  let k = w.rng.pick(kinds);
+  c.desire[k] = (c.desire[k] || 0) + 1;
+  logEvent(w, 2, `${c.name} dreamed of the creek running through a valley full of flowers, and woke with plans.`, [c.id], c, "gift");
+  remember(w, c, "dream", "I dreamed of the creek running through a valley full of flowers.", 0.7);
+  feel(c, w, "joy", 0.5);
+  return { what: "a dream", spot: null, dreamer: c.id, idea: "plans" };
+}
+
+// The curious look for reasons; the cautious and incurious shrug. Some never stop
+// saying it's luck: how open they are caps how far they can believe.
+function beliefOpenness(c) {
+  let t = c.temp;
+  return 0.5 + t.curiosity * 0.8 - t.caution * 0.35 + (c.stage === "child" ? 0.3 : 0);
+}
+// The least open grown-ups of their own valley (about one in seven) stay doubters.
+var doubtCache = new WeakMap();
+function doubtLine(w) {
+  let c = doubtCache.get(w);
+  if (c && c.t === w.t) return c.v;
+  let os = w.creatures.filter((o) => !o.visitor && o.stage !== "child").map(beliefOpenness).sort((a, b) => a - b),
+    v = os.length >= 5 ? os[Math.floor(os.length * 0.15)] : -1e9;
+  doubtCache.set(w, { t: w.t, v });
+  return v;
+}
+function beliefCap(w, c) {
+  return c.stage !== "child" && beliefOpenness(c) < doubtLine(w) ? 0.45 : 1;
+}
+
+function noticeGift(w, c, kind, what, need, mult = 1) {
   let b = beliefsOf(c),
     t = c.temp,
     before = b.giver,
     // The curious look for reasons; the cautious and incurious shrug.
-    openness = 0.5 + t.curiosity * 0.8 - t.caution * 0.35 + (c.stage === "child" ? 0.3 : 0),
-    gain = (0.05 + 0.13 * need) * clamp(openness, 0.15, 1.5) * (1 + 0.15 * Math.min(4, b.seen));
-  b.giver = +clamp(b.giver + gain * (1 - b.giver), 0, 1).toFixed(3);
+    openness = beliefOpenness(c),
+    gain = (0.06 + 0.16 * need) * clamp(openness, 0.15, 1.5) * (1 + 0.2 * Math.min(5, b.seen)) * mult;
+  b.giver = +clamp(Math.min(Math.max(b.giver, beliefCap(w, c)), b.giver + gain * (1 - b.giver)), 0, 1).toFixed(3);
   b.seen++;
   b.lastSeen = Math.round(w.t);
-  let label = kind === "found" ? what : giftText(kind).toLowerCase();
+  let heard = mult < 0.7, // heard about it from the others
+    label = kind === "found" ? what : (GIFT_KINDS[kind] && GIFT_KINDS[kind].phrase) || what;
+  label = label[0].toUpperCase() + label.slice(1);
   if (before < 0.5 && b.giver >= 0.5) {
     wordFor(w, c, "giver");
-    remember(w, c, "belief", `${label[0].toUpperCase() + label.slice(1)}, just when we needed it. I think someone is watching over the valley.`, 0.85);
-    emote(c, w, "idea", 3);
+    remember(w, c, "belief", `${label}${need > 0.45 ? ", just when we needed it" : ""}. The creek gives to us. I'm sure of it now.`, 0.85);
+    if (!c.asleep) emote(c, w, "idea", 3);
     w.stats.believers = (w.stats.believers || 0) + 1;
     if (!w.firstBeliever) {
       w.firstBeliever = c.id;
-      logEvent(w, 3, `${c.name} has begun to wonder whether someone is watching over the valley, sending gifts.`, [c.id], c, "belief");
+      w.firstBelieverAt = Math.round(w.t);
+      logEvent(w, 3, `${c.name} has come to believe that the creek gives them what they need. "The creek keeps us," they say, "and we keep the creek."`, [c.id], c, "belief");
+      chooseGivingPlace(w, c);
     }
-  } else if (b.seen === 1) {
-    remember(w, c, "gift", b.giver > 0.3 ? `${label[0].toUpperCase() + label.slice(1)} came out of nowhere. The creek must have wanted it.` : `${label[0].toUpperCase() + label.slice(1)} came. Lucky.`, 0.55);
+  } else if (b.seen === 1 && !heard) {
+    remember(w, c, "gift", b.giver > 0.3 ? `${label} came out of nowhere. Maybe the creek wanted us to have it.` : `${label} came. Lucky.`, 0.55);
   }
+  if (heard) return;
   // Believers say thank you.
-  if (b.giver >= 0.6 && !c.asleep && canBeInterrupted(c) && !c.farewell && !c.leaving) {
+  if (b.giver >= 0.6 && !c.asleep && canBeInterrupted(c) && !c.farewell && !c.leaving && !(c.plan && c.plan.goal === "journey")) {
     if (!b.thanks) {
       let others = w.creatures.map((o) => o.beliefs && o.beliefs.thanks).filter(Boolean),
         counts = {};
@@ -10773,18 +11298,101 @@ function noticeGift(w, c, kind, what, need) {
   }
 }
 
+// The creek bank nearest the village, on the terrace edge, with room for the temple.
+function chooseGivingPlace(w, c) {
+  if (w.givingPlace) return w.givingPlace;
+  let T = w.terrain,
+    home = villageCentre(w),
+    side = T.side(home.x, home.z),
+    best = null;
+  for (let dz = 0; dz <= 30 && !best; dz += 2)
+    for (let sg of [1, -1]) {
+      let z = clamp(home.z + sg * dz, 10, VL - 10),
+        x = T.axisX(z) + (side === 0 ? -1 : 1) * (T.floorHW(z) + 4.5);
+      if (!T.walkable(x, z) || T.valleyR(x, z) > 0.84 || T.edgeDist(x, z) < 4) continue;
+      if (w.structures.some((s) => (s.x - x) ** 2 + (s.z - z) ** 2 < (STRUCTURES[s.kind].radius + TEMPLE_ROOM) ** 2)) continue;
+      if (w.res.some((r) => r.kind !== "reeds" && (r.x - x) ** 2 + (r.z - z) ** 2 < (r.kind === "tree" || r.kind === "podtree" || r.kind === "orchard" ? 49 : 25))) continue;
+      best = { x: +x.toFixed(2), z: +z.toFixed(2) };
+      break;
+    }
+  best = best || { x: w.meadow.x, z: w.meadow.z };
+  // the creek, seen from there (for facing the water)
+  best.cx = +T.creekX(best.z).toFixed(2);
+  w.givingPlace = best;
+  namePlace(w, "the Giving Place", best, "giving", 4, c, true);
+  logEvent(w, 3, `${c.name} went down to the creek's edge below the village to thank it. They have started calling that spot the Giving Place.`, [c.id], best, "place");
+  return best;
+}
+
+// A request that was answered.
+function giftAnswered(w, req, kind) {
+  let c = w.byId[req.by];
+  w.stats.answered = (w.stats.answered || 0) + 1;
+  if (c) {
+    logEvent(w, 3, `${c.name} asked the creek, and the creek answered: ${GIFT_KINDS[kind].phrase || giftArrivalPhrase(kind)}. ${c.name} told everyone.`, [c.id], c, "belief");
+    remember(w, c, "belief", `I asked the creek, and it answered me.`, 0.95);
+    feel(c, w, "joy", 0.9);
+    emote(c, w, "star", 4);
+    beliefsOf(c).answered = (beliefsOf(c).answered || 0) + 1;
+  } else logEvent(w, 3, `They had asked the creek, and the creek answered.`, [], null, "belief");
+}
+
+function giftArrivalPhrase(kind) {
+  return { flowers: "new flowers", fruit: "young fruit trees", goats: "two goats", bees: "bees", fish: "fish", bird: "a new bird", greattree: "a great fallen tree", clay: "good clay", stones: "stones", found: "something to find" }[kind] || "what they needed";
+}
+
+// ---------------------------------------------------------------------------
+// The rhythm: gifts measured in valley days (one real hour each).
+// ---------------------------------------------------------------------------
+var NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+var TENS_WORDS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+function numberWords(n) {
+  n = Math.round(n);
+  if (n < 20) return NUMBER_WORDS[n];
+  if (n < 100) return TENS_WORDS[Math.floor(n / 10)] + (n % 10 ? "-" + NUMBER_WORDS[n % 10] : "");
+  if (n < 1000) return NUMBER_WORDS[Math.floor(n / 100)] + " hundred" + (n % 100 ? " and " + numberWords(n % 100) : "");
+  return String(n);
+}
+var HOUR_PHRASE = { dawn: "at dawn", morning: "in the morning", midday: "at midday", afternoon: "in the afternoon", dusk: "at dusk", night: "in the night" };
+
+// How long without a gift before they say the creek is resting: three days, or half again
+// the rhythm they know, so a player who comes every four days isn't "away" every time.
+function restAfter(w) {
+  return Math.max(GIFT.restDays * 86400, w.giftRhythm ? 1.5 * w.giftRhythm.days * getDayLength() : 0);
+}
+
+// The rhythm of the last few gifts, if there is one: { days, when } (when may be null).
+function giftRhythm(w, n = 4) {
+  let g = (w.gifts || []).slice(-(n + 1));
+  if (g.length < n + 1) return null;
+  let gaps = [];
+  for (let i = 1; i < g.length; i++) gaps.push((g[i].t - g[i - 1].t) / getDayLength());
+  let sorted = gaps.slice().sort((a, b) => a - b),
+    mid = sorted[Math.floor(sorted.length / 2)];
+  if (!gaps.every((x) => Math.abs(x - mid) <= Math.max(1.5, mid * 0.15))) return null;
+  let names = g.slice(1).map((x) => timeOfDayName(x.t)),
+    when = names.every((x) => x === names[0]) ? names[0] : null;
+  return { days: Math.round(mid), when };
+}
+
+function rhythmText(r) {
+  return `the creek gives${r.when ? " " + HOUR_PHRASE[r.when] + "," : ""} every ${numberWords(r.days)} days`;
+}
+
 function noticePattern(w) {
-  let g = w.gifts;
-  if (g.length < 4 || w.giftPatternNoticed) return;
-  let last = g.slice(-4),
-    regular = last.every((x, i) => i === 0 || (x.t - last[i - 1].t > 10 * 3600 && x.t - last[i - 1].t < 16 * 3600));
-  if (!regular) return;
-  let c = w.creatures.filter((c) => !c.visitor && c.stage !== "child" && beliefsOf(c).giver > 0.5).sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+  let r = giftRhythm(w);
+  if (!r) return;
+  let key = r.days + ":" + (r.when || "");
+  if (w.giftRhythm && w.giftRhythm.key === key) return;
+  let c = believers(w).filter((c) => c.stage !== "child").sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
   if (!c) return;
-  w.giftPatternNoticed = Math.round(w.t);
+  let first = !w.giftRhythm;
+  w.giftRhythm = { key, days: r.days, when: r.when, t: Math.round(w.t), by: c.id };
+  w.giftPatternNoticed = w.giftPatternNoticed || Math.round(w.t);
   beliefsOf(c).pattern = true;
-  logEvent(w, 3, `${c.name} has noticed that the gifts come about twice a day, as steady as breathing.`, [c.id], c, "belief");
-  remember(w, c, "belief", "The gifts come twice a day. Whoever sends them keeps a rhythm.", 0.85);
+  let say = rhythmText(r);
+  logEvent(w, 3, first ? `${c.name} has noticed that ${say}.` : `${c.name} says the creek keeps a new rhythm now: ${say.replace(/^the creek gives/, "it gives")}.`, [c.id], c, "belief");
+  remember(w, c, "belief", `${say[0].toUpperCase() + say.slice(1)}. You can count on it.`, 0.85);
 }
 
 function thanksCustom(w) {
@@ -10797,10 +11405,120 @@ function thanksCustom(w) {
   if (n < bs.length * 0.6) return;
   w.customs = w.customs || {};
   w.customs.thanks = { g, since: Math.round(w.t) };
-  logEvent(w, 3, `It has become the custom to ${GESTURE_FIRST[g].replace(/my /, "your ")} when a gift arrives, to say thank you.`, [], null, "custom");
+  logEvent(w, 3, `It has become the custom to ${GESTURE_FIRST[g].replace(/my /, "your ")} when the creek gives, to say thank you.`, [], null, "custom");
 }
 
+// ---------------------------------------------------------------------------
+// Requests: a believer says out loud what the valley needs most.
+// ---------------------------------------------------------------------------
+function giftRequests(w) {
+  if (w.request && w.t < w.request.until) return;
+  if (w.request) w.request = null;
+  if (w.t - (w.lastRequest || -1e9) < GIFT.requestGap || w.t - (w.giftLast ?? -1e9) < 2 * 3600) return;
+  let bs = believers(w).filter((c) => c.stage !== "child" && !c.asleep);
+  if (!bs.length) return;
+  let best = null;
+  for (let k in GIFT_KINDS) {
+    let r = giftNeedWhy(w, k);
+    if (!best || r.need > best.need) best = { kind: k, ...r };
+  }
+  if (!best || best.need < 0.45 || !best.why) return;
+  let c = w.rng.pick(bs);
+  w.request = { kind: best.kind, why: best.why, by: c.id, name: c.name, t: Math.round(w.t), until: Math.round(w.t + GIFT.requestLife) };
+  w.lastRequest = w.t;
+  w.stats.requests = (w.stats.requests || 0) + 1;
+  let ask = { rain: "rain", seeds: "seeds", warm: "a warm day", snow: "snow", stars: "a night of stars", rainbow: "a sign", flowers: "flowers", fruit: "fruit trees", goats: "animals", bees: "bees", fish: "fish", bird: "birdsong", greattree: "timber", clay: "clay", stones: "stones", found: "something to find", dream: "a dream" }[best.kind];
+  logEvent(w, 2, `${c.name} went down to the water and asked the creek for ${ask}. "${best.why[0].toUpperCase() + best.why.slice(1)}," they said.`, [c.id], c, "request");
+  remember(w, c, "belief", `I asked the creek for ${ask}, because ${best.why}.`, 0.6);
+}
+
+// ---------------------------------------------------------------------------
+// Keeping watch: when a gift is due, believers take turns at the Giving Place.
+// ---------------------------------------------------------------------------
+function watchOption(w, c) {
+  let gp = w.givingPlace,
+    b = c.beliefs;
+  if (!gp || !b || b.giver < 0.55 || c.visitor || c.farewell || c.leaving || isNight(w.t)) return null;
+  if (!giftReady(w) || w.t - (b.watched || -1e9) < GIFT.watchGap) return null;
+  let watching = 0;
+  for (let o of w.creatures) if (o.plan && o.plan.goal === "watch") watching++;
+  if (watching >= GIFT.watchers) return null;
+  // Once they know the rhythm, they gather when the gift is expected.
+  let r = w.giftRhythm,
+    expected = r && r.when ? timeOfDayName(w.t) === r.when : true,
+    resting = !!w.giftsStopped,
+    score = (0.2 + 0.55 * b.giver) * (expected ? 1.4 : 0.6) * (resting ? 0.35 : 1) * (c.stage === "child" ? 0.6 : 1);
+  let a = w.rng.range(-1.2, 1.2) + Math.atan2(gp.cx - gp.x, 0.001),
+    d = w.rng.range(1.6, 2.6),
+    x = gp.x + Math.sin(a) * d,
+    z = gp.z + Math.cos(a) * d;
+  if (!w.terrain.walkable(x, z)) (x = gp.x), (z = gp.z);
+  return {
+    score,
+    plan: {
+      goal: "watch",
+      steps: [
+        { do: "walk", x, z, near: 0.4, why: "watch" },
+        { do: "keepwatch", x: gp.cx, z: gp.z, dur: w.rng.range(140, 320) },
+        { do: "offer" },
+      ],
+    },
+  };
+}
+
+ACTIONS.keepwatch = {
+  start(w, c, step) {
+    beliefsOf(c).watched = Math.round(w.t);
+    return makeAct(w, c, "watch", step.dur || 200, { lookX: step.x, lookZ: step.z });
+  },
+  end(w, c) {
+    c.needs.social = clamp(c.needs.social + 0.08, 0, 1);
+    feel(c, w, "warmth", 0.2);
+    return true;
+  },
+};
+
+// What each one leaves for the giver, by what they love.
+var OFFERING_KINDS = {
+  building: ["bead", "a carved bead"],
+  growing: ["flower", "a flower"],
+  collecting: ["pebble", "a pretty pebble"],
+  social: ["ring", "a woven ring of grass"],
+  exploring: ["feather", "a feather"],
+  water: ["shell", "a creek shell"],
+  sound: ["whistle", "a reed whistle"],
+};
+
+ACTIONS.offer = {
+  start(w, c) {
+    let b = beliefsOf(c);
+    if (b.offeredFor === w.giftLast || !w.givingPlace) return "skip";
+    b.offeredFor = w.giftLast; // one chance each time a gift is due
+    if (!w.rng.chance(0.2)) return "skip";
+    return makeAct(w, c, "give", 4, { lookX: w.givingPlace.x, lookZ: w.givingPlace.z });
+  },
+  end(w, c) {
+    let b = beliefsOf(c),
+      o = OFFERING_KINDS[c.sig] || OFFERING_KINDS.collecting;
+    if (o[0] === "flower" && !(w.fauna && w.fauna.flowers.length) && w.rng.chance(0.5)) o = OFFERING_KINDS.collecting;
+    if (o[0] === "bead" && c.know.clay && w.rng.chance(0.4)) o = ["figure", "a little clay figure"];
+    b.offeredFor = w.giftLast;
+    let of = (w.offerings = w.offerings || { n: {}, total: 0, recent: [] });
+    of.n[o[0]] = (of.n[o[0]] || 0) + 1;
+    of.total++;
+    of.recent.push({ k: o[0], by: c.name, t: Math.round(w.t) });
+    if (of.recent.length > GIFT.offeringsShown) of.recent.shift();
+    if (of.total === 1) logEvent(w, 3, `${c.name} left ${o[1]} at the Giving Place, for the creek. It's the first thing anyone has left there.`, [c.id], w.givingPlace, "offering");
+    else if (of.total % 50 === 0) logEvent(w, 2, `There are ${numberWords(of.total) === String(of.total) ? of.total : numberWords(of.total)} small gifts at the Giving Place now, left for the creek.`, [], w.givingPlace, "offering");
+    if (!(c.counts.offered > 0)) remember(w, c, "belief", `I left ${o[1]} at the Giving Place for the creek.`, 0.6);
+    c.counts.offered = (c.counts.offered || 0) + 1;
+    return true;
+  },
+};
+
+// ---------------------------------------------------------------------------
 // The found object: someone wanders over and picks it up.
+// ---------------------------------------------------------------------------
 function claimFoundGifts(w) {
   for (let it of w.items) {
     if (it.kind !== "gift" || it.claimer) continue;
@@ -10846,7 +11564,7 @@ function giftChat(w, a, b) {
   if (Math.abs(diff) < 0.05) return;
   let r = relation(b, a),
     trust = honestyRate(r) * (0.5 + clamp(r.warmth, 0, 1));
-  bb.giver = +clamp(bb.giver + diff * 0.06 * trust * (b.stage === "child" ? 2 : 1), 0, 1).toFixed(3);
+  bb.giver = +clamp(bb.giver + diff * 0.1 * trust * (b.stage === "child" ? 2 : 1), 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
   if (ba.giver > 0.5 && bb.giver > 0.3) wordFor(w, b, "giver");
   if (Math.abs(diff) > 0.55 && a.stage !== "child" && b.stage !== "child" && w.rng.chance(0.12) && w.t - (w.lastArgument || -1e9) > 86400) {
     w.lastArgument = w.t;
@@ -10854,29 +11572,734 @@ function giftChat(w, a, b) {
       doubter = diff > 0 ? b : a;
     relation(a, b).annoy = Math.min(1, relation(a, b).annoy + 0.06);
     relation(b, a).annoy = Math.min(1, relation(b, a).annoy + 0.06);
-    logEvent(w, 2, `${believer.name} and ${doubter.name} argued about whether anyone really sends the gifts. ${doubter.name} says it's only luck.`, [a.id, b.id], a, "belief");
+    logEvent(w, 2, `${believer.name} and ${doubter.name} argued about whether the creek really gives. ${doubter.name} says it's only luck.`, [a.id, b.id], a, "belief");
+  }
+  // The one who believes in someone beyond the valley tells their friends, who find it odd.
+  if (ba.beyond && !bb.beyond && w.rng.chance(0.04)) beyondTalk(w, a, b);
+}
+
+// A child grows up with its family's belief.
+function inheritBelief(w, c, a, b) {
+  let g = ((a.beliefs ? a.beliefs.giver : 0) + (b.beliefs ? b.beliefs.giver : 0)) / 2;
+  beliefsOf(c).giver = +Math.min(0.75 * g, beliefCap(w, c)).toFixed(3);
+}
+
+// ---------------------------------------------------------------------------
+// The one who believes in you.
+// ---------------------------------------------------------------------------
+var BEYOND_LINES = [
+  "The creek gives us life. But the gifts? Someone sends those. Someone far away, looking in.",
+  "I think whoever sends the gifts lives somewhere else, beyond the hills. Somewhere we can't see.",
+  "Sometimes I feel someone watching, kindly. Not the creek. Someone else.",
+  "I wave, in case they're looking.",
+];
+
+function beyondTick(w) {
+  let total = w.stats.gifts || 0;
+  if (total < GIFT.beyondGifts || !(w.gifts || []).length || w.t - (w.firstGiftAt ?? w.gifts[0].t) < GIFT.beyondDays * 86400) return;
+  let have = w.creatures.filter((c) => !c.visitor && c.beliefs && c.beliefs.beyond);
+  if (have.length >= 1) return; // one at a time; it can be passed on (up to two for a while)
+  let recent = (w.gifts || []).filter((g) => w.t - g.t < 14 * 86400).length;
+  if (recent < 7) return;
+  let pool = believers(w).filter((c) => c.stage !== "elder" && !c.farewell && !c.leaving && (c.stage === "adult" || ageDays(w, c) > 3));
+  if (!pool.length) return;
+  let c = pool.sort((a, b) => b.temp.curiosity + b.beliefs.giver - (a.temp.curiosity + a.beliefs.giver))[0];
+  becomeBeyond(w, c, null);
+}
+
+function becomeBeyond(w, c, from) {
+  let b = beliefsOf(c);
+  b.beyond = Math.round(w.t);
+  w.beyondEver = w.beyondEver || [];
+  w.beyondEver.push({ id: c.id, name: c.name, t: Math.round(w.t), from: from ? from.name : null });
+  if (w.beyondEver.length > 40) w.beyondEver.shift();
+  if (from) {
+    logEvent(w, 3, `${c.name} has always listened to ${from.name}. Now they say it too: the gifts come from someone beyond the valley, someone who looks in on them.`, [c.id, from.id], c, "belief");
+    remember(w, c, "belief", `${from.name} taught me to wave at the sky. Someone is there.`, 0.95);
+  } else {
+    logEvent(w, 3, `${c.name} has become sure that the gifts come from someone beyond the valley, from another place entirely. They still thank the creek, because the creek brings life. But when they think no one is looking, they wave at the sky.`, [c.id], c, "belief");
+    remember(w, c, "belief", BEYOND_LINES[0], 0.95);
+  }
+  emote(c, w, "idea", 4);
+}
+
+function beyondTalk(w, a, b) {
+  let r = relation(b, a);
+  if (r.warmth > 0.4) feel(b, w, "warmth", 0.15);
+  if (w.t - (w.lastBeyondTalk || -1e9) < 2 * 86400) return;
+  w.lastBeyondTalk = w.t;
+  logEvent(w, 2, `${a.name} told ${b.name}: "${w.rng.pick(BEYOND_LINES)}" ${b.name} thinks it's an odd idea, but is fond of ${a.name} all the same.`, [a.id, b.id], a, "belief");
+}
+
+// When the one who believes passes or leaves, the belief goes to one of its children
+// or a young friend it taught.
+function passBeyond(w, c) {
+  if (!c.beliefs || !c.beliefs.beyond) return;
+  let pool = w.creatures.filter((o) => o !== c && !o.visitor && !o.farewell && !o.leaving && o.beliefs && o.beliefs.giver > 0.4 && !o.beliefs.beyond);
+  let kids = pool.filter((o) => (c.children || []).includes(o.id));
+  let friends = pool.filter((o) => ageDays(w, o) < ageDays(w, c) - 4 && relation(c, o).warmth > 0.5).sort((x, y) => relation(c, y).warmth - relation(c, x).warmth);
+  let heir = kids.sort((x, y) => relation(c, y).warmth - relation(c, x).warmth)[0] || friends[0];
+  if (heir) becomeBeyond(w, heir, c);
+}
+
+// ---------------------------------------------------------------------------
+// Runs inside the life tick (every 600 s).
+// ---------------------------------------------------------------------------
+function giftTick(w) {
+  claimFoundGifts(w);
+  // a snow day melts into the topsoil
+  if (w.snow && w.t >= w.snow.until && !w.snow.melted) {
+    w.snow.melted = 1;
+    if (w.creek) w.creek.soil = +Math.min(1, w.creek.soil + 0.35).toFixed(3);
+    logEvent(w, 1, "The snow melted away, and the ground drank it in.", [], null, "weather");
+  }
+  faunaSlow(w);
+  giftRequests(w);
+  beyondTick(w);
+  let g = w.gifts || [];
+  if (g.length >= 3 && !w.giftsStopped && w.t - w.giftLast > restAfter(w)) {
+    w.giftsStopped = Math.round(w.t);
+    let c = believers(w).filter((c) => c.stage !== "child").sort((a, b) => b.beliefs.giver - a.beliefs.giver)[0];
+    w.lantern = { t: Math.round(w.t), by: c ? c.id : null };
+    logEvent(w, 3, c ? `The gifts haven't come for a while. "The creek is resting," ${c.name} says. They left a lantern burning at the Giving Place, so the creek will know where to find them.` : "The gifts haven't come for a while. The creek must be resting.", c ? [c.id] : [], w.givingPlace || null, "belief");
+    for (let o of w.creatures) if (beliefsOf(o).giver > 0.5) remember(w, o, "belief", "The creek is resting. It will give again when it's ready.", 0.7);
+  }
+  // Doubters talk themselves back out of it: "it's only luck".
+  for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.45 && !c.visitor && beliefCap(w, c) < 0.5) c.beliefs.giver = +Math.max(0.45, c.beliefs.giver - 0.002).toFixed(4);
+  // Faith fades only very slowly while the creek rests.
+  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - 0.0001 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
+}
+
+// What decide() can choose from this file: keeping watch, tending goats, the spring.
+function beliefOptions(w, c) {
+  let out = [];
+  let a = watchOption(w, c);
+  if (a) out.push(["watch", a]);
+  let b = goatOption(w, c);
+  if (b) out.push(["goats", b]);
+  if (typeof springOption === "function") {
+    let s = springOption(w, c);
+    if (s) out.push(["journey", s]);
+  }
+  if (typeof starsOption === "function") {
+    let s = starsOption(w, c);
+    if (s) out.push(["stars", s]);
+  }
+  return out;
+}
+
+// A starry night: they lie out in the grass and look up. Snow: they play in it.
+function starsOption(w, c) {
+  if (w.starry && w.t >= w.starry.from && w.t < w.starry.until && isNight(w.t) && c.needs.energy > 0.35 && !c.visitor) {
+    let p = w.terrain.randomPoint(w.rng, { near: { x: w.meadow.x, z: w.meadow.z, r: 6 }, minEdge: 2 }) || w.meadow;
+    return { score: 1.2 + 0.4 * c.temp.curiosity, plan: { goal: "stars", steps: [{ do: "walk", x: p.x, z: p.z, near: 0.5 }, { do: "stargaze", dur: w.rng.range(200, 420) }] } };
+  }
+  if (w.snow && w.t < w.snow.until && !isNight(w.t) && c.stage !== "elder" && c.needs.energy > 0.3 && !c.visitor) {
+    let p = w.terrain.randomPoint(w.rng, { near: { x: w.meadow.x, z: w.meadow.z, r: 8 }, minEdge: 2 }) || w.meadow;
+    return { score: (c.stage === "child" ? 1.3 : 0.6) * clamp((0.9 - c.needs.fun) / 0.9, 0.2, 1), plan: { goal: "snow", steps: [{ do: "walk", x: p.x, z: p.z, near: 0.5, run: true }, { do: "snowplay" }] } };
+  }
+  return null;
+}
+
+ACTIONS.stargaze = {
+  start(w, c, step) {
+    return makeAct(w, c, "stargaze", step.dur || 300, {});
+  },
+  end(w, c) {
+    c.needs.fun = clamp(c.needs.fun + 0.25, 0, 1);
+    c.needs.social = clamp(c.needs.social + 0.1, 0, 1);
+    feel(c, w, "joy", 0.4);
+    if (!(c.counts.stars > 0)) remember(w, c, "stars", "We lay in the grass all night and counted the stars. There were more than anyone could count.", 0.75);
+    c.counts.stars = (c.counts.stars || 0) + 1;
+    if (!w.starsNoted || w.t - w.starsNoted > 86400) {
+      w.starsNoted = w.t;
+      logEvent(w, 2, "The creekfolk lay out in the meadow and watched the stars until they fell asleep.", [c.id], c, "gift");
+    }
+    return true;
+  },
+};
+
+ACTIONS.snowplay = {
+  start(w, c) {
+    return makeAct(w, c, "play", 40, {});
+  },
+  end(w, c) {
+    c.needs.fun = clamp(c.needs.fun + 0.35, 0, 1);
+    feel(c, w, "joy", 0.5);
+    if (!(c.counts.snow > 0)) remember(w, c, "snow", "Snow! It's cold and soft and you can throw it.", 0.8);
+    c.counts.snow = (c.counts.snow || 0) + 1;
+    return true;
+  },
+};
+
+// ==== src/sim/temple.js ====
+// ==========================================================================
+// The temple to the creek (Phase 3B), the spring, and the great project for
+// valleys with no giver.
+//
+// The temple starts once there have been at least 7 gifts in the last 14 real
+// days, most of the village believes the creek gives, and the valley is at least
+// a week old. It rises in three stages at the Giving Place (shrine, hall, crown),
+// each of a dozen parts. A part unlocks when the village feels the creek has
+// answered enough; that feeling builds from recent gifts at the pace below. Then
+// they build the part with ordinary labour and materials, and the materials keep
+// their own clocks: timber from a grove they plant, clay that cures, great stones
+// moved only in the dry season.
+//
+//   giving                     pace
+//   about every 4 days         0.5
+//   every other day            1.0 (full speed)
+//   daily                      1.2
+//   twice a day                1.4
+//   6 days with no gift        stops; nothing is lost
+//
+// A valley that hasn't started its temple by day 30 begins the Hall of the
+// Ancestors by the memorial grove instead, at full speed on time alone, so every
+// valley has a long build. The temple can still start later if gifts begin.
+// ==========================================================================
+
+var TEMPLE = {
+  startGifts: 7, // gifts in the last startWindow days to begin
+  startWindow: 14, // real days
+  minDay: 7, // the temple can't begin before week 2
+  feelPerPart: 8.25, // real days of "the creek has answered" per part, at full speed
+  firstFeel: 0.7, // the first part comes sooner: they're eager
+  stopDays: 6, // no gift for this long: the temple stops
+  greatDay: 30, // a valley with no temple by now begins its own great project
+  groveTrees: 8, // the temple wood
+  groveDays: 30, // real days for a planted tree to give timber
+  timberRegrow: 8 * 3600, // a grown tree gives another timber this often (up to 3)
+  stuckDays: 5, // a part that hasn't moved in this long: they make do with what they have
+};
+
+// Materials: timber, from the temple wood and from great fallen trees.
+MATERIAL_LABELS.timber = "timber";
+HEAVY_MATERIALS.timber = !0;
+SOURCE_KIND.timber = ["timbertree", "greatlog"];
+GATHER_MATERIAL.timbertree = "timber";
+GATHER_MATERIAL.greatlog = "timber";
+GATHER_TIME.timbertree = 16;
+GATHER_TIME.greatlog = 10;
+REGROW_RATES.timbertree = 1 / 480;
+UNINTERRUPTIBLE.add("away");
+
+// A part: name, materials, labour, and flags (heavy, cure, dry, dryseason, carve, grove).
+var templePart = (name, mats, labor, o = {}) => stageDef(name, mats, labor, o);
+STRUCTURES.temple = {
+  label: "temple",
+  concept: "temple",
+  radius: 5.5,
+  great: "temple",
+  levels: [
+    {
+      name: "shrine",
+      label: "shrine",
+      stages: [
+        templePart("first stone", { stone: 3 }, 300, { heavy: !0 }),
+        templePart("base course", { stone: 6 }, 600, { heavy: !0 }),
+        templePart("second course", { stone: 6 }, 600, { heavy: !0 }),
+        templePart("offering ledge", { stone: 4 }, 500),
+        templePart("water bowl", { clay: 3 }, 400, { cure: 8000, dry: !0 }),
+        templePart("temple wood", { seeds: 4 }, 600, { grove: !0 }),
+        templePart("third course", { stone: 6 }, 700, { heavy: !0 }),
+        templePart("lantern niche", { stone: 3, reeds: 2 }, 500),
+        templePart("path to the water", { stone: 8 }, 900, { heavy: !0 }),
+        templePart("standing stones", { stone: 8 }, 1200, { heavy: !0 }),
+        templePart("carved marker", { branch: 2 }, 1500, { carve: !0 }),
+        templePart("capstone", { stone: 4 }, 800, { heavy: !0 }),
+      ],
+    },
+    {
+      name: "hall",
+      label: "hall",
+      stages: [
+        templePart("footings", { stone: 10 }, 1500, { heavy: !0 }),
+        templePart("floor stones", { stone: 10 }, 1500),
+        templePart("corner posts", { timber: 4 }, 1800, { heavy: !0 }),
+        templePart("beams", { timber: 4 }, 1800, { heavy: !0 }),
+        templePart("north wall", { mud: 12, clay: 4 }, 2000, { cure: 60000, dry: !0 }),
+        templePart("south wall", { mud: 12, clay: 4 }, 2000, { cure: 60000, dry: !0 }),
+        templePart("first carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("second carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("roof battens", { timber: 3, branch: 6 }, 1500),
+        templePart("clay-tile roof", { tile: 8 }, 2000, { heavy: !0 }),
+        templePart("third carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("door and lanterns", { timber: 2, reeds: 6 }, 1500),
+      ],
+    },
+    {
+      name: "crown",
+      label: "crown",
+      stages: [
+        templePart("first terrace", { stone: 8 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("second terrace", { stone: 8 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("third terrace", { stone: 7 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("fourth terrace", { stone: 6 }, 1400, { heavy: !0, dryseason: !0 }),
+        templePart("fifth terrace", { stone: 5 }, 1300, { heavy: !0, dryseason: !0 }),
+        templePart("top step", { stone: 4 }, 1200, { heavy: !0, dryseason: !0 }),
+        templePart("channel lining", { clay: 6 }, 1500, { cure: 60000, dry: !0 }),
+        templePart("cistern", { clay: 4, stone: 3 }, 1500, { cure: 40000, dry: !0 }),
+        templePart("water stair", { mud: 6, stone: 3 }, 1500),
+        templePart("sun gate posts", { timber: 3, stone: 4 }, 1500, { heavy: !0 }),
+        templePart("sun gate", { timber: 2 }, 2000),
+        templePart("crown stone", { stone: 3 }, 1500, { heavy: !0, dryseason: !0 }),
+      ],
+    },
+  ],
+};
+
+// The great project of a valley with no giver: the Hall of the Ancestors, by the grove.
+STRUCTURES.ancestors = {
+  label: "Hall of the Ancestors",
+  concept: "ancestors",
+  radius: 4.5,
+  great: "ancestors",
+  levels: [
+    {
+      name: "stones",
+      label: "ancestor stones",
+      stages: [
+        templePart("first stone", { stone: 3 }, 300, { heavy: !0 }),
+        templePart("names of the first five", { stone: 2 }, 1500, { carve: !0 }),
+        templePart("second stone", { stone: 3 }, 400, { heavy: !0 }),
+        templePart("third stone", { stone: 3 }, 400, { heavy: !0 }),
+        templePart("names of the elders", { stone: 2 }, 1500, { carve: !0 }),
+        templePart("fourth stone", { stone: 3 }, 400, { heavy: !0 }),
+        templePart("stone ring", { stone: 8 }, 900, { heavy: !0 }),
+        templePart("hall wood", { seeds: 4 }, 600, { grove: !0 }),
+        templePart("fifth stone", { stone: 3 }, 400, { heavy: !0 }),
+        templePart("lamp stones", { stone: 4, reeds: 2 }, 600),
+        templePart("names of the travelers", { stone: 2 }, 1500, { carve: !0 }),
+        templePart("sixth stone", { stone: 3 }, 400, { heavy: !0 }),
+      ],
+    },
+    {
+      name: "hall",
+      label: "hall",
+      stages: [
+        templePart("footings", { stone: 10 }, 1500, { heavy: !0 }),
+        templePart("floor stones", { stone: 10 }, 1500),
+        templePart("corner posts", { timber: 4 }, 1800, { heavy: !0 }),
+        templePart("beams", { timber: 4 }, 1800, { heavy: !0 }),
+        templePart("east wall", { mud: 12, clay: 4 }, 2000, { cure: 60000, dry: !0 }),
+        templePart("west wall", { mud: 12, clay: 4 }, 2000, { cure: 60000, dry: !0 }),
+        templePart("first carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("second carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("roof battens", { timber: 3, branch: 6 }, 1500),
+        templePart("clay-tile roof", { tile: 8 }, 2000, { heavy: !0 }),
+        templePart("third carved panel", { clay: 3 }, 2400, { carve: !0, cure: 20000 }),
+        templePart("door and lanterns", { timber: 2, reeds: 6 }, 1500),
+      ],
+    },
+    {
+      name: "tower",
+      label: "lantern tower",
+      stages: [
+        templePart("first ring", { stone: 8 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("second ring", { stone: 8 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("third ring", { stone: 7 }, 1500, { heavy: !0, dryseason: !0 }),
+        templePart("fourth ring", { stone: 6 }, 1400, { heavy: !0, dryseason: !0 }),
+        templePart("stair", { timber: 3 }, 1500),
+        templePart("fifth ring", { stone: 5 }, 1300, { heavy: !0, dryseason: !0 }),
+        templePart("lamp room floor", { timber: 3 }, 1500),
+        templePart("lamp room walls", { clay: 6 }, 1500, { cure: 40000, dry: !0 }),
+        templePart("lamp", { clay: 4, glowcap: 2 }, 1500, { cure: 20000 }),
+        templePart("roof posts", { timber: 3, stone: 4 }, 1500, { heavy: !0 }),
+        templePart("roof", { tile: 6 }, 2000, { heavy: !0 }),
+        templePart("crown stone", { stone: 3 }, 1500, { heavy: !0, dryseason: !0 }),
+      ],
+    },
+  ],
+};
+
+var GREAT_TEXT = {
+  temple: { name: "temple", the: "the temple", levels: ["shrine", "hall", "crown"] },
+  ancestors: { name: "Hall of the Ancestors", the: "the Hall of the Ancestors", levels: ["ancestor stones", "hall", "lantern tower"] },
+};
+
+// ---------------------------------------------------------------------------
+// Pace
+// ---------------------------------------------------------------------------
+
+// Gifts per real day over the last `days` days (or since the first gift, if sooner).
+function giftRate(w, days = TEMPLE.startWindow) {
+  let g = w.gifts || [];
+  if (!g.length) return 0;
+  let n = g.filter((x) => w.t - x.t < days * 86400).length,
+    span = clamp((w.t - g[0].t) / 86400 + 1, 1, days);
+  return n / span;
+}
+
+// The pace table: straight lines between the author's points on a log scale.
+function paceOfRate(r) {
+  if (r <= 0) return 0;
+  let L = Math.log2(r); // -2 every 4 days, -1 every other day, 0 daily, 1 twice a day
+  if (L <= -2) return 0.4 + 0.1 * clamp((L + 2.585) / 0.585, 0, 1);
+  if (L <= -1) return 0.5 + 0.5 * (L + 2);
+  if (L <= 0) return 1 + 0.2 * (L + 1);
+  return Math.min(1.4, 1.2 + 0.2 * L);
+}
+
+function templePace(w) {
+  if (!(w.gifts || []).length || w.t - (w.giftLast ?? -1e9) > TEMPLE.stopDays * 86400) return 0;
+  return paceOfRate(giftRate(w));
+}
+
+// ---------------------------------------------------------------------------
+// The temple's life
+// ---------------------------------------------------------------------------
+function greatStructure(w, kind) {
+  let g = kind === "temple" ? w.temple : w.ancestors;
+  return g && g.sid ? w.byId[g.sid] : null;
+}
+
+function templeCanStart(w) {
+  return !w.temple && w.givingPlace && w.t >= TEMPLE.minDay * 86400 && (w.gifts || []).filter((x) => w.t - x.t < TEMPLE.startWindow * 86400).length >= TEMPLE.startGifts && mostBelieve(w);
+}
+
+function foundGreat(w, kind, at, by) {
+  let s = register(w, {
+    id: w.nextId++,
+    kind,
+    x: +at.x.toFixed(2),
+    z: +at.z.toFixed(2),
+    rot: +(at.rot || 0).toFixed(3),
+    owner: null,
+    founder: by ? by.id : null,
+    level: 0,
+    t: Math.round(w.t),
+    building: { level: 0, stage: 0, delivered: {}, labor: 0, cureLeft: 0, cureUntil: null, started: w.t, by: by ? by.id : null, locked: !0 },
+    contrib: {},
+    spare: {},
+  });
+  w.structures.push(s);
+  let g = { kind, sid: s.id, started: Math.round(w.t), feel: kind === "temple" ? TEMPLE.firstFeel : 0.5, parts: 0, partTimes: [], stageTimes: [], carvings: [], state: "waiting", unlockedAt: null, made: 0 };
+  if (kind === "temple") w.temple = g;
+  else w.ancestors = g;
+  return { s, g };
+}
+
+// The sunrise at their midwinter, seen from the Giving Place (for the crown's sun gate).
+// The view draws the sun rising toward +x and a little +z.
+var SUNRISE_DIR = Math.atan2(0.9, 0.45);
+
+function startTemple(w) {
+  let gp = w.givingPlace,
+    by = believers(w).filter((c) => c.stage !== "child").sort((a, b) => b.beliefs.giver - a.beliefs.giver)[0] || null,
+    { s } = foundGreat(w, "temple", { x: gp.x, z: gp.z, rot: SUNRISE_DIR }, by);
+  logEvent(w, 3, `The creekfolk have begun a shrine at the Giving Place, to honour the creek that gives.${by ? ` ${by.name} set the first stone in place in their mind long before anyone lifted it.` : ""}`, by ? [by.id] : [], s, "temple");
+  newStory(w, "temple", { what: "shrine", where: "the Giving Place" }, s, 2, witnessesNear(w, s, 20, by ? [by] : []));
+  for (let c of believers(w)) remember(w, c, "temple", "We're building a shrine for the creek at the Giving Place.", 0.7, { x: s.x, z: s.z, pv: 0.4 });
+}
+
+function startAncestors(w) {
+  let T = w.terrain,
+    grove = w.res.filter((r) => r.kind === "grove"),
+    near = grove.length ? { x: grove.reduce((a, r) => a + r.x, 0) / grove.length, z: grove.reduce((a, r) => a + r.z, 0) / grove.length } : villageCentre(w),
+    at = null;
+  for (let i = 0; i < 300 && !at; i++) {
+    let p = T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: 8 + i / 15 }, offFloor: true, minEdge: 6 });
+    if (p && siteFor(w, p.x, p.z, 4.5, "ancestors")) at = p;
+  }
+  if (!at) return false;
+  let by = w.creatures.filter((c) => c.stage === "elder" && !c.visitor)[0] || w.creatures.find((c) => !c.visitor) || null,
+    { s } = foundGreat(w, "ancestors", { x: at.x, z: at.z, rot: Math.atan2(near.x - at.x, near.z - at.z) }, by);
+  logEvent(w, 3, `The creekfolk have begun a great work near the memorial grove: a Hall of the Ancestors, to honour the creek and everyone it has kept.${by ? ` ${by.name} chose the place.` : ""}`, by ? [by.id] : [], s, "temple");
+  newStory(w, "temple", { what: "Hall of the Ancestors", where: null }, s, 2, witnessesNear(w, s, 20, by ? [by] : []));
+  return true;
+}
+
+// Every life tick (600 s).
+function templeTick(w) {
+  if (templeCanStart(w)) startTemple(w);
+  if (!w.ancestors && !w.temple && w.t >= TEMPLE.greatDay * 86400) startAncestors(w);
+  if (w.temple) greatTick(w, w.temple, templePace(w));
+  if (w.ancestors) greatTick(w, w.ancestors, 1);
+  growTimber(w);
+  springTick(w);
+}
+
+function greatTick(w, g, pace) {
+  let s = w.byId[g.sid];
+  if (!s || g.state === "done") return;
+  let def = STRUCTURES[s.kind],
+    txt = GREAT_TEXT[s.kind];
+  // Between stages: begin the next one, waiting for the creek.
+  if (!s.building) {
+    if (s.level >= def.levels.length) return greatDone(w, g, s);
+    s.building = { level: s.level, stage: 0, delivered: {}, labor: 0, cureLeft: 0, cureUntil: null, started: w.t, by: null, locked: !0 };
+  }
+  let b = s.building;
+  if (b.locked) {
+    // Stopped: no gift for six days. Nothing is lost.
+    if (pace <= 0) {
+      if (g.state !== "stopped") {
+        g.state = "stopped";
+        g.stoppedAt = Math.round(w.t);
+        logEvent(w, 3, `No one has lifted a stone at ${txt.the} for days. "We'll wait for a sign," they say. They sweep the stones, leave small gifts there, and wait.`, [], s, "temple");
+      } else if (!g.storied && w.t - g.stoppedAt > 4 * 86400) {
+        g.storied = 1;
+        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 1, believers(w));
+      }
+      return;
+    }
+    if (g.state === "stopped") {
+      logEvent(w, 3, `The creek has given again, and the builders have taken up their tools at ${txt.the}.`, [], s, "temple");
+      g.storied = 0;
+    }
+    g.state = "waiting";
+    g.feel = +(g.feel + (pace * LIFE.tick) / (TEMPLE.feelPerPart * 86400)).toFixed(5);
+    if (g.feel >= 1) {
+      g.feel = +(g.feel - 1).toFixed(5);
+      b.locked = !1;
+      g.unlockedAt = Math.round(w.t);
+      g.state = "building";
+      let st = def.levels[b.level].stages[b.stage],
+        lv = def.levels[b.level].label;
+      let first = {
+        temple: ["The creek has answered, the believers say: the first stone of the shrine can be laid.", "The creek has answered. The creekfolk have begun the hall of the temple, behind the shrine.", "The creek has answered. The creekfolk have begun the crown of the temple: a stepped pyramid behind the hall, to carry the creek's water down its steps."],
+        ancestors: ["The first of the ancestor stones can be raised.", "The creekfolk have begun the hall of the Hall of the Ancestors, inside the ring of stones.", "The creekfolk have begun the lantern tower of the Hall of the Ancestors."],
+      }[s.kind][b.level];
+      if (b.stage === 0) logEvent(w, 3, first, [], s, "temple");
+      else logEvent(w, 2, s.kind === "temple" ? `The creek has answered, the believers say. Next for the ${lv}: the ${st.name}.` : `Next for the ${lv} of the Hall of the Ancestors: the ${st.name}.`, [], s, "temple");
+    }
+    return;
+  }
+  g.state = "building";
+  // A part that hasn't moved in days: they make do with what they have.
+  if (g.unlockedAt && w.t - g.unlockedAt > TEMPLE.stuckDays * 86400 && !b.cureLeft) {
+    let need = stageNeeds(s),
+      made = 0;
+    for (let m in need)
+      if ((b.delivered[m] || 0) < need[m]) (b.delivered[m] = need[m]), made++;
+    if (made) {
+      g.made++;
+      g.unlockedAt = Math.round(w.t);
+      logEvent(w, 2, `The builders at ${txt.the} couldn't find what they needed, so they made do with what they had.`, [], s, "temple");
+    }
   }
 }
 
-// Runs inside the life tick: missing gifts, and found objects waiting to be found.
-function giftTick(w) {
-  claimFoundGifts(w);
-  let g = w.gifts || [];
-  if (g.length >= 3 && !w.giftsStopped && w.t - w.giftLast > GIFT.stopDays * 86400) {
-    w.giftsStopped = Math.round(w.t);
-    let doubter = w.creatures.filter((c) => !c.visitor && c.stage !== "child").sort((a, b) => beliefsOf(a).giver - beliefsOf(b).giver)[0];
-    logEvent(
-      w,
-      3,
-      `The gifts have stopped coming. Some of the creekfolk wonder what they did wrong${doubter && beliefsOf(doubter).giver < 0.3 ? `; ${doubter.name} says there was never anyone at all` : ""}.`,
-      [],
-      null,
-      "belief",
-    );
-    for (let c of w.creatures) if (beliefsOf(c).giver > 0.5) remember(w, c, "belief", "The gifts have stopped. I wonder if we did something wrong.", 0.8);
-  }
-  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.1) c.beliefs.giver = +Math.max(0.1, c.beliefs.giver - 0.00015 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
+// Called by the core (stageDone) when a part of a great project is finished.
+function greatPartDone(w, s, level, stage) {
+  let g = s.kind === "temple" ? w.temple : w.ancestors,
+    st = STRUCTURES[s.kind].levels[level].stages[stage];
+  if (!g) return;
+  g.parts++;
+  g.partTimes.push(Math.round(w.t));
+  g.unlockedAt = null;
+  g.state = "waiting";
+  if (st.grove) plantTimberGrove(w, s);
+  if (st.carve) carveStory(w, s, g);
+  if (stage === STRUCTURES[s.kind].levels[level].stages.length - 1) g.stageTimes.push(Math.round(w.t));
+  else logEvent(w, 1, `The ${st.name} of the ${STRUCTURES[s.kind].levels[level].label} ${/s$/.test(st.name) ? "are" : "is"} done.`, [], s, "temple");
 }
+
+function greatDone(w, g, s) {
+  g.state = "done";
+  g.done = Math.round(w.t);
+  let days = Math.round((g.done - g.started) / 86400);
+  if (s.kind === "temple") {
+    logEvent(w, 3, "The temple is finished. The crown stands over the shrine and the hall, the creek runs down its steps, and the sun gate faces their midwinter sunrise. The creekfolk sat together on the steps until dark.", [], s, "temple");
+    newStory(w, "temple-done", { what: "temple", n: days }, s, 3, w.creatures.filter((c) => !c.visitor));
+  } else {
+    logEvent(w, 3, "The Hall of the Ancestors is finished. A lamp burns at the top of its tower, and every name the valley remembers is carved inside.", [], s, "temple");
+    newStory(w, "temple-done", { what: "Hall of the Ancestors", n: days }, s, 3, w.creatures.filter((c) => !c.visitor));
+  }
+}
+
+// A dream can bring the next part closer (gift.js).
+function templeDream(w, c) {
+  let g = w.temple,
+    s = g && w.byId[g.sid];
+  if (!s || g.state === "done" || !s.building || !s.building.locked) return false;
+  g.feel = +Math.min(0.999, g.feel + 0.5).toFixed(5);
+  let def = STRUCTURES.temple.levels[s.building.level];
+  logEvent(w, 3, `${c.name} dreamed of the ${def.label} as it will be: the ${def.stages[s.building.stage].name}, every stone in its place. They told everyone at breakfast.`, [c.id], c, "gift");
+  remember(w, c, "dream", `I dreamed of the ${def.stages[s.building.stage].name} of the ${def.label}, finished.`, 0.85);
+  return true;
+}
+
+// A gift has come (gift.js): nothing to do here yet beyond what the pace reads.
+function templeOnGift(w) {}
+
+// ---------------------------------------------------------------------------
+// Timber: the temple wood, planted as part of the shrine, grows for about a month.
+// ---------------------------------------------------------------------------
+function plantTimberGrove(w, s) {
+  let T = w.terrain,
+    n = 0;
+  for (let i = 0; i < 80 && n < TEMPLE.groveTrees; i++) {
+    let p = T.randomPoint(w.rng, { near: { x: s.x, z: s.z, r: 9 + i / 8 }, offFloor: true, minEdge: 4, avoid: [{ x: s.x, z: s.z, r: TEMPLE_ROOM }] });
+    if (!p || w.res.some((r) => (r.x - p.x) ** 2 + (r.z - p.z) ** 2 < 4) || w.structures.some((o) => (o.x - p.x) ** 2 + (o.z - p.z) ** 2 < (STRUCTURES[o.kind].radius + 1.5) ** 2)) continue;
+    let o = register(w, { id: w.nextId++, kind: "timbertree", x: +p.x.toFixed(2), z: +p.z.toFixed(2), side: T.side(p.x, p.z), planted: Math.round(w.t), grow: 0, amt: 0, max: 3, canopy: 0.4, variant: "pine", forGreat: s.kind });
+    w.res.push(o);
+    n++;
+  }
+  logEvent(w, 2, `The creekfolk planted ${numberWords(n)} young trees near ${s.kind === "temple" ? "the Giving Place" : "the Hall of the Ancestors"}. In a month or so they will be tall enough for beams.`, [], s, "temple");
+}
+
+function growTimber(w) {
+  for (let r of w.res) {
+    if (r.kind !== "timbertree") continue;
+    if (r.grow < 1) {
+      r.grow = +Math.min(1, r.grow + LIFE.tick / (TEMPLE.groveDays * 86400)).toFixed(5);
+      r.canopy = +(0.4 + 1.6 * r.grow).toFixed(2);
+      if (r.grow >= 1) {
+        r.amt = 2;
+        r.regrowAt = Math.round(w.t + TEMPLE.timberRegrow);
+        if (!w.timberNoted) {
+          w.timberNoted = 1;
+          logEvent(w, 2, "The trees planted for the great work have grown tall enough to give timber.", [], r, "nature");
+        }
+      }
+    } else if (r.amt < r.max && w.t >= (r.regrowAt || 0)) {
+      r.amt++;
+      r.regrowAt = Math.round(w.t + TEMPLE.timberRegrow);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Carvings record the village's version of a story, as it is told now. A carved story
+// drifts more slowly afterwards (minds.js).
+// ---------------------------------------------------------------------------
+function carveStory(w, s, g) {
+  let tell = {};
+  for (let c of w.creatures) if (!c.visitor) for (let k in c.lore || {}) (tell[k] = tell[k] || []).push(c.lore[k]);
+  let best = null;
+  for (let k in tell) {
+    let st = w.stories[k];
+    if (!st || st.carved) continue;
+    let score = tell[k].length * (st.weight || 1);
+    if (!best || score > best.score) best = { k, st, score };
+  }
+  if (!best) return;
+  let counts = new Map();
+  for (let l of tell[best.k]) {
+    let key = JSON.stringify([l.v.who, l.v.n, l.v.where, l.v.why, l.v.big || 0]);
+    let e = counts.get(key) || { n: 0, v: l.v };
+    e.n++;
+    counts.set(key, e);
+  }
+  let top = [...counts.values()].sort((a, b) => b.n - a.n)[0],
+    text = storyText(w, best.st, top.v);
+  best.st.carved = Math.round(w.t);
+  g.carvings.push({ id: best.st.id, text, t: Math.round(w.t), true: sameTold(w, best.st, top.v, best.st.truth) });
+  if (g.carvings.length > 60) g.carvings.shift();
+  logEvent(w, 2, `They carved a story into ${s.kind === "temple" ? "the temple" : "the Hall of the Ancestors"}: "${text}"`, [], s, "carving");
+}
+
+// ---------------------------------------------------------------------------
+// The spring where the creek begins: first heard of, then found, then visited.
+// ---------------------------------------------------------------------------
+var SPRING_NEWS = "the creek begins at a spring, up past the head of this valley, where the water comes up out of the ground under a mossy stone";
+
+function springOf(w) {
+  return w.spring || (w.spring = { heard: null, found: null, journey: null, visits: 0 });
+}
+
+// News of the spring arrives with a visitor or traveler, once the creek belief has taken hold.
+function springNews(w, c) {
+  let sp = springOf(w);
+  if (sp.heard) return null;
+  let alive = w.creatures.filter((o) => !o.visitor).length;
+  if (believers(w).length < alive / 3) return null;
+  sp.heard = Math.round(w.t);
+  sp.from = c ? c.name : null;
+  return SPRING_NEWS;
+}
+
+// Where the spring is: beyond the valley's upstream end, along the creek.
+function springAt(w) {
+  let z = -14;
+  return { x: +w.terrain.creekX(z).toFixed(2), z };
+}
+// The head of the valley, where the walk out to the spring starts.
+function springGate(w) {
+  let T = w.terrain;
+  for (let z = 2.5; z < 14; z += 0.5)
+    for (let off of [2, 3, 4, 1.5]) {
+      let x = T.creekX(z) + (T.side(w.meadow.x, w.meadow.z) === 0 ? -off : off);
+      if (T.walkable(x, z)) return { x: +x.toFixed(2), z };
+    }
+  return { x: w.meadow.x, z: w.meadow.z };
+}
+
+function springTick(w) {
+  let sp = springOf(w);
+  // If no one brings the news, a curious elder wonders aloud where the creek comes from.
+  if (!sp.heard && w.t > 60 * 86400 && believers(w).length > 2) {
+    let c = w.creatures.filter((o) => !o.visitor && o.stage !== "child").sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+    if (c) {
+      sp.heard = Math.round(w.t);
+      sp.from = c.name;
+      sp.wondered = 1;
+      logEvent(w, 3, `${c.name} has been wondering where the creek comes from. "It must start somewhere," they say, "up past the head of the valley."`, [c.id], c, "spring");
+    }
+  }
+}
+
+// Someone sets out for the spring: the first journey, or later a believer's visit.
+function springOption(w, c) {
+  let sp = w.spring;
+  if (!sp || !sp.heard || c.visitor || c.farewell || c.leaving || c.stage !== "adult" || isNight(w.t)) return null;
+  if (c.lifespan && c.born + c.lifespan - w.t < 3 * 86400) return null;
+  if (w.creatures.some((o) => o.plan && o.plan.goal === "journey")) return null;
+  let score;
+  if (!sp.found) {
+    if (w.t - sp.heard < 0.25 * 86400 && sp.dreamer !== c.id) return null; // they talk it over first
+    score = sp.dreamer === c.id ? 1.6 : 0.15 + 0.6 * c.temp.curiosity * (0.5 + c.interests.exploring) + 0.3 * (c.beliefs ? c.beliefs.giver : 0);
+  } else {
+    // later visits: a believer goes now and then, about every few real days for the village
+    if (w.t - (sp.lastVisit || sp.found) < 3 * 86400 || !(c.beliefs && c.beliefs.giver > 0.6)) return null;
+    score = 0.12 + 0.4 * c.beliefs.giver * (0.5 + c.interests.exploring);
+  }
+  let gate = springGate(w);
+  return { score, plan: { goal: "journey", steps: [{ do: "walk", x: gate.x, z: gate.z, near: 0.4, why: "spring" }, { do: "journey" }] } };
+}
+
+ACTIONS.journey = {
+  start(w, c) {
+    let sp = springOf(w);
+    sp.journey = c.id;
+    let at = springAt(w);
+    if (!sp.found && !sp.setOut) {
+      sp.setOut = 1;
+      logEvent(w, 3, `${c.name} has set out from the head of the valley to find the spring where the creek begins.`, [c.id], c, "spring");
+    }
+    return makeAct(w, c, "away", sp.found ? 0.3 * getDayLength() : 0.5 * getDayLength(), { lookX: at.x, lookZ: at.z });
+  },
+  end(w, c) {
+    let sp = springOf(w),
+      at = springAt(w);
+    sp.journey = null;
+    c.needs.food = Math.max(c.needs.food, 0.35); // they ate on the way
+    if (!sp.found) {
+      sp.found = Math.round(w.t);
+      sp.by = c.id;
+      sp.byName = c.name;
+      namePlace(w, "the Spring", at, "spring", 4, c, true);
+      logEvent(w, 3, `${c.name} came back from beyond the head of the valley. They found it: the spring where the creek begins, water rising cold and clear out of the ground under a mossy stone. "That's where the creek's gifts come from," the believers say now. It is the holiest place they know.`, [c.id], c, "spring");
+      newStory(w, "spring", { who: c.name }, at, 3, witnessesNear(w, c, 12, [c]));
+      remember(w, c, "spring", "I found the spring where the creek begins. I drank from it. I'll never forget it.", 1, { x: at.x, z: at.z, pv: 0.8 });
+      feel(c, w, "joy", 1);
+      for (let o of w.creatures) if (o.beliefs && o.beliefs.giver > 0.4) o.beliefs.giver = +Math.min(Math.max(o.beliefs.giver, beliefCap(w, o)), o.beliefs.giver + 0.05).toFixed(3);
+    } else {
+      sp.visits++;
+      sp.lastVisit = Math.round(w.t);
+      let of = (w.offerings = w.offerings || { n: {}, total: 0, recent: [] });
+      of.n.water = (of.n.water || 0) + 1;
+      of.total++;
+      of.recent.push({ k: "water", by: c.name, t: Math.round(w.t) });
+      if (of.recent.length > GIFT.offeringsShown) of.recent.shift();
+      if (sp.visits === 1 || sp.visits % 10 === 0) logEvent(w, 2, `${c.name} walked up to the Spring and brought back a little of its water for the Giving Place.`, [c.id], c, "spring");
+      remember(w, c, "spring", "I went to the Spring. The water there is the coldest, clearest thing.", 0.8);
+      feel(c, w, "joy", 0.6);
+    }
+    return true;
+  },
+};
 
 // ==== src/sim/hooks.js ====
 // ==========================================================================
@@ -10967,6 +12390,39 @@ function devTrigger(w, what) {
     return `${c.name}'s time has come`;
   }
   if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  // BELIEF (Phase 3B)
+  if (what === "believe") {
+    for (let c of alive) beliefsOf(c).giver = Math.max(beliefsOf(c).giver, 0.8);
+    if (!w.givingPlace && alive[0]) chooseGivingPlace(w, alive[0]);
+    return "everyone believes the creek gives";
+  }
+  if (what === "answer") {
+    let g = w.temple || w.ancestors,
+      s = g && w.byId[g.sid];
+    if (!s) return "no temple yet (it needs 7 gifts in 14 days and most of them believing)";
+    if (!s.building || !s.building.locked) return "they're already building a part";
+    g.feel = 1;
+    greatTick(w, g, 1);
+    return "the creek has answered: the next part can be built";
+  }
+  if (what === "spring") {
+    let sp = springOf(w);
+    if (sp.found) return "the spring was already found";
+    sp.heard = sp.heard || Math.round(w.t);
+    let c = alive.find((o) => o.stage === "adult");
+    if (!c) return "no grown-up to go";
+    sp.dreamer = c.id;
+    let gate = springGate(w);
+    setPlan(w, c, { goal: "journey", steps: [{ do: "walk", x: gate.x, z: gate.z, near: 0.4, why: "spring" }, { do: "journey" }], i: 0 });
+    return `${c.name} sets out for the spring`;
+  }
+  if (what === "beyond") {
+    let c = alive.filter((o) => o.stage !== "elder" && !(o.beliefs && o.beliefs.beyond)).sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+    if (!c) return "nobody";
+    beliefsOf(c).giver = Math.max(beliefsOf(c).giver, 0.7);
+    becomeBeyond(w, c, null);
+    return `${c.name} believes in you`;
+  }
   return "unknown";
 }
 
@@ -11012,6 +12468,19 @@ var CreekSim = {
   creekPondLevels,
   creekCells,
   creekBumpiness,
+  // Phase 3B: belief and the temple
+  GIFT,
+  GIFT_KINDS,
+  giftNeedWhy,
+  giftRhythm,
+  rhythmText,
+  believers,
+  mostBelieve,
+  TEMPLE,
+  templePace,
+  giftRate,
+  paceOfRate,
+  STRUCTURES,
   devTrigger,
 };
 
