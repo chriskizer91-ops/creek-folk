@@ -20,6 +20,7 @@ function newValley(seed, opts = {}) {
   w.lifeV = 1;
   w.season = seasonAt(w).name;
   schedule(w, LIFE.tick, "L");
+  storyFounding(w); // MINDS: everyone remembers waking up
   return w;
 }
 
@@ -41,5 +42,6 @@ function upgradeWorld(w) {
   w.cycle = { len: VALLEY_DAY, off: (w.cycle && w.cycle.off) ?? 0.27 };
   setDayCycle(w.cycle);
   for (let c of w.creatures) c.stage = stageOf(w, c);
+  if (!w.stories) storyFounding(w); // MINDS: a valley from before stories
   return w;
 }

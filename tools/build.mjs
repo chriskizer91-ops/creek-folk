@@ -18,6 +18,8 @@ export const SIM_FILES = [
   'src/sim/core.js',      // the original valley simulation (minds, building, water)
   'src/sim/calendar.js',  // real calendar: dates and seasons
   'src/sim/life.js',      // ages, stages, births, passings, leaving downstream
+  'src/sim/minds.js',     // stories and myths, named places, customs, lost skills, visitors
+  'src/sim/gift.js',      // the player's gift and beliefs about the giver
   'src/sim/hooks.js',     // small patches that connect life and calendar to the core
   'src/sim/api.js',       // the surface used by the app, the worker and the tests
 ];
@@ -28,6 +30,7 @@ const VIEW_FILES = [
   'src/view/catchup.js',  // long catch-ups in a Web Worker
   'src/view/dev.js',      // hidden developer menu
   'src/view/patches.js',  // small patches that connect the new parts to the view
+  'src/view/minds-view.js', // the gift button, stories, places, customs and beliefs in the HUD
   'src/view/boot.js',     // starts the app
 ];
 

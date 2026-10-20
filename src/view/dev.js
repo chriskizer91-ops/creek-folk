@@ -160,6 +160,8 @@ ${off > 0 ? `<div class="muted">Resetting the offset can't rewind the valley: it
 <tr><td class="muted">so far</td><td>born ${w.stats.births || 0} · passed on ${w.stats.passings || 0} · downstream ${w.stats.departed || 0} · grove trees ${w.res.filter((r) => r.kind === "grove").length}</td></tr>
 <tr><td class="muted">pairs</td><td>${escapeHtml(pairs.join(", ") || "none")}</td></tr>
 <tr><td class="muted">next passing</td><td>${nextPass ? `${escapeHtml(nextPass.c.name)} in ${nextPass.left.toFixed(2)} days` : "-"}</td></tr>
+<tr><td class="muted">minds</td><td>stories ${Object.keys(w.stories || {}).length} · myths ${w.stats.myths || 0} · places ${(w.placeNames || []).length} · skills lost ${Object.keys(w.lost || {}).length} · visits ${w.stats.visits || 0} · travelers ${w.stats.travelers || 0}</td></tr>
+<tr><td class="muted">gifts</td><td>${(w.gifts || []).length} given · believers ${w.creatures.filter((c) => c.beliefs && c.beliefs.giver > 0.5).length} · ${giftReady(w) ? "ready now" : "next in " + durationText(giftWaitSeconds(w))}</td></tr>
 <tr><td class="muted">errors</td><td>${w.stats.errors || 0}</td></tr>
 </table>
 <h5>Minds</h5>
@@ -202,6 +204,8 @@ function mindHTML(w, c) {
     `desires: ${Object.entries(c.desire).filter(([, v]) => v > 0.05).map(([k, v]) => `${k} ${f(v)}`).join(" · ")}`,
     `words: ${words || "-"}`,
     `closest:\n  ${rels.join("\n  ") || "-"}`,
+    `gift belief: ${c.beliefs ? `giver ${f(c.beliefs.giver)} · seen ${c.beliefs.seen} · thanks ${c.beliefs.thanks || "-"}${c.beliefs.pattern ? " · noticed the rhythm" : ""}` : "-"}${c.treasure ? ` · keeps ${c.treasure}` : ""}${c.visitor ? " · VISITING" : ""}`,
+    `stories (${Object.keys(c.lore || {}).length}):\n  ${Object.entries(c.lore || {}).filter(([k]) => w.stories[k]).map(([k, l]) => `[${l.first ? "saw" : "heard"} ${f(l.conf)}${sameTold(w, w.stories[k], l.v, w.stories[k].truth) ? "" : " DRIFTED"}] ${storyText(w, w.stories[k], l.v)}`).join("\n  ")}`,
     `memories (newest first):\n  ${mem.join("\n  ")}`,
   ].join("\n");
   return `<pre>${escapeHtml(txt)}</pre>`;

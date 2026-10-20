@@ -1155,7 +1155,8 @@
               a,
               hash01(r + o + 7) > 0.5 ? PALETTE.stone : PALETTE.stone2
             );
-          }
+          } else
+          n.kind === "gift" && this.setInst("glowcap", e.glowcap++, n.x, s + 0.1, n.z, r, 1.5, 16768358); // MINDS: a found gift
         }
         for (let n in e) {
           let s = this.inst[n];
@@ -5505,6 +5506,7 @@ void main(){
         ),
         e("paw", "Creatures", () => this.open("creatures")),
         e("house", "Village", () => this.open("village")),
+        this.giftBtn = e("gift", "Send a gift", () => this.open("gift")), // MINDS
         e("scroll", "Happenings", () => this.open("log")),
         e("gear", "Settings", () => this.open("settings")),
         this.top.append(this.clock, this.btns),
@@ -5584,6 +5586,7 @@ void main(){
           if (e === "creatures") s = this.creaturesHTML();else
           if (e === "village") s = this.villageHTML();else
           if (e === "log") s = this.logHTML();else
+          if (e === "gift") s = this.giftHTML();else
           if (e === "settings") {
             if (!t) return;
             s = this.settingsHTML();
@@ -5764,6 +5767,8 @@ void main(){
           join("") +
           "</ul>" :
           '<p class="muted">No memories yet.</p>';
+        } else if (a === "stories") {
+          l += storiesTabHTML(e, n); // MINDS (src/view/minds-view.js)
         } else if (a === "words") {
           let c = vocabularySummary(e),
             h = Object.keys(n.lex).
@@ -5772,7 +5777,7 @@ void main(){
               if (!u) return "";
               let f = c.find((x) => x.concept === d),
                 p = f && f.word === u;
-              return `<tr><td>${escapeHtml(CONCEPT_LABELS[d] || d)}</td><td class="word">${escapeHtml(u)}</td><td>${p ? '<span class="ok">shared</span>' : f ? 'others say <span class="word">' + escapeHtml(f.word) + "</span>" : ""}</td></tr>`;
+              return `<tr><td>${escapeHtml(conceptLabel(e, d))}</td><td class="word">${escapeHtml(u)}</td><td>${p ? '<span class="ok">shared</span>' : f ? 'others say <span class="word">' + escapeHtml(f.word) + "</span>" : ""}</td></tr>`;
             }).
             join("");
           l += h ?
@@ -5786,6 +5791,7 @@ void main(){
           ["mind", "Mind"],
           ["bonds", "Bonds"],
           ["memories", "Memories"],
+          ["stories", "Stories"],
           ["words", "Words"]]
           ) +
           `<div class="sh-body">${l}</div>`);
@@ -5902,7 +5908,7 @@ void main(){
           r.
           map(
             (o) =>
-            `<tr><td>${escapeHtml(CONCEPT_LABELS[o.concept] || o.concept)}</td><td class="word">${escapeHtml(o.word)}</td><td><small>${o.users} of ${t.creatures.length}${o.variants > 1 ? " \xB7 " + (o.variants - 1) + " rival word" + (o.variants > 2 ? "s" : "") : ""}</small></td></tr>`
+            `<tr><td>${escapeHtml(conceptLabel(t, o.concept))}</td><td class="word">${escapeHtml(o.word)}</td><td><small>${o.users} of ${t.creatures.length}${o.variants > 1 ? " \xB7 " + (o.variants - 1) + " rival word" + (o.variants > 2 ? "s" : "") : ""}</small></td></tr>`
           ).
           join("") +
           "</table>";
@@ -5916,12 +5922,17 @@ void main(){
           s += r.length ?
           '<ul class="list">' + r.join("") + "</ul>" :
           '<p class="muted">No customs have taken hold yet. Habits that seem to bring luck can spread from one creature to another.</p>';
+          s = villageCustomsHTML(t) + s; // MINDS: customs of the whole village, and beliefs
           let o = t.stats,
             a = t.structures.filter(
               (c) => c.kind === "dam" && c.level > 0
             ).length,
             l = t.hydro && t.hydro.marsh || 0;
           s += `<h4>So far</h4><p class="muted">${o.pods || 0} pods opened together \xB7 ${o.heavy || 0} heavy lifts shared \xB7 ${o.wades || 0} creek wadings (${o.slips || 0} slips) \xB7 ${o.planted || 0} trees planted \xB7 ${o.harvests || 0} harvests${a ? ` \xB7 ${a} creek dam${a > 1 ? "s" : ""}` : ""}${l ? ` \xB7 ${l} patches of marsh` : ""}</p>`;
+        } else if (n === "stories") {
+          s += villageStoriesHTML(t); // MINDS
+        } else if (n === "places") {
+          s += villagePlacesHTML(t); // MINDS
         } else if (n === "history") {
           let r = t.hist.slice().reverse();
           s +=
@@ -5945,6 +5956,8 @@ void main(){
           ["projects", "Projects"],
           ["words", "Words"],
           ["customs", "Customs"],
+          ["stories", "Stories"],
+          ["places", "Places"],
           ["history", "History"]]
           ) +
           `<div class="sh-body">${s}</div>`);

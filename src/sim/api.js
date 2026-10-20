@@ -11,4 +11,11 @@ var CreekSim = {
   seasonAt,
   dateText,
   LIFE,
+  MINDS,
+  giveGift,
+  giftReady,
+  giftWaitSeconds,
+  storyText,
+  giftNeed,
+  giverName,
 };

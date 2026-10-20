@@ -562,6 +562,11 @@
 
   }
   var CONCEPT_LABELS = {
+    giver: "the one who sends gifts", // MINDS
+    spring: "spring",
+    summer: "summer",
+    autumn: "autumn",
+    winter: "winter",
     help: "help",
     pod: "seed pod",
     berry: "berries",
@@ -2283,7 +2288,9 @@
       l.annoy = Math.max(0, l.annoy - 0.05),
       l.lastT = i.t,
       o.desire.meeting += 0.02 * o.temp.sociability,
-      shareNews(i, o, a);
+      shareNews(i, o, a),
+      tellStory(i, o, a), // MINDS: stories, retold (src/sim/minds.js)
+      giftChat(i, o, a); // MINDS: beliefs about the gift (src/sim/gift.js)
     }
     (t.lines || []).filter((o) => !o.ok).length >= 3 &&
     i.rng.chance(0.3) &&
@@ -2668,6 +2675,7 @@
         f,
         "wetland"
       );
+      storyFrogs(i, f); // MINDS
       let x = null,
         g = 1e9;
       for (let m of i.creatures) {
@@ -3300,6 +3308,7 @@
     e === "planting" && (t.desire.garden += 0.6),
     e === "clay" && (t.desire.workshop += 0.1),
     e === "dams" && (t.desire.dam = (t.desire.dam || 0) + 0.5),
+    storyDiscovery(i, t, e), // MINDS: first discoveries become stories
     !0);
   }
   function damIdeaReady(i) {
@@ -4839,6 +4848,7 @@
       n.name === "banks" && plantDamBanks(i, t);
     }
     o && t.kind === "home" && (o.sleepSpot = { x: t.x, z: t.z });
+    storyBuilt(i, t, n.label, r); // MINDS: the first of each thing built becomes a story
   }
   function durationText(i) {
     if (i < 90) return Math.round(i) + " seconds";
@@ -4970,13 +4980,17 @@
       }),
       emote(t, i, "idea", 3),
       wordFor(i, t, s.concept),
+      i._proposal = { yes: [], no: [] }, // MINDS: the others react to a proposal
       beSeen(i, t, {
         x: a.x,
         z: a.z,
         onSee: (d) => {
           d.desire[n] = (d.desire[n] || 0) + 0.05;
+          s.personal || proposalReaction(i, t, n, d, i._proposal);
         }
       }),
+      proposalLog(i, t, h.label, n, a, i._proposal),
+      i._proposal = null,
       !0);
 
   }
@@ -7047,8 +7061,8 @@
       case "W":
         worldTick(i), schedule(i, i.t + 60, "W");
         break;
-      case "R":
-        changeWeather(i);
+      case "R": // MINDS: a gift can change the weather, so stale weather events are skipped
+        (t.tok || 0) === (i.weather.tok || 0) && changeWeather(i);
         break;
       case "L": // LIFE: ages, births, passings, leaving (src/sim/life.js)
         lifeTick(i);
@@ -7080,7 +7094,8 @@
     e.rain = s === "rain" ? 1 : s === "storm" ? 1.6 : 0,
     e.since = i.t,
     e.until = i.t + r,
-    schedule(i, e.until, "R"),
+    schedule(i, e.until, "R", 0, e.tok || 0),
+    s === "storm" && n !== "storm" && storyStorm(i), // MINDS
     e.rain > 0 && !(n === "rain" || n === "storm") ? (
     i.stats.rains = (i.stats.rains || 0) + 1,
     logEvent(
@@ -7824,6 +7839,8 @@ function lifeTick(w) {
   farewells(w);
   leaving(w);
   housing(w);
+  mindsTick(w); // stories, myths, visitors (minds.js)
+  giftTick(w); // gifts that stopped, found objects (gift.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -7834,7 +7851,7 @@ function lifeTick(w) {
 
 function stageCounts(w) {
   let s = { child: 0, adult: 0, elder: 0 };
-  for (let c of w.creatures) s[stageOf(w, c)]++;
+  for (let c of w.creatures) if (!c.visitor) s[stageOf(w, c)]++;
   return s;
 }
 
@@ -7843,6 +7860,7 @@ function noteSeason(w) {
   if (w.season !== s.name) {
     let first = !w.season;
     w.season = s.name;
+    if (!first) seasonGathering(w, s.name); // MINDS: the turning of the season, gathered
     if (!first)
       logEvent(w, 3, {
         spring: "Spring has come to the valley.",
@@ -7882,7 +7900,7 @@ function isRelated(a, b) {
 }
 
 function pairUp(w) {
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.partner && !c.leaving && !c.farewell);
+  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.partner && !c.leaving && !c.farewell && !c.visitor);
   if (adults.length < 2) return;
   let few = adults.length + w.creatures.filter((c) => c.partner).length < LIFE.floorAdults;
   for (let a of adults) {
@@ -7927,16 +7945,17 @@ function births(w) {
   let pairs = [];
   for (let c of w.creatures) {
     let p = c.partner && w.byId[c.partner];
-    if (p && c.id < p.id && stageOf(w, c) === "adult" && stageOf(w, p) === "adult" && !c.leaving && !p.leaving && !c.farewell && !p.farewell) pairs.push([c, p]);
+    if (p && c.id < p.id && !c.visitor && stageOf(w, c) === "adult" && stageOf(w, p) === "adult" && !c.leaving && !p.leaving && !c.farewell && !p.farewell) pairs.push([c, p]);
   }
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult").length,
+  let adults = w.creatures.filter((c) => !c.visitor && stageOf(w, c) === "adult").length,
     boost = adults < LIFE.floorAdults ? 2.5 : 1;
   // Births go on when the valley is full (young adults leave to make room), but pause
   // if it is badly overcrowded.
-  if (w.creatures.length >= valleyCapacity(w) + 6) return;
+  let pop = w.creatures.filter((c) => !c.visitor).length;
+  if (pop >= valleyCapacity(w) + 6) return;
   // Fewer births once the valley is nearly full: pairs have children about every
   // pairBirthDays until it is 85% full, then up to two and a half times less often.
-  let fill = w.creatures.length / valleyCapacity(w),
+  let fill = pop / valleyCapacity(w),
     crowd = 1 + 1.5 * clamp((fill - 0.85) / 0.15, 0, 1);
   let p = (LIFE.tick / (LIFE.pairBirthDays * crowd * DAY_S)) * boost;
   for (let [a, b] of pairs) if (w.rng.chance(p)) bear(w, a, b);
@@ -8030,7 +8049,7 @@ function canBeInterrupted(c) {
 
 function farewells(w) {
   for (let c of w.creatures) {
-    if (c.farewell || c.leaving) continue;
+    if (c.farewell || c.leaving || c.visitor) continue;
     if (w.t - (c.born ?? 0) < c.lifespan) continue;
     if (c.asleep || !canBeInterrupted(c)) continue; // wait until it wakes, or finishes what it's doing
     let spot = lovedPlace(w, c);
@@ -8045,7 +8064,7 @@ function farewells(w) {
     });
     // Family and close friends come to sit with them.
     for (let o of w.creatures) {
-      if (o === c || o.farewell || o.leaving || o.asleep || !canBeInterrupted(o)) continue;
+      if (o === c || o.farewell || o.leaving || o.visitor || o.asleep || !canBeInterrupted(o)) continue;
       let r = o.rel[c.id];
       let family = (c.children || []).includes(o.id) || (c.parents || []).includes(o.id) || c.partner === o.id;
       if (!family && !(r && r.warmth > 0.35)) continue;
@@ -8101,11 +8120,13 @@ function passOn(w, c) {
   let words = near.length
     ? `, with ${nameList(w, near.map((o) => o.id))} beside them`
     : "";
+  storyPassing(w, c, near); // MINDS
+  let offer = passingOfferings(w, c, near); // MINDS: customs at a passing
   let kids = (c.children || []).length;
   logEvent(
     w,
     3,
-    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.`,
+    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.${offer}`,
     [c.id, ...near.map((o) => o.id)],
     c.farewell || c,
     "passing",
@@ -8170,7 +8191,7 @@ function groveTree(w, c) {
 // ---------------------------------------------------------------------------
 function leaving(w) {
   let cap = valleyCapacity(w),
-    n = w.creatures.filter((c) => !c.leaving && !c.farewell).length,
+    n = w.creatures.filter((c) => !c.leaving && !c.farewell && !c.visitor).length,
     over = n - cap;
   // Over capacity, someone must go. Nearly full, a restless young one may choose to,
   // about once every few days.
@@ -8178,10 +8199,10 @@ function leaving(w) {
   if (w.creatures.some((c) => c.leaving)) return; // one at a time
   let young = w.creatures.filter((c) => {
     let a = ageDays(w, c);
-    return a >= LIFE.childDays && a < LIFE.childDays + 7 && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child");
+    return a >= LIFE.childDays && a < LIFE.childDays + 7 && !c.farewell && !c.visitor && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child");
   });
   if (!young.length && over > 2)
-    young = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child"));
+    young = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.visitor && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child"));
   if (!young.length) return;
   let c = w.rng.weighted(young, (y) => 0.2 + y.temp.curiosity + y.interests.exploring + (y.partner ? -0.3 : 0.3));
   if (!c) return;
@@ -8249,7 +8270,9 @@ function depart(w, c) {
   rec.partner = c.partner;
   rec.how = "downstream";
   w.downstream = w.downstream || [];
-  w.downstream.push({ id: c.id, name: c.name, t: Math.round(w.t), with: c.leaving && c.leaving.with });
+  w.downstream.push({ id: c.id, name: c.name, t: Math.round(w.t), with: c.leaving && c.leaving.with, snap: snapshotForVisits(w, c) });
+  newStory(w, "leaving", { who: c.name }, c, 1, witnessesNear(w, c, 8, near)); // MINDS
+  if (!(w.placeNames || []).some((p) => p.kind === "leaving")) namePlace(w, "the Leaving Bank", c, "leaving", 4, near[0] || null);
   if (w.downstream.length > 400) w.downstream.splice(0, w.downstream.length - 400);
   for (let o of w.creatures) {
     if (o === c) continue;
@@ -8277,11 +8300,13 @@ function depart(w, c) {
 // Taking a creekfolk out of the simulation (passed on or gone downstream).
 // ---------------------------------------------------------------------------
 function retire(w, c) {
+  checkLostSkills(w, c); // MINDS: was this the last one who knew how?
   // Hand on what they owned: to their partner, else a grown child, else an adult without a home.
   for (let s of w.structures) {
     if (s.owner !== c.id) continue;
     let heir = [c.partner, ...(c.children || [])].map((id) => w.byId[id]).find((h) => h && h !== c && !h.leaving && !h.farewell && !w.structures.some((x) => x.kind === s.kind && x.owner === h.id));
     if (!heir) heir = w.creatures.find((h) => h !== c && !h.leaving && !h.farewell && stageOf(w, h) !== "child" && !w.structures.some((x) => x.kind === s.kind && x.owner === h.id));
+    if (heir && heir.visitor) heir = null;
     if (heir) {
       s.owner = heir.id;
       if (s.kind === "home") {
@@ -8308,7 +8333,7 @@ function retire(w, c) {
 function housing(w) {
   for (let s of w.structures) {
     if (s.kind !== "home" || s.owner || s.level < 1 || s.building) continue;
-    let h = w.creatures.find((c) => stageOf(w, c) !== "child" && !c.leaving && !c.farewell && (c.home == null || !w.byId[c.home]));
+    let h = w.creatures.find((c) => stageOf(w, c) !== "child" && !c.visitor && !c.leaving && !c.farewell && (c.home == null || !w.byId[c.home]));
     if (!h) continue;
     s.owner = h.id;
     h.home = s.id;
@@ -8384,6 +8409,7 @@ function groveStage(w, tree) {
 // for help). Put it back on its way; after two valley days of distraction, it goes anyway.
 function keepOnTheirWay(w) {
   for (let c of w.creatures.slice()) {
+    if (c.visitor) continue;
     let goal = c.farewell ? "farewell" : c.leaving ? "leave" : null;
     if (!goal || (c.plan && c.plan.goal === goal)) continue;
     let since = (c.farewell || c.leaving).t;
@@ -8411,7 +8437,7 @@ function keepOnTheirWay(w) {
 // somewhere downstream and stays. They bring their own way of speaking.
 // ---------------------------------------------------------------------------
 function travelers(w) {
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell);
+  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell && !c.visitor);
   let free = adults.filter((c) => !c.partner);
   let canPair = free.some((a) => free.some((b) => a !== b && !isRelated(a, b)));
   let paired = adults.some((c) => c.partner && w.byId[c.partner]);
@@ -8450,10 +8476,933 @@ function arriveTraveler(w) {
   w.stats.travelers = (w.stats.travelers || 0) + 1;
   logEvent(w, 3, `A traveler came up the creek from somewhere downstream: ${c.name}. They looked around for a long while, and stayed.`, [c.id], at, "arrival");
   remember(w, c, "life", "I followed the creek upstream and found this valley. I think I will stay.", 0.9, { x: at.x, z: at.z, pv: 0.3 });
+  newStory(w, "arrival", { who: c.name }, at, 2, witnessesNear(w, at, 14, [c])); // MINDS
   c.asleep = false;
   c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 8, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
   schedule(w, w.t + 8, "A", c.id, c.tok);
   return c;
+}
+
+// ==== src/sim/minds.js ====
+// ==========================================================================
+// Minds of the village: stories, myths, named places, customs, lost skills,
+// proposals and visitors from downstream.
+//
+// STORIES. Notable events become stories (world.stories). Each creekfolk holds
+// its own version of the stories it knows (creature.lore), with how sure it is.
+// Those who were there know the truth. Everyone else heard it from someone, and
+// each retelling can shift a detail: numbers grow, deeds move to more famous
+// names (or to a teller's own ancestors), places get named, causes get added
+// ("the creek wanted it", "the one who sends gifts"). Elders who were there
+// correct the young, until they give up. When most of the living believe a
+// version that isn't what happened, a myth has formed, and the log says so.
+//
+// Everything here uses the world's seeded random numbers.
+// ==========================================================================
+
+var MINDS = {
+  loreMax: 24,          // stories one creekfolk can hold
+  tellChance: 0.45,     // chance a chat includes a story (elders: much more)
+  driftBase: 0.045,     // chance a retelling changes a detail
+  mythEvery: 6 * 3600,  // how often the valley's beliefs are compared with the truth
+  visitEveryDays: 6,    // a departed creekfolk comes back to visit about this often
+};
+
+var SKILL_TEXT = {
+  mud: "mud dries hard enough to build with",
+  planting: "seeds grow into plants",
+  clay: "to find and shape the sticky clay",
+  glowcap: "to find the mushrooms that glow",
+  tools: "to make and use tools",
+  dams: "to dam the creek",
+};
+
+// ---------------------------------------------------------------------------
+// Stories
+// ---------------------------------------------------------------------------
+function newStory(w, kind, truth, at, weight, witnesses = []) {
+  w.stories = w.stories || {};
+  w.storySeq = (w.storySeq || 0) + 1;
+  let s = {
+    id: w.storySeq,
+    kind,
+    t: Math.round(w.t),
+    truth: { big: 0, why: null, ...truth },
+    x: at ? +(+at.x).toFixed(1) : null,
+    z: at ? +(+at.z).toFixed(1) : null,
+    weight,
+  };
+  w.stories[s.id] = s;
+  for (let c of witnesses) learnStory(w, c, s, { ...s.truth }, 1, null, true);
+  return s;
+}
+
+// Everyone awake within sight (plus any listed) witnesses it.
+function witnessesNear(w, at, radius = 12, extra = []) {
+  let out = new Set(extra.filter(Boolean));
+  if (at)
+    for (let c of w.creatures) if (!c.asleep && dist2d(c.x, c.z, at.x, at.z) < radius) out.add(c);
+  return [...out];
+}
+
+function learnStory(w, c, s, v, conf, from, first) {
+  c.lore = c.lore || {};
+  let had = c.lore[s.id];
+  c.lore[s.id] = { v, conf: +conf.toFixed(3), first: !!first, from: from ? from.id : null, heard: Math.round(w.t), told: had ? had.told : 0 };
+  let keys = Object.keys(c.lore);
+  if (keys.length > MINDS.loreMax) {
+    // Forget the story that matters least to them now.
+    let worst = null,
+      ws = 1e9;
+    for (let k of keys) {
+      let st = w.stories[k],
+        l = c.lore[k],
+        score = (st ? st.weight : 0) * 2 + l.told * 0.3 + (l.first ? 1.5 : 0) - (w.t - l.heard) / 86400 / 10;
+      if (+k !== s.id && score < ws) (ws = score), (worst = k);
+    }
+    if (worst) delete c.lore[worst];
+  }
+}
+
+// Two versions that read the same are the same story, as far as anyone can tell.
+function sameTold(w, s, a, b) {
+  return storyText(w, s, a) === storyText(w, s, b);
+}
+
+function sameVersion(a, b) {
+  return a.who === b.who && a.n === b.n && a.where === b.where && a.why === b.why && (a.big || 0) === (b.big || 0);
+}
+
+// Render a version of a story as a sentence.
+function storyText(w, s, v) {
+  let where = v.where ? ` at ${v.where}` : "",
+    big = v.big || 0,
+    why = v.why === "giver" ? `, sent by ${giverName(w)}` : v.why === "creek" ? ", because the creek wished it" : v.why === "elders" ? ", as the elders had said it would" : "";
+  switch (s.kind) {
+    case "founding":
+      return `The first ${numberWord(v.n)} woke in the meadow beside the creek${why}${big ? ", on the brightest morning there ever was" : ""}.`;
+    case "discovery":
+      return `${v.who} was the first to learn ${SKILL_TEXT[v.what] || v.what}${where}${why}${big >= 2 ? ", all in a single afternoon" : ""}.`;
+    case "built":
+      return `${v.who} built the first ${v.what}${where}${why}${big ? (big >= 2 ? ", with their own two paws and no help at all" : ", and it took no time at all") : ""}.`;
+    case "passing":
+      return `${v.who} passed on${where}${v.n ? ` after ${daysWord(v.n)}` : ""}${why}${big ? (big >= 2 ? "; they say the whole valley went quiet" : ", the oldest anyone could remember") : ""}.`;
+    case "storm":
+      return `${big >= 2 ? "The great storm" : big ? "A terrible storm" : "A storm"} came over the valley${v.n > 1 ? ` and the rain fell for ${numberWord(v.n)} nights` : ""}${why}.`;
+    case "arrival":
+      return `${v.who} came up the creek from somewhere downstream${why}${big ? ", carrying nothing at all" : ""}, and stayed.`;
+    case "leaving":
+      return `${v.who} went downstream to see where the creek goes${big ? (big >= 2 ? ", and found a lake as wide as the sky" : ", and never looked back") : ""}${why}.`;
+    case "news":
+      return `${v.who} came back from downstream and told us ${v.what}${big ? (big >= 2 ? ", and many more wonders besides" : ", bigger than anything here") : ""}.`;
+    case "gift":
+      return `${giftText(v.what)} came${v.needed ? " when the valley needed it" : ""}${where}${why}${big ? (big >= 2 ? ", and everyone who saw it was changed" : ", glowing") : ""}.`;
+    case "frogs":
+      return `The frogs came back to the marsh${where}${why}${big ? ", singing all at once on the same night" : ""}.`;
+    case "lost":
+      return `Once, long ago, the creekfolk knew ${SKILL_TEXT[v.what] || v.what}${v.who ? `; ${v.who} was the last who did` : ""}.`;
+  }
+  return "Something happened, long ago.";
+}
+
+function numberWord(n) {
+  return ["no one", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"][n] || (n > 40 ? "a great many" : String(n));
+}
+function daysWord(n) {
+  return n >= 90 ? "a hundred days" : `${numberWord(Math.round(n))} days`;
+}
+
+// How well known a name is: how many living creekfolk hold stories about them.
+function fameOf(w, name) {
+  let f = 0;
+  for (let c of w.creatures) for (let k in c.lore || {}) if (c.lore[k].v.who === name) f++;
+  return f;
+}
+
+// A teller may change one detail. Returns a new version (or the same one).
+function retell(w, teller, listener, s, v) {
+  let rng = w.rng,
+    l = teller.lore[s.id],
+    age = (w.t - s.t) / 86400,
+    p = MINDS.driftBase * (l.first ? 0.5 : 1) * (1 + Math.min(1.5, age / 20)) * (listener.stage === "child" ? 1.4 : 1) * (teller.stage === "elder" ? 0.8 : 1) * (0.7 + 0.6 * teller.temp.curiosity);
+  if (!rng.chance(p)) return v;
+  let nv = { ...v },
+    ops = [];
+  if (nv.n != null) ops.push("n");
+  if (nv.who != null && s.kind !== "founding") ops.push("who", "who");
+  if (["founding", "storm", "gift", "frogs", "discovery", "built"].includes(s.kind)) ops.push("why");
+  ops.push("big", "big");
+  if (s.x != null) ops.push("where");
+  let op = rng.pick(ops);
+  if (op === "n") {
+    if (s.kind === "founding") nv.n = rng.pick([3, 7, 12, 1]);
+    else nv.n = Math.max(nv.n + 1, Math.round(nv.n * rng.range(1.3, 2)));
+  } else if (op === "who") {
+    // Deeds drift to famous names, or to the teller's own family.
+    let anc = ancestors(w, teller).filter((r) => r.name !== nv.who),
+      famous = null,
+      best = 2,
+      fame = {};
+    for (let c of w.creatures) for (let k in c.lore || {}) { let n = c.lore[k].v.who; if (n) fame[n] = (fame[n] || 0) + 1; }
+    for (let n in fame) if (n !== nv.who && n !== "one of the first five" && fame[n] > best) (best = fame[n]), (famous = n);
+    if (anc.length && rng.chance(0.5)) nv.who = rng.pick(anc).name;
+    else if (famous) nv.who = famous;
+    else if (s.t < 3 * 86400 && rng.chance(0.5)) nv.who = "one of the first five";
+    else return v;
+  } else if (op === "why") {
+    let g = (teller.beliefs && teller.beliefs.giver) || 0;
+    nv.why = g > 0.45 ? "giver" : teller.stage === "elder" && rng.chance(0.3) ? "elders" : "creek";
+  } else if (op === "big") {
+    nv.big = Math.min(3, (nv.big || 0) + 1);
+  } else if (op === "where") {
+    let pl = placeNear(w, s.x, s.z, 10) || (w.placeNames && w.placeNames.length ? rng.pick(w.placeNames) : null);
+    if (!pl || pl.name === nv.where) return v;
+    nv.where = pl.name;
+  }
+  return nv;
+}
+
+function ancestors(w, c) {
+  let out = [],
+    seen = new Set(),
+    q = (c.parents || []).slice();
+  while (q.length && out.length < 8) {
+    let id = q.shift();
+    if (seen.has(id)) continue;
+    seen.add(id);
+    let r = (w.lineage || {})[id];
+    if (!r) continue;
+    out.push(r);
+    for (let p of r.parents || []) q.push(p);
+  }
+  return out;
+}
+
+// Called after every chat: the teller may tell the listener a story.
+function tellStory(w, teller, listener) {
+  if (!teller.lore) return;
+  let rng = w.rng,
+    eager = (teller.stage === "elder" ? 2.2 : 1) * (listener.stage === "child" ? 1.5 : 1) * (0.6 + 0.6 * teller.temp.sociability);
+  if (!rng.chance(Math.min(0.95, MINDS.tellChance * eager))) return;
+  let keys = Object.keys(teller.lore).filter((k) => w.stories[k]);
+  if (!keys.length) return;
+  let k = +rng.weighted(keys, (k) => {
+    let s = w.stories[k],
+      known = listener.lore && listener.lore[k];
+    return s.weight * (known ? (sameVersion(known.v, teller.lore[k].v) ? 0.15 : 0.8) : 1.6) * (1 + teller.lore[k].told * 0.1);
+  });
+  let s = w.stories[k],
+    mine = teller.lore[k];
+  mine.told++;
+  let v = retell(w, teller, listener, s, mine.v);
+  let theirs = listener.lore && listener.lore[k];
+  if (!theirs) {
+    learnStory(w, listener, s, v, Math.max(0.2, mine.conf * 0.88), teller, false);
+    return;
+  }
+  if (sameVersion(theirs.v, v)) {
+    theirs.conf = +Math.min(1, theirs.conf + 0.05).toFixed(3);
+    return;
+  }
+  // They know it differently. Those who were there, or are sure, push back.
+  let rel = relation(listener, teller),
+    trust = honestyRate(rel) * (0.5 + clamp(rel.warmth, 0, 1)),
+    tellerWeight = mine.conf * (teller.stage === "elder" ? 1.4 : 1) * trust,
+    mineWeight = theirs.conf * (theirs.first ? 1.6 : 1) * (listener.stage === "elder" ? 1.3 : 1);
+  if (theirs.first && listener.stage !== "child" && mineWeight > tellerWeight) {
+    correct(w, listener, teller, s, theirs, mine);
+  } else if (rng.chance(clamp(tellerWeight / (tellerWeight + mineWeight), 0.05, 0.95))) {
+    listener.lore[k] = { ...theirs, v, conf: +Math.max(0.2, mine.conf * 0.85).toFixed(3), from: teller.id, first: false, heard: Math.round(w.t) };
+  }
+}
+
+// Someone who was there corrects a retelling. The young often aren't convinced.
+function correct(w, elder, teller, s, theirs, mine) {
+  let rng = w.rng;
+  elder.corrections = elder.corrections || {};
+  let n = (elder.corrections[s.id] = (elder.corrections[s.id] || 0) + 1);
+  if (n === 6) {
+    logEvent(w, 2, `${elder.name} has given up correcting the young ones about ${shortAbout(w, s)}. "Let them tell it their way," they said.`, [elder.id], elder, "story");
+    remember(w, elder, "story", `Nobody tells it the way it really happened anymore. Maybe that's all right.`, 0.6);
+    return;
+  }
+  if (n > 6) return;
+  let convinced = rng.chance(teller.stage === "child" ? 0.3 : 0.55);
+  if (convinced) {
+    teller.lore[s.id] = { ...mine, v: { ...theirs.v }, conf: +Math.max(mine.conf, 0.7).toFixed(3), from: elder.id };
+  } else mine.conf = +Math.max(0.2, mine.conf - 0.1).toFixed(3);
+  if (n === 1 || rng.chance(0.25))
+    logEvent(
+      w,
+      1,
+      `${teller.name} was telling how ${lower(storyText(w, s, mine.v)).replace(/\.$/, "")}. ${elder.name}, who was there, said it wasn't like that${convinced ? ", and " + teller.name + " listened." : `. ${teller.name} didn't seem convinced.`}`,
+      [elder.id, teller.id],
+      elder,
+      "story",
+    );
+}
+
+function shortAbout(w, s) {
+  let v = s.truth;
+  return {
+    founding: "how the valley began",
+    discovery: `who first learned ${SKILL_TEXT[v.what] || v.what}`,
+    built: `who built the first ${v.what}`,
+    passing: `${v.who}'s passing`,
+    storm: "the storm",
+    arrival: `how ${v.who} came`,
+    leaving: `${v.who} going downstream`,
+    news: "the news from downstream",
+    gift: "the gift",
+    frogs: "the frogs coming back",
+    lost: "what was forgotten",
+  }[s.kind] || "the old days";
+}
+
+// Every few hours: has a myth formed? Has a story been forgotten?
+function checkMyths(w) {
+  w.myths = w.myths || {};
+  let holders = {};
+  for (let c of w.creatures) {
+    if (c.visitor) continue;
+    for (let k in c.lore || {}) (holders[k] = holders[k] || []).push(c.lore[k]);
+  }
+  for (let k in w.stories) {
+    let s = w.stories[k],
+      hs = holders[k];
+    if (!hs || !hs.length) {
+      if (s.weight >= 2 && !s.forgotten && w.t - s.t > 86400) {
+        s.forgotten = Math.round(w.t);
+        logEvent(w, 2, `No one in the valley remembers anymore that ${lower(storyText(w, s, s.truth))}`, [], s.x != null ? s : null, "forgotten");
+      }
+      if (w.t - s.t > 86400 * 3) delete w.stories[k];
+      continue;
+    }
+    if (hs.length < 3) continue;
+    // The most common version among the living.
+    let counts = new Map();
+    for (let h of hs) {
+      let key = JSON.stringify([h.v.who, h.v.n, h.v.where, h.v.why, h.v.big || 0]);
+      let e = counts.get(key) || { n: 0, v: h.v, first: 0 };
+      e.n++;
+      if (h.first) e.first++;
+      counts.set(key, e);
+    }
+    let top = [...counts.values()].sort((a, b) => b.n - a.n)[0];
+    if (top.n < hs.length * 0.5) continue;
+    let key = JSON.stringify([top.v.who, top.v.n, top.v.where, top.v.why, top.v.big || 0]);
+    if (sameTold(w, s, top.v, s.truth) || w.myths[k] === key) continue;
+    w.myths[k] = key;
+    w.stats.myths = (w.stats.myths || 0) + 1;
+    // Every myth shows in the village's stories; the important ones, at most one a day, in the history.
+    if (s.weight < 2 || w.t - (w.lastMythLog || -1e9) < 86400) continue;
+    w.lastMythLog = w.t;
+    logEvent(w, 3, `Most of the valley now believes that ${lower(storyText(w, s, top.v))} It wasn't quite like that: ${lower(storyText(w, s, s.truth))}`, [], s.x != null ? s : null, "myth");
+  }
+}
+
+// Lower-case a sentence's first word, unless it's a name.
+function lower(t) {
+  return /^(The|A|An|Once|Something|Seeds|No)\b/.test(t) ? t[0].toLowerCase() + t.slice(1) : t;
+}
+
+// ---------------------------------------------------------------------------
+// Named places
+// ---------------------------------------------------------------------------
+function placeNear(w, x, z, r = 4) {
+  if (x == null) return null;
+  let best = null,
+    bd = r;
+  for (let p of w.placeNames || []) {
+    let d = dist2d(p.x, p.z, x, z);
+    if (d < Math.max(bd, p.r)) (bd = d), (best = p);
+  }
+  return best;
+}
+
+function namePlace(w, name, at, kind, r = 3, by = null, silent = false) {
+  w.placeNames = w.placeNames || [];
+  let near = placeNear(w, at.x, at.z, r);
+  if (near) return near;
+  let p = { id: (w.placeSeq = (w.placeSeq || 0) + 1), name, x: +at.x.toFixed(1), z: +at.z.toFixed(1), r, kind, t: Math.round(w.t) };
+  w.placeNames.push(p);
+  // The namer coins a word for it in their own speech; it spreads like any other word.
+  if (by) wordFor(w, by, "place:" + p.id);
+  if (!silent) logEvent(w, 2, `The creekfolk have started calling ${kind === "rest" ? "the place where " + name.replace(/'s Rest$/, "") + " passed" : "it"} ${name}.`, by ? [by.id] : [], at, "place");
+  return p;
+}
+
+// What a concept means, for the words list (places have ids).
+function conceptLabel(w, concept) {
+  if (concept.startsWith("place:")) {
+    let p = (w.placeNames || []).find((p) => "place:" + p.id === concept);
+    return p ? p.name : "a place";
+  }
+  return CONCEPT_LABELS[concept] || concept;
+}
+
+// ---------------------------------------------------------------------------
+// Hooks called from the core and from life.js
+// ---------------------------------------------------------------------------
+function storyFounding(w) {
+  newStory(w, "founding", { n: w.creatures.length }, w.meadow, 3, w.creatures);
+  namePlace(w, "the Waking Meadow", w.meadow, "meadow", 5, null, true);
+}
+
+function storyDiscovery(w, c, skill) {
+  if (w.lost && w.lost[skill]) {
+    let days = Math.round((w.t - w.lost[skill]) / 86400);
+    delete w.lost[skill];
+    logEvent(w, 3, `${c.name} has learned again how ${SKILL_TEXT[skill] || skill}, ${days} days after the valley forgot.`, [c.id], c, "discovery");
+    newStory(w, "discovery", { who: c.name, what: skill }, c, 2, witnessesNear(w, c, 10, [c]));
+    return;
+  }
+  if ((w.stats["know_" + skill] || 0) !== 1) return;
+  newStory(w, "discovery", { who: c.name, what: skill }, c, 2, witnessesNear(w, c, 10, [c]));
+}
+
+function storyBuilt(w, s, label, builders) {
+  w.firstBuilt = w.firstBuilt || {};
+  let key = s.kind + ":" + s.level;
+  if (s.owner || w.firstBuilt[key]) return;
+  w.firstBuilt[key] = Math.round(w.t);
+  let lead = builders[0] && w.byId[builders[0]];
+  if (!lead) return;
+  newStory(w, "built", { who: lead.name, what: label }, s, s.level === 1 ? 2 : 1, witnessesNear(w, s, 12, builders.map((id) => w.byId[id])));
+  if (s.kind === "dam" && s.level === 1 && !(w.placeNames || []).some((p) => p.kind === "pool")) namePlace(w, `${lead.name}'s Pool`, s, "pool", 4, lead);
+  if (s.kind === "crossing" && s.level === 1) namePlace(w, s.level >= 2 ? "the Footbridge" : "the Stepping Stones", s, "crossing", 3, lead);
+  if (s.kind === "meeting" && s.level === 1) namePlace(w, "the Meeting Stone", s, "meeting", 3, lead);
+}
+
+function storyPassing(w, c, near) {
+  let notable = c.founder || c.traveler || (c.children || []).length >= 3 || !(w.stats.passings > 0);
+  let at = c.farewell || c;
+  let place = placeNear(w, at.x, at.z, 3);
+  if (!place && notable) place = namePlace(w, `${c.name}'s Rest`, at, "rest", 2.5, near[0] || null);
+  newStory(w, "passing", { who: c.name, n: Math.round(ageDays(w, c)), where: place ? place.name : null }, at, notable ? 2 : 1, witnessesNear(w, at, 8, near));
+}
+
+function storyStorm(w) {
+  if (w.lastStormStory && w.t - w.lastStormStory < 3 * 86400) return;
+  w.lastStormStory = w.t;
+  newStory(w, "storm", { n: 1 }, null, 1, w.creatures.filter((c) => !c.visitor));
+}
+
+function storyFrogs(w, at) {
+  newStory(w, "frogs", {}, at, 1, witnessesNear(w, at, 14));
+}
+
+// When the last creekfolk who knew a skill is gone.
+function checkLostSkills(w, gone) {
+  w.lost = w.lost || {};
+  for (let k in SKILL_TEXT) {
+    if (!gone.know || !gone.know[k] || w.lost[k]) continue;
+    if (w.creatures.some((c) => c !== gone && c.know[k])) continue;
+    w.lost[k] = Math.round(w.t);
+    w.stats.skillsLost = (w.stats.skillsLost || 0) + 1;
+    logEvent(w, 3, `No one left in the valley knows how ${SKILL_TEXT[k]}. ${gone.name} was the last.`, [], gone, "lost");
+    newStory(w, "lost", { what: k, who: gone.name }, null, 2, w.creatures.filter((c) => c !== gone && !c.visitor && c.rel[gone.id]));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Customs: offerings at a passing, gatherings when the season turns
+// ---------------------------------------------------------------------------
+var OFFERINGS = {
+  sound: ["hummed a low song", "hum a low song"],
+  collecting: ["left a pretty pebble", "leave a pretty pebble"],
+  growing: ["laid a flower", "lay a flower"],
+  water: ["brought water from the creek", "bring water from the creek"],
+  building: ["set a small stone", "set a small stone"],
+  social: ["held paws in a circle", "hold paws in a circle"],
+  exploring: ["told of far-off places", "tell of far-off places"],
+};
+
+function passingOfferings(w, c, near) {
+  w.customs = w.customs || {};
+  let cu = (w.customs.passing = w.customs.passing || { counts: {}, custom: null, since: null });
+  let done = [];
+  for (let o of near) {
+    let pick = cu.custom && w.rng.chance(0.75) ? cu.custom : o.sig;
+    cu.counts[pick] = (cu.counts[pick] || 0) + 1;
+    done.push(pick);
+  }
+  let total = Object.values(cu.counts).reduce((a, b) => a + b, 0);
+  if (!cu.custom) {
+    for (let k in cu.counts)
+      if (cu.counts[k] >= 4 && cu.counts[k] >= total * 0.4) {
+        cu.custom = k;
+        cu.since = Math.round(w.t);
+        logEvent(w, 3, `It has become the custom, when someone passes, to ${OFFERINGS[k][1]} for them.`, [], c.farewell || c, "custom");
+        break;
+      }
+  }
+  if (!done.length) return "";
+  let k = cu.custom && done.filter((d) => d === cu.custom).length >= done.length / 2 ? cu.custom : done[0];
+  return ` They ${OFFERINGS[k][0]} for them.`;
+}
+
+function seasonGathering(w, season) {
+  let meet = findStructure(w, "meeting", (s) => s.level > 0),
+    at = meet ? { x: meet.x, z: meet.z } : w.meadow;
+  let goers = w.creatures.filter((c) => !c.asleep && !c.farewell && !c.leaving && canBeInterrupted(c) && dist2d(c.x, c.z, at.x, at.z) < 30);
+  if (goers.length < 3) return;
+  w.customs = w.customs || {};
+  let g = (w.customs.seasons = w.customs.seasons || { n: 0 });
+  g.n++;
+  for (let c of goers) {
+    let a = w.rng.range(0, 6.28),
+      d = w.rng.range(1.2, 2.8);
+    setPlan(w, c, { goal: "gather", steps: [{ do: "walk", x: at.x + Math.cos(a) * d, z: at.z + Math.sin(a) * d, near: 0.3, why: "gather" }, { do: "gather", x: at.x, z: at.z }], i: 0 });
+  }
+  let word = favoriteWord(goers[0], season) || null;
+  let place = placeNear(w, at.x, at.z, 5);
+  logEvent(
+    w,
+    3,
+    g.n === 1
+      ? `The creekfolk gathered at ${place ? place.name : "the meeting place"} to mark the coming of ${season}.`
+      : g.n === 2
+        ? `For the second time, the creekfolk gathered at ${place ? place.name : "the meeting place"} as the season turned. It is becoming a custom.`
+        : `The creekfolk gathered at ${place ? place.name : "the meeting place"} for the turning of the season, as they always do${word ? `; they call it "${word}"` : ""}.`,
+    goers.map((c) => c.id),
+    at,
+    "custom",
+  );
+  for (let c of goers) wordFor(w, c, season);
+}
+
+// ---------------------------------------------------------------------------
+// Proposals: when someone marks out a shared project, the others react.
+// ---------------------------------------------------------------------------
+function proposalReaction(w, by, kind, observer, out) {
+  let r = relation(observer, by),
+    agree = (observer.desire[kind] || 0) + 0.4 * clamp(r.warmth, -1, 1) - 0.3 * r.annoy + w.rng.range(-0.15, 0.15);
+  if (agree > 0.25) {
+    observer.desire[kind] = (observer.desire[kind] || 0) + 0.15;
+    warmTo(observer, by, 0.02);
+    out.yes.push(observer.id);
+  } else if (agree < -0.05) {
+    r.annoy = Math.min(1, r.annoy + 0.04);
+    out.no.push(observer.id);
+  }
+}
+
+function proposalLog(w, by, label, kind, at, out) {
+  if (STRUCTURES[kind].personal || (!out.yes.length && !out.no.length)) return;
+  let yes = out.yes.length ? `${nameList(w, out.yes)} liked the idea` : "",
+    no = out.no.length ? `${nameList(w, out.no)} ${out.no.length > 1 ? "weren't" : "wasn't"} sure` : "";
+  logEvent(w, 2, `${by.name} proposed ${withArticle(label)}. ${[yes, no].filter(Boolean).join("; ")}.`, [by.id, ...out.yes, ...out.no], at, "proposal");
+}
+
+// ---------------------------------------------------------------------------
+// Visitors: someone who went downstream comes back for a little while, with news.
+// ---------------------------------------------------------------------------
+var DOWNSTREAM_NEWS = [
+  "the creek joins a river so wide you can't see the other side",
+  "there is a still lake where the creek ends, full of sky",
+  "other creekfolk live downstream, and they build their homes on stilts",
+  "a fallen tree far below made a pool bigger than ours",
+  "the hills open out into a meadow that goes on forever",
+  "there are fish downstream as long as your arm",
+  "far below, the creek runs under the ground and comes out singing",
+  "the folk downstream have a different word for everything",
+  "there are reeds downstream taller than our roofs",
+  "at night, downstream, the whole marsh glows",
+];
+
+function snapshotForVisits(w, c) {
+  let rels = Object.entries(c.rel)
+    .sort((a, b) => b[1].warmth - a[1].warmth)
+    .slice(0, 8);
+  return {
+    look: c.look,
+    temp: c.temp,
+    interests: c.interests,
+    accent: c.accent,
+    lex: Object.fromEntries(Object.entries(c.lex).slice(0, 30)),
+    sig: c.sig,
+    born: c.born,
+    lifespan: c.lifespan,
+    gen: c.gen,
+    parents: c.parents,
+    children: c.children,
+    rel: Object.fromEntries(rels),
+    strength: c.adultStrength,
+  };
+}
+
+function visits(w) {
+  if (w.creatures.some((c) => c.visitor)) return;
+  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > MINDS.visitEveryDays * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
+  let d = w.rng.pick(cands);
+  d.visited = Math.round(w.t);
+  let edge = downstreamEdge(w, { x: w.terrain.creekX(58) + 2, z: 58 });
+  let c = makeFolk(w, d.name, edge.x, edge.z);
+  let sn = d.snap;
+  Object.assign(c, { id: d.id, look: sn.look, temp: sn.temp, interests: sn.interests, accent: sn.accent, lex: sn.lex, sig: sn.sig, rel: sn.rel, strength: sn.strength, adultStrength: sn.strength });
+  Object.assign(c, { born: sn.born, lifespan: sn.lifespan, gen: sn.gen, parents: sn.parents || [], children: sn.children || [], partner: null });
+  c.stage = stageOf(w, c);
+  c.visitor = { until: Math.round(w.t + VALLEY_DAY * 2), x: edge.x, z: edge.z };
+  register(w, c);
+  w.creatures.push(c);
+  w.stats.visits = (w.stats.visits || 0) + 1;
+  let news = w.rng.pick(DOWNSTREAM_NEWS);
+  logEvent(w, 3, `${c.name} came back up the creek to visit! They say ${news}.`, [c.id], edge, "visit");
+  newStory(w, "news", { who: c.name, what: news }, edge, 2, [c]);
+  for (let o of w.creatures) {
+    let r = o.rel[c.id];
+    if (o !== c && r && r.warmth > 0.3) remember(w, o, "visit", `${c.name} came back to visit. They say ${news}.`, 0.8, { who: c.id });
+  }
+  c.asleep = false;
+  c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 6, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
+  schedule(w, w.t + 6, "A", c.id, c.tok);
+}
+
+function endVisits(w) {
+  for (let c of w.creatures.slice()) {
+    if (!c.visitor) continue;
+    if (w.t > c.visitor.until + VALLEY_DAY * 2) {
+      leaveAgain(w, c);
+      continue;
+    }
+    if (w.t > c.visitor.until && (!c.plan || c.plan.goal !== "goback") && !c.asleep && canBeInterrupted(c))
+      setPlan(w, c, { goal: "goback", steps: [{ do: "walk", x: c.visitor.x, z: c.visitor.z, near: 0.4, why: "leave" }, { do: "goback" }], i: 0 });
+  }
+}
+
+function leaveAgain(w, c) {
+  logEvent(w, 2, `${c.name} went back downstream, home to wherever that is now.`, [c.id], c, "visit");
+  for (let s of w.structures) if (s.owner === c.id) s.owner = null;
+  for (let o of w.creatures) {
+    if (o.partner === c.id) o.partner = null;
+    if (o.attend && o.attend.id === c.id) o.attend = null;
+  }
+  c.act = null;
+  c.plan = null;
+  c.tok++;
+  let i = w.creatures.indexOf(c);
+  if (i >= 0) w.creatures.splice(i, 1);
+  delete w.byId[c.id];
+}
+
+ACTIONS.gather = {
+  start(w, c, step) {
+    return makeAct(w, c, "sit", 150, { lookX: step.x, lookZ: step.z });
+  },
+  end(w, c) {
+    c.needs.social = clamp(c.needs.social + 0.2, 0, 1);
+    feel(c, w, "warmth", 0.3);
+    return true;
+  },
+};
+
+ACTIONS.goback = {
+  start(w, c) {
+    return makeAct(w, c, "look", 5, { lookX: w.meadow.x, lookZ: w.meadow.z });
+  },
+  end(w, c) {
+    leaveAgain(w, c);
+    return false;
+  },
+};
+
+// Runs inside the life tick.
+function mindsTick(w) {
+  endVisits(w);
+  visits(w);
+  if (!w.lastMyth || w.t - w.lastMyth >= MINDS.mythEvery) {
+    w.lastMyth = w.t;
+    checkMyths(w);
+  }
+}
+
+// ==== src/sim/gift.js ====
+// ==========================================================================
+// The player's gift, and what the creekfolk come to believe about it.
+//
+// Once every 12 real hours the player may give the valley one gift: a gentle
+// rain, a scatter of seeds, a warm day, or a found object. Gifts help things
+// grow; they never decide whether anyone survives.
+//
+// The creekfolk notice. Each one explains a gift its own way (luck, the creek,
+// or someone watching), and repeated gifts that arrive when they're needed make
+// "someone" more likely. Believers coin a word for the giver (it spreads like
+// any other word), thank it with a gesture that can become a village custom,
+// notice when gifts come regularly, argue with doubters, and wonder what they
+// did wrong when the gifts stop.
+// ==========================================================================
+
+var GIFT = {
+  every: 12 * 3600, // seconds between gifts
+  stopDays: 3,      // after this long without a gift (once there have been a few), it feels like they stopped
+};
+
+var FOUND_THINGS = [
+  "a smooth blue stone",
+  "a long white feather",
+  "a tiny bell",
+  "a carved wooden bead",
+  "a spiral shell",
+  "a piece of green glass",
+  "a ring of braided grass",
+  "a little copper key",
+];
+
+function giftText(what) {
+  let t = { rain: "a gentle rain", seeds: "a scatter of seeds", warm: "a warm day" }[what] || what;
+  return t[0].toUpperCase() + t.slice(1);
+}
+
+function giverName(w) {
+  let believers = w.creatures.filter((c) => c.beliefs && c.beliefs.giver > 0.5).length;
+  let v = vocabularySummary(w).find((e) => e.concept === "giver");
+  return v && believers >= 2 && v.users >= Math.ceil(believers / 2) ? `"${v.word}"` : "the one who sends gifts";
+}
+
+function giftReady(w) {
+  return w.t - (w.giftLast ?? -1e9) >= GIFT.every;
+}
+
+function giftWaitSeconds(w) {
+  return Math.max(0, (w.giftLast ?? -1e9) + GIFT.every - w.t);
+}
+
+function beliefsOf(c) {
+  return (c.beliefs = c.beliefs || { giver: 0, seen: 0, lastSeen: null, pattern: false, thanks: null });
+}
+
+// How much the valley needed this gift right now (0..1).
+function giftNeed(w, kind) {
+  let alive = w.creatures.filter((c) => !c.visitor);
+  if (kind === "rain") {
+    let dryFor = w.weather.rain > 0 ? 0 : w.t - (w.weather.since || 0);
+    let thirsty = w.structures.some((s) => s.kind === "garden" && s.beds && s.beds.some((b) => b.state === "growing" && b.water < 0.35));
+    return clamp(dryFor / (3 * VALLEY_DAY), 0, 1) * 0.6 + (thirsty ? 0.4 : 0);
+  }
+  if (kind === "seeds") {
+    let food = alive.reduce((a, c) => a + c.needs.food, 0) / Math.max(1, alive.length);
+    return clamp((0.6 - food) * 2.5, 0, 1);
+  }
+  if (kind === "warm") {
+    let s = seasonAt(w),
+      wet = alive.filter((c) => c.wet > 0.4).length / Math.max(1, alive.length);
+    return clamp((1 - s.warmth) * 0.7 + wet * 0.6 + (w.weather.rain > 0 ? 0.2 : 0), 0, 1);
+  }
+  return 0.5;
+}
+
+// The gift arrives. Returns a short description for the player.
+function giveGift(w, kind) {
+  if (!giftReady(w)) return null;
+  let need = giftNeed(w, kind),
+    T = w.terrain,
+    spot = null,
+    alive = w.creatures.filter((c) => !c.visitor),
+    what = kind;
+  w.giftLast = w.t;
+  w.gifts = w.gifts || [];
+  if (kind === "rain") {
+    let e = w.weather;
+    e.cum = rainTotal(w, w.t);
+    e.cumT = w.t;
+    e.state = "rain";
+    e.rain = 1;
+    e.since = w.t;
+    e.until = w.t + 0.4 * VALLEY_DAY;
+    e.tok = (e.tok || 0) + 1;
+    schedule(w, e.until, "R", 0, e.tok);
+    logEvent(w, 2, "A gentle rain began to fall out of a clear sky.", [], null, "gift");
+  } else if (kind === "seeds") {
+    let g = findStructure(w, "garden", (s) => s.level > 0);
+    let c = g ? { x: g.x, z: g.z } : w.meadow;
+    spot = T.randomPoint(w.rng, { near: { x: c.x, z: c.z, r: 4 }, minEdge: 1 }) || { x: w.meadow.x, z: w.meadow.z };
+    dropItem(w, "seeds", spot.x, spot.z, 10);
+    for (let r of w.res) if (r.kind === "bush" && r.amt < r.max) r.amt = Math.min(r.max, r.amt + 2);
+    logEvent(w, 2, "Seeds were found scattered in the grass, where there had been none.", [], spot, "gift");
+  } else if (kind === "warm") {
+    let e = w.weather;
+    if (e.rain > 0) {
+      e.cum = rainTotal(w, w.t);
+      e.cumT = w.t;
+      e.state = "clear";
+      e.rain = 0;
+      e.since = w.t;
+      e.until = w.t + VALLEY_DAY;
+      e.tok = (e.tok || 0) + 1;
+      schedule(w, e.until, "R", 0, e.tok);
+    }
+    for (let c of w.creatures) (c.wet = 0), (c.needs.comfort = clamp(c.needs.comfort + 0.3, 0, 1)), (c.needs.fun = clamp(c.needs.fun + 0.1, 0, 1));
+    for (let s of w.structures) if (s.kind === "garden" && s.beds) for (let b of s.beds) if (b.state === "growing") b.grow = Math.min(1, b.grow + 0.25);
+    for (let r of w.res) if (r.kind === "orchard" && r.stage < 3) r.grow = Math.min(0.99, (r.grow || 0) + 0.15);
+    logEvent(w, 2, `A warm, golden day settled over the valley${seasonAt(w).warmth < 0.4 ? ", though it was the cold time of year" : ""}.`, [], null, "gift");
+  } else if (kind === "found") {
+    what = w.rng.pick(FOUND_THINGS);
+    spot = T.randomPoint(w.rng, { near: { x: w.meadow.x, z: w.meadow.z, r: 14 }, minEdge: 1.5 }) || { x: w.meadow.x, z: w.meadow.z };
+    let it = dropItem(w, "gift", spot.x, spot.z, 1);
+    it.thing = what;
+    logEvent(w, 2, `Something glinted in the grass that hadn't been there before.`, [], spot, "gift");
+  } else return null;
+
+  w.gifts.push({ t: Math.round(w.t), kind, what, need: +need.toFixed(2) });
+  if (w.gifts.length > 200) w.gifts.splice(0, w.gifts.length - 200);
+  w.stats.gifts = (w.stats.gifts || 0) + 1;
+  if (w.giftsStopped) {
+    w.giftsStopped = null;
+    logEvent(w, 3, "The gifts have come back! Even the doubters looked up.", [], null, "gift");
+    for (let c of alive) if (beliefsOf(c).giver > 0.3) feel(c, w, "joy", 0.6), remember(w, c, "gift", "The gifts came back. We weren't forgotten after all.", 0.8);
+  }
+
+  // Who noticed, and what they made of it.
+  let observers = kind === "rain" || kind === "warm" ? alive.filter((c) => !c.asleep) : witnessesNear(w, spot, 16).filter((c) => !c.visitor);
+  for (let c of observers) noticeGift(w, c, kind, what, need);
+  if (w.gifts.length === 1 || need > 0.55 || kind === "found")
+    newStory(w, "gift", { what, needed: need > 0.5, where: spot && placeNear(w, spot.x, spot.z, 4) ? placeNear(w, spot.x, spot.z, 4).name : null }, spot, w.gifts.length === 1 ? 2 : 1, observers);
+  noticePattern(w);
+  thanksCustom(w);
+  return { kind, what, need };
+}
+
+function noticeGift(w, c, kind, what, need) {
+  let b = beliefsOf(c),
+    t = c.temp,
+    before = b.giver,
+    // The curious look for reasons; the cautious and incurious shrug.
+    openness = 0.5 + t.curiosity * 0.8 - t.caution * 0.35 + (c.stage === "child" ? 0.3 : 0),
+    gain = (0.05 + 0.13 * need) * clamp(openness, 0.15, 1.5) * (1 + 0.15 * Math.min(4, b.seen));
+  b.giver = +clamp(b.giver + gain * (1 - b.giver), 0, 1).toFixed(3);
+  b.seen++;
+  b.lastSeen = Math.round(w.t);
+  let label = kind === "found" ? what : giftText(kind).toLowerCase();
+  if (before < 0.5 && b.giver >= 0.5) {
+    wordFor(w, c, "giver");
+    remember(w, c, "belief", `${label[0].toUpperCase() + label.slice(1)}, just when we needed it. I think someone is watching over the valley.`, 0.85);
+    emote(c, w, "idea", 3);
+    w.stats.believers = (w.stats.believers || 0) + 1;
+    if (!w.firstBeliever) {
+      w.firstBeliever = c.id;
+      logEvent(w, 3, `${c.name} has begun to wonder whether someone is watching over the valley, sending gifts.`, [c.id], c, "belief");
+    }
+  } else if (b.seen === 1) {
+    remember(w, c, "gift", b.giver > 0.3 ? `${label[0].toUpperCase() + label.slice(1)} came out of nowhere. The creek must have wanted it.` : `${label[0].toUpperCase() + label.slice(1)} came. Lucky.`, 0.55);
+  }
+  // Believers say thank you.
+  if (b.giver >= 0.6 && !c.asleep && canBeInterrupted(c) && !c.farewell && !c.leaving) {
+    if (!b.thanks) {
+      let others = w.creatures.map((o) => o.beliefs && o.beliefs.thanks).filter(Boolean),
+        counts = {};
+      for (let g of others) counts[g] = (counts[g] || 0) + 1;
+      let common = Object.entries(counts).sort((a, x) => x[1] - a[1])[0];
+      b.thanks = common && w.rng.chance(0.7) ? common[0] : w.rng.pick(GESTURES);
+    }
+    setPlan(w, c, { goal: "thanks", steps: [{ do: "gesture", g: b.thanks, task: "thanks" }], i: 0 });
+  }
+}
+
+function noticePattern(w) {
+  let g = w.gifts;
+  if (g.length < 4 || w.giftPatternNoticed) return;
+  let last = g.slice(-4),
+    regular = last.every((x, i) => i === 0 || (x.t - last[i - 1].t > 10 * 3600 && x.t - last[i - 1].t < 16 * 3600));
+  if (!regular) return;
+  let c = w.creatures.filter((c) => !c.visitor && c.stage !== "child" && beliefsOf(c).giver > 0.5).sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+  if (!c) return;
+  w.giftPatternNoticed = Math.round(w.t);
+  beliefsOf(c).pattern = true;
+  logEvent(w, 3, `${c.name} has noticed that the gifts come about twice a day, as steady as breathing.`, [c.id], c, "belief");
+  remember(w, c, "belief", "The gifts come twice a day. Whoever sends them keeps a rhythm.", 0.85);
+}
+
+function thanksCustom(w) {
+  if (w.customs && w.customs.thanks) return;
+  let bs = w.creatures.map((c) => c.beliefs && c.beliefs.giver >= 0.6 && c.beliefs.thanks).filter(Boolean);
+  if (bs.length < 4) return;
+  let counts = {};
+  for (let g of bs) counts[g] = (counts[g] || 0) + 1;
+  let [g, n] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  if (n < bs.length * 0.6) return;
+  w.customs = w.customs || {};
+  w.customs.thanks = { g, since: Math.round(w.t) };
+  logEvent(w, 3, `It has become the custom to ${GESTURE_FIRST[g].replace(/my /, "your ")} when a gift arrives, to say thank you.`, [], null, "custom");
+}
+
+// The found object: someone wanders over and picks it up.
+function claimFoundGifts(w) {
+  for (let it of w.items) {
+    if (it.kind !== "gift" || it.claimer) continue;
+    let best = null,
+      bd = 30;
+    for (let c of w.creatures) {
+      if (c.asleep || c.visitor || c.farewell || c.leaving || !canBeInterrupted(c)) continue;
+      let d = dist2d(c.x, c.z, it.x, it.z);
+      if (d < bd) (bd = d), (best = c);
+    }
+    if (!best) continue;
+    it.claimer = best.id;
+    setPlan(w, best, { goal: "treasure", steps: [{ do: "walk", x: it.x, z: it.z, near: 0.4, why: "treasure" }, { do: "pickgift", id: it.id }], i: 0 });
+  }
+}
+
+ACTIONS.pickgift = {
+  start(w, c, step) {
+    let it = w.byId[step.id];
+    if (!it) return null;
+    return makeAct(w, c, "look", 4, { lookX: it.x, lookZ: it.z, icon: "eye" });
+  },
+  end(w, c, a, step) {
+    let it = w.byId[step.id];
+    if (!it) return false;
+    c.treasure = it.thing;
+    removeThing(w, it, w.items);
+    logEvent(w, 3, `${c.name} found ${it.thing} in the grass. Nobody knows where it came from. ${c.name} is keeping it safe.`, [c.id], c, "gift");
+    remember(w, c, "treasure", `I found ${it.thing}. Nobody knows where it came from. I'm keeping it.`, 0.9, { x: c.x, z: c.z, pv: 0.4 });
+    noticeGift(w, c, "found", it.thing, 0.6);
+    feel(c, w, "joy", 0.7);
+    emote(c, w, "star", 3);
+    beSeen(w, c, { x: c.x, z: c.z, onSee: (o) => noticeGift(w, o, "found", it.thing, 0.4) });
+    return true;
+  },
+};
+
+// Belief passes between friends, and believers and doubters sometimes argue.
+function giftChat(w, a, b) {
+  let ba = beliefsOf(a),
+    bb = beliefsOf(b),
+    diff = ba.giver - bb.giver;
+  if (Math.abs(diff) < 0.05) return;
+  let r = relation(b, a),
+    trust = honestyRate(r) * (0.5 + clamp(r.warmth, 0, 1));
+  bb.giver = +clamp(bb.giver + diff * 0.06 * trust * (b.stage === "child" ? 2 : 1), 0, 1).toFixed(3);
+  if (ba.giver > 0.5 && bb.giver > 0.3) wordFor(w, b, "giver");
+  if (Math.abs(diff) > 0.55 && a.stage !== "child" && b.stage !== "child" && w.rng.chance(0.12) && w.t - (w.lastArgument || -1e9) > 86400) {
+    w.lastArgument = w.t;
+    let believer = diff > 0 ? a : b,
+      doubter = diff > 0 ? b : a;
+    relation(a, b).annoy = Math.min(1, relation(a, b).annoy + 0.06);
+    relation(b, a).annoy = Math.min(1, relation(b, a).annoy + 0.06);
+    logEvent(w, 2, `${believer.name} and ${doubter.name} argued about whether anyone really sends the gifts. ${doubter.name} says it's only luck.`, [a.id, b.id], a, "belief");
+  }
+}
+
+// Runs inside the life tick: missing gifts, and found objects waiting to be found.
+function giftTick(w) {
+  claimFoundGifts(w);
+  let g = w.gifts || [];
+  if (g.length >= 3 && !w.giftsStopped && w.t - w.giftLast > GIFT.stopDays * 86400) {
+    w.giftsStopped = Math.round(w.t);
+    let doubter = w.creatures.filter((c) => !c.visitor && c.stage !== "child").sort((a, b) => beliefsOf(a).giver - beliefsOf(b).giver)[0];
+    logEvent(
+      w,
+      3,
+      `The gifts have stopped coming. Some of the creekfolk wonder what they did wrong${doubter && beliefsOf(doubter).giver < 0.3 ? `; ${doubter.name} says there was never anyone at all` : ""}.`,
+      [],
+      null,
+      "belief",
+    );
+    for (let c of w.creatures) if (beliefsOf(c).giver > 0.5) remember(w, c, "belief", "The gifts have stopped. I wonder if we did something wrong.", 0.8);
+  }
+  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.1) c.beliefs.giver = +Math.max(0.1, c.beliefs.giver - 0.0006).toFixed(4);
 }
 
 // ==== src/sim/hooks.js ====
@@ -8479,6 +9428,7 @@ function newValley(seed, opts = {}) {
   w.lifeV = 1;
   w.season = seasonAt(w).name;
   schedule(w, LIFE.tick, "L");
+  storyFounding(w); // MINDS: everyone remembers waking up
   return w;
 }
 
@@ -8500,6 +9450,7 @@ function upgradeWorld(w) {
   w.cycle = { len: VALLEY_DAY, off: (w.cycle && w.cycle.off) ?? 0.27 };
   setDayCycle(w.cycle);
   for (let c of w.creatures) c.stage = stageOf(w, c);
+  if (!w.stories) storyFounding(w); // MINDS: a valley from before stories
   return w;
 }
 
@@ -8517,6 +9468,13 @@ var CreekSim = {
   seasonAt,
   dateText,
   LIFE,
+  MINDS,
+  giveGift,
+  giftReady,
+  giftWaitSeconds,
+  storyText,
+  giftNeed,
+  giverName,
 };
 
 module.exports = CreekSim;

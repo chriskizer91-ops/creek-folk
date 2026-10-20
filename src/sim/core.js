@@ -560,6 +560,11 @@
 
   }
   var CONCEPT_LABELS = {
+    giver: "the one who sends gifts", // MINDS
+    spring: "spring",
+    summer: "summer",
+    autumn: "autumn",
+    winter: "winter",
     help: "help",
     pod: "seed pod",
     berry: "berries",
@@ -2281,7 +2286,9 @@
       l.annoy = Math.max(0, l.annoy - 0.05),
       l.lastT = i.t,
       o.desire.meeting += 0.02 * o.temp.sociability,
-      shareNews(i, o, a);
+      shareNews(i, o, a),
+      tellStory(i, o, a), // MINDS: stories, retold (src/sim/minds.js)
+      giftChat(i, o, a); // MINDS: beliefs about the gift (src/sim/gift.js)
     }
     (t.lines || []).filter((o) => !o.ok).length >= 3 &&
     i.rng.chance(0.3) &&
@@ -2666,6 +2673,7 @@
         f,
         "wetland"
       );
+      storyFrogs(i, f); // MINDS
       let x = null,
         g = 1e9;
       for (let m of i.creatures) {
@@ -3298,6 +3306,7 @@
     e === "planting" && (t.desire.garden += 0.6),
     e === "clay" && (t.desire.workshop += 0.1),
     e === "dams" && (t.desire.dam = (t.desire.dam || 0) + 0.5),
+    storyDiscovery(i, t, e), // MINDS: first discoveries become stories
     !0);
   }
   function damIdeaReady(i) {
@@ -4837,6 +4846,7 @@
       n.name === "banks" && plantDamBanks(i, t);
     }
     o && t.kind === "home" && (o.sleepSpot = { x: t.x, z: t.z });
+    storyBuilt(i, t, n.label, r); // MINDS: the first of each thing built becomes a story
   }
   function durationText(i) {
     if (i < 90) return Math.round(i) + " seconds";
@@ -4968,13 +4978,17 @@
       }),
       emote(t, i, "idea", 3),
       wordFor(i, t, s.concept),
+      i._proposal = { yes: [], no: [] }, // MINDS: the others react to a proposal
       beSeen(i, t, {
         x: a.x,
         z: a.z,
         onSee: (d) => {
           d.desire[n] = (d.desire[n] || 0) + 0.05;
+          s.personal || proposalReaction(i, t, n, d, i._proposal);
         }
       }),
+      proposalLog(i, t, h.label, n, a, i._proposal),
+      i._proposal = null,
       !0);
 
   }
@@ -7045,8 +7059,8 @@
       case "W":
         worldTick(i), schedule(i, i.t + 60, "W");
         break;
-      case "R":
-        changeWeather(i);
+      case "R": // MINDS: a gift can change the weather, so stale weather events are skipped
+        (t.tok || 0) === (i.weather.tok || 0) && changeWeather(i);
         break;
       case "L": // LIFE: ages, births, passings, leaving (src/sim/life.js)
         lifeTick(i);
@@ -7078,7 +7092,8 @@
     e.rain = s === "rain" ? 1 : s === "storm" ? 1.6 : 0,
     e.since = i.t,
     e.until = i.t + r,
-    schedule(i, e.until, "R"),
+    schedule(i, e.until, "R", 0, e.tok || 0),
+    s === "storm" && n !== "storm" && storyStorm(i), // MINDS
     e.rain > 0 && !(n === "rain" || n === "storm") ? (
     i.stats.rains = (i.stats.rains || 0) + 1,
     logEvent(

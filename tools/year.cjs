@@ -25,7 +25,24 @@ if (process.argv[2] === "--child") {
   const weeks = [];
   const D = 86400;
   let lastErr = 0;
+  // A simulated player. GIFTS=regular (twice a day, choosing what's needed most),
+  // none, irregular (now and then), or stop:<day> (regular, then never again).
+  const policy = process.env.GIFTS || "none";
+  const stopDay = policy.startsWith("stop:") ? +policy.slice(5) : Infinity;
+  const kinds = ["rain", "seeds", "warm", "found"];
+  let giftRng = 7;
+  const rnd = () => ((giftRng = (giftRng * 16807) % 2147483647) / 2147483647);
+  const give = () => {
+    const k = kinds.slice().sort((a, b) => S.giftNeed(w, b) - S.giftNeed(w, a))[rnd() < 0.25 ? 3 : 0];
+    S.giveGift(w, k);
+  };
   for (let d = 1; d <= days; d++) {
+    if (policy !== "none" && d < stopDay)
+      for (const h of [9, 21]) {
+        S.runUntil(w, (d - 1) * D + h * 3600 + Math.floor(rnd() * 3600));
+        if (policy === "irregular" && rnd() > 0.2) continue;
+        give();
+      }
     S.runUntil(w, d * D);
     if (d % 7 === 0 || d === days) {
       const sc = S.stageCounts(w);
@@ -64,6 +81,20 @@ if (process.argv[2] === "--child") {
     maxGen: lineage.reduce((m, r) => Math.max(m, r.gen || 0), 0),
     lived: lineage.length,
     saveKB: Math.round(S.saveWorld(w).length / 1024),
+    minds: {
+      stories: Object.keys(w.stories || {}).length,
+      myths: w.stats.myths || 0,
+      places: (w.placeNames || []).map((p) => p.name),
+      lost: w.stats.skillsLost || 0,
+      relearned: w.hist.filter((e) => /has learned again/.test(e.text)).length,
+      visits: w.stats.visits || 0,
+      gifts: (w.gifts || []).length,
+      believers: w.creatures.filter((c) => c.beliefs && c.beliefs.giver > 0.5).length,
+      giver: S.giverName(w),
+      customs: Object.keys(w.customs || {}).filter((k) => (k === "passing" ? w.customs[k].custom : k === "seasons" ? w.customs[k].n >= 2 : true)),
+      firstMythDay: (w.hist.find((e) => e.kind === "myth") || { t: null }).t / D || null,
+      samples: w.hist.filter((e) => ["myth", "custom", "belief", "visit", "lost", "place", "forgotten"].includes(e.kind)).slice(-14).map((e) => `${(e.t / D).toFixed(1)} ${e.text}`),
+    },
     knowledge: Object.fromEntries(["mud", "planting", "clay", "glowcap", "tools", "dams"].map((k) => [k, w.creatures.filter((c) => c.know[k]).length])),
     structures: w.structures.map((s) => s.kind + ":" + s.level).sort().join(" "),
     errors: w.stats.errors || 0,
@@ -118,6 +149,10 @@ function finish() {
       `${r.seed}: ${months} | births ${r.weeks.at(-1).births}, passings ${r.weeks.at(-1).passings}, downstream ${r.weeks.at(-1).departed}, generations ${r.maxGen}, errors ${r.errors}, ` +
         `first passing day ${r.firstPassingDay}, full by day ${full ? full.day : "-"}, sim ${(r.ms / 1000).toFixed(0)} s (${Math.round((days * 86400) / (r.ms / 1000))}x), save ${r.saveKB} KB`,
     );
+  }
+  for (const r of results) {
+    const m = r.minds;
+    console.log(`  ${r.seed} minds: ${m.stories} stories, ${m.myths} myths (first day ${m.firstMythDay ? m.firstMythDay.toFixed(1) : "-"}), ${m.places.length} places, skills lost ${m.lost} / relearned ${m.relearned}, visits ${m.visits}, gifts ${m.gifts}, believers ${m.believers}, giver ${m.giver}, customs ${m.customs.join(",") || "-"}`);
   }
   checkTargets(results, days);
 }

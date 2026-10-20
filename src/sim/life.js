@@ -127,6 +127,8 @@ function lifeTick(w) {
   farewells(w);
   leaving(w);
   housing(w);
+  mindsTick(w); // stories, myths, visitors (minds.js)
+  giftTick(w); // gifts that stopped, found objects (gift.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -137,7 +139,7 @@ function lifeTick(w) {
 
 function stageCounts(w) {
   let s = { child: 0, adult: 0, elder: 0 };
-  for (let c of w.creatures) s[stageOf(w, c)]++;
+  for (let c of w.creatures) if (!c.visitor) s[stageOf(w, c)]++;
   return s;
 }
 
@@ -146,6 +148,7 @@ function noteSeason(w) {
   if (w.season !== s.name) {
     let first = !w.season;
     w.season = s.name;
+    if (!first) seasonGathering(w, s.name); // MINDS: the turning of the season, gathered
     if (!first)
       logEvent(w, 3, {
         spring: "Spring has come to the valley.",
@@ -185,7 +188,7 @@ function isRelated(a, b) {
 }
 
 function pairUp(w) {
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.partner && !c.leaving && !c.farewell);
+  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.partner && !c.leaving && !c.farewell && !c.visitor);
   if (adults.length < 2) return;
   let few = adults.length + w.creatures.filter((c) => c.partner).length < LIFE.floorAdults;
   for (let a of adults) {
@@ -230,16 +233,17 @@ function births(w) {
   let pairs = [];
   for (let c of w.creatures) {
     let p = c.partner && w.byId[c.partner];
-    if (p && c.id < p.id && stageOf(w, c) === "adult" && stageOf(w, p) === "adult" && !c.leaving && !p.leaving && !c.farewell && !p.farewell) pairs.push([c, p]);
+    if (p && c.id < p.id && !c.visitor && stageOf(w, c) === "adult" && stageOf(w, p) === "adult" && !c.leaving && !p.leaving && !c.farewell && !p.farewell) pairs.push([c, p]);
   }
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult").length,
+  let adults = w.creatures.filter((c) => !c.visitor && stageOf(w, c) === "adult").length,
     boost = adults < LIFE.floorAdults ? 2.5 : 1;
   // Births go on when the valley is full (young adults leave to make room), but pause
   // if it is badly overcrowded.
-  if (w.creatures.length >= valleyCapacity(w) + 6) return;
+  let pop = w.creatures.filter((c) => !c.visitor).length;
+  if (pop >= valleyCapacity(w) + 6) return;
   // Fewer births once the valley is nearly full: pairs have children about every
   // pairBirthDays until it is 85% full, then up to two and a half times less often.
-  let fill = w.creatures.length / valleyCapacity(w),
+  let fill = pop / valleyCapacity(w),
     crowd = 1 + 1.5 * clamp((fill - 0.85) / 0.15, 0, 1);
   let p = (LIFE.tick / (LIFE.pairBirthDays * crowd * DAY_S)) * boost;
   for (let [a, b] of pairs) if (w.rng.chance(p)) bear(w, a, b);
@@ -333,7 +337,7 @@ function canBeInterrupted(c) {
 
 function farewells(w) {
   for (let c of w.creatures) {
-    if (c.farewell || c.leaving) continue;
+    if (c.farewell || c.leaving || c.visitor) continue;
     if (w.t - (c.born ?? 0) < c.lifespan) continue;
     if (c.asleep || !canBeInterrupted(c)) continue; // wait until it wakes, or finishes what it's doing
     let spot = lovedPlace(w, c);
@@ -348,7 +352,7 @@ function farewells(w) {
     });
     // Family and close friends come to sit with them.
     for (let o of w.creatures) {
-      if (o === c || o.farewell || o.leaving || o.asleep || !canBeInterrupted(o)) continue;
+      if (o === c || o.farewell || o.leaving || o.visitor || o.asleep || !canBeInterrupted(o)) continue;
       let r = o.rel[c.id];
       let family = (c.children || []).includes(o.id) || (c.parents || []).includes(o.id) || c.partner === o.id;
       if (!family && !(r && r.warmth > 0.35)) continue;
@@ -404,11 +408,13 @@ function passOn(w, c) {
   let words = near.length
     ? `, with ${nameList(w, near.map((o) => o.id))} beside them`
     : "";
+  storyPassing(w, c, near); // MINDS
+  let offer = passingOfferings(w, c, near); // MINDS: customs at a passing
   let kids = (c.children || []).length;
   logEvent(
     w,
     3,
-    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.`,
+    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.${offer}`,
     [c.id, ...near.map((o) => o.id)],
     c.farewell || c,
     "passing",
@@ -473,7 +479,7 @@ function groveTree(w, c) {
 // ---------------------------------------------------------------------------
 function leaving(w) {
   let cap = valleyCapacity(w),
-    n = w.creatures.filter((c) => !c.leaving && !c.farewell).length,
+    n = w.creatures.filter((c) => !c.leaving && !c.farewell && !c.visitor).length,
     over = n - cap;
   // Over capacity, someone must go. Nearly full, a restless young one may choose to,
   // about once every few days.
@@ -481,10 +487,10 @@ function leaving(w) {
   if (w.creatures.some((c) => c.leaving)) return; // one at a time
   let young = w.creatures.filter((c) => {
     let a = ageDays(w, c);
-    return a >= LIFE.childDays && a < LIFE.childDays + 7 && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child");
+    return a >= LIFE.childDays && a < LIFE.childDays + 7 && !c.farewell && !c.visitor && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child");
   });
   if (!young.length && over > 2)
-    young = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child"));
+    young = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.visitor && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child"));
   if (!young.length) return;
   let c = w.rng.weighted(young, (y) => 0.2 + y.temp.curiosity + y.interests.exploring + (y.partner ? -0.3 : 0.3));
   if (!c) return;
@@ -552,7 +558,9 @@ function depart(w, c) {
   rec.partner = c.partner;
   rec.how = "downstream";
   w.downstream = w.downstream || [];
-  w.downstream.push({ id: c.id, name: c.name, t: Math.round(w.t), with: c.leaving && c.leaving.with });
+  w.downstream.push({ id: c.id, name: c.name, t: Math.round(w.t), with: c.leaving && c.leaving.with, snap: snapshotForVisits(w, c) });
+  newStory(w, "leaving", { who: c.name }, c, 1, witnessesNear(w, c, 8, near)); // MINDS
+  if (!(w.placeNames || []).some((p) => p.kind === "leaving")) namePlace(w, "the Leaving Bank", c, "leaving", 4, near[0] || null);
   if (w.downstream.length > 400) w.downstream.splice(0, w.downstream.length - 400);
   for (let o of w.creatures) {
     if (o === c) continue;
@@ -580,11 +588,13 @@ function depart(w, c) {
 // Taking a creekfolk out of the simulation (passed on or gone downstream).
 // ---------------------------------------------------------------------------
 function retire(w, c) {
+  checkLostSkills(w, c); // MINDS: was this the last one who knew how?
   // Hand on what they owned: to their partner, else a grown child, else an adult without a home.
   for (let s of w.structures) {
     if (s.owner !== c.id) continue;
     let heir = [c.partner, ...(c.children || [])].map((id) => w.byId[id]).find((h) => h && h !== c && !h.leaving && !h.farewell && !w.structures.some((x) => x.kind === s.kind && x.owner === h.id));
     if (!heir) heir = w.creatures.find((h) => h !== c && !h.leaving && !h.farewell && stageOf(w, h) !== "child" && !w.structures.some((x) => x.kind === s.kind && x.owner === h.id));
+    if (heir && heir.visitor) heir = null;
     if (heir) {
       s.owner = heir.id;
       if (s.kind === "home") {
@@ -611,7 +621,7 @@ function retire(w, c) {
 function housing(w) {
   for (let s of w.structures) {
     if (s.kind !== "home" || s.owner || s.level < 1 || s.building) continue;
-    let h = w.creatures.find((c) => stageOf(w, c) !== "child" && !c.leaving && !c.farewell && (c.home == null || !w.byId[c.home]));
+    let h = w.creatures.find((c) => stageOf(w, c) !== "child" && !c.visitor && !c.leaving && !c.farewell && (c.home == null || !w.byId[c.home]));
     if (!h) continue;
     s.owner = h.id;
     h.home = s.id;
@@ -687,6 +697,7 @@ function groveStage(w, tree) {
 // for help). Put it back on its way; after two valley days of distraction, it goes anyway.
 function keepOnTheirWay(w) {
   for (let c of w.creatures.slice()) {
+    if (c.visitor) continue;
     let goal = c.farewell ? "farewell" : c.leaving ? "leave" : null;
     if (!goal || (c.plan && c.plan.goal === goal)) continue;
     let since = (c.farewell || c.leaving).t;
@@ -714,7 +725,7 @@ function keepOnTheirWay(w) {
 // somewhere downstream and stays. They bring their own way of speaking.
 // ---------------------------------------------------------------------------
 function travelers(w) {
-  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell);
+  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell && !c.visitor);
   let free = adults.filter((c) => !c.partner);
   let canPair = free.some((a) => free.some((b) => a !== b && !isRelated(a, b)));
   let paired = adults.some((c) => c.partner && w.byId[c.partner]);
@@ -753,6 +764,7 @@ function arriveTraveler(w) {
   w.stats.travelers = (w.stats.travelers || 0) + 1;
   logEvent(w, 3, `A traveler came up the creek from somewhere downstream: ${c.name}. They looked around for a long while, and stayed.`, [c.id], at, "arrival");
   remember(w, c, "life", "I followed the creek upstream and found this valley. I think I will stay.", 0.9, { x: at.x, z: at.z, pv: 0.3 });
+  newStory(w, "arrival", { who: c.name }, at, 2, witnessesNear(w, at, 14, [c])); // MINDS
   c.asleep = false;
   c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 8, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
   schedule(w, w.t + 8, "A", c.id, c.tok);
