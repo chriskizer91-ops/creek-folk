@@ -281,5 +281,5 @@ function giftTick(w) {
     );
     for (let c of w.creatures) if (beliefsOf(c).giver > 0.5) remember(w, c, "belief", "The gifts have stopped. I wonder if we did something wrong.", 0.8);
   }
-  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.1) c.beliefs.giver = +Math.max(0.1, c.beliefs.giver - 0.0006).toFixed(4);
+  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.1) c.beliefs.giver = +Math.max(0.1, c.beliefs.giver - 0.00015 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
 }
