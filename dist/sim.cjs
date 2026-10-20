@@ -8924,7 +8924,7 @@ function creekFeed(w) {
   }
   let ponds = 0;
   for (let id in cr.dams) if (cr.dams[id].pl > cr.nodes[cr.dams[id].i].bed + 0.15) ponds++;
-  let health = clamp(0.55 * Math.min(1, d / 0.75) + 0.25 * (healed / Math.max(1, L)) + 0.2 * Math.min(1, ponds / 6), 0, 1);
+  let health = clamp(0.55 * Math.min(1, d / 0.6) + 0.25 * (healed / Math.max(1, L)) + 0.2 * Math.min(1, ponds / 6), 0, 1);
   cr.health = +health.toFixed(3);
   return Math.round(20 + 16 * health);
 }
@@ -9031,7 +9031,9 @@ var LIFE = {
   pairWarmth: 0.4,        // mutual warmth needed to pair up
   settleDays: 2,          // after this many days grown, a good friend is enough
   friendWarmth: 0.15,     // ...meaning this much mutual warmth
-  floorAdults: 4,         // below this many adults, births speed up (the valley never empties)
+  floorAdults: 4,
+  roomFill: 0.75,         // below this share of capacity, births come a little faster ...
+  roomBoost: 1.35,        // ... by this much (Phase 3A: capacity now grows as the creek heals)         // below this many adults, births speed up (the valley never empties)
   maxCapacity: 36,        // upper limit, set from the catch-up benchmark
   restlessDays: 3,        // when the valley is nearly full, someone chooses to leave about this often
   founders: 5,
@@ -9265,7 +9267,9 @@ function births(w) {
   // pairBirthDays until it is 85% full, then up to two and a half times less often.
   let fill = pop / valleyCapacity(w),
     crowd = 1 + 1.5 * clamp((fill - 0.85) / 0.15, 0, 1);
-  let p = (LIFE.tick / (LIFE.pairBirthDays * crowd * DAY_S)) * boost;
+  // CREEK: room to grow (the land can feed more than live here): a few more children
+  let room = fill < LIFE.roomFill ? LIFE.roomBoost : 1;
+  let p = (LIFE.tick / (LIFE.pairBirthDays * crowd * DAY_S)) * boost * room;
   for (let [a, b] of pairs) if (w.rng.chance(p)) bear(w, a, b);
 }
 

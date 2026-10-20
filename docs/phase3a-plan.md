@@ -202,3 +202,26 @@ A real year is about 45 valley years and, at about 8 storms per wet season, abou
   build shows on the author's phone.
 - Year arc: headless runs (`tools/year.cjs`) with the creek metrics per month.
 - Determinism with floods and dams.
+
+## What changed while building it
+- **Loose gravel can move on.** With a strict "never scour" rule, small floods dropped
+  gravel that big floods could never move, so an undammed creek filled itself up. Now a
+  flood can carry on gravel an earlier flood left loose, but never digs below what has
+  settled for good (`bedMin`; deposits settle quickly in still water or among plants).
+  The creek still only gets better.
+- **Ponds are reservoirs with their own basins.** Water reaching any node of a dam's
+  basin goes into the pond; the pond spills when full and shrinks through the dry season
+  (evaporation 1.1 mm and seepage 0.4 mm per valley day, chosen so a first pool survives).
+- **The hills' slow water** (`CREEK.hillFill`, `hillTau`): the wet season's rain is given
+  back to the floor over about 70 valley days. A cut-down creek drains it at once (and a
+  bare gravel bed lets it sink away), so the valley still dries; a healed floor holds it,
+  which is what lets it stay marshy through the dry season.
+- **Climbing from the bottom.** A silted dam that would leak if raised asks the dam below
+  it to be raised first; the lowest dam of a series gets a stone apron below it. Without
+  this the bottom dam capped the whole series.
+- **Raised ponds stay shallow over the floor** (`raiseAbove` 0.1 m): higher, the floor
+  became a lake instead of a marsh.
+- **Gardens** go at the edge of the valley floor near home; the old rule (within 7 m of
+  the creek) found no sites in the new valley.
+- **Determinism rule:** every change to the creek ends with `creekRefresh()`, and the
+  world keeps the `build` key in a fixed place, so a reload is exact.

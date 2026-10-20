@@ -1058,7 +1058,7 @@ function creekFeed(w) {
   }
   let ponds = 0;
   for (let id in cr.dams) if (cr.dams[id].pl > cr.nodes[cr.dams[id].i].bed + 0.15) ponds++;
-  let health = clamp(0.55 * Math.min(1, d / 0.75) + 0.25 * (healed / Math.max(1, L)) + 0.2 * Math.min(1, ponds / 6), 0, 1);
+  let health = clamp(0.55 * Math.min(1, d / 0.6) + 0.25 * (healed / Math.max(1, L)) + 0.2 * Math.min(1, ponds / 6), 0, 1);
   cr.health = +health.toFixed(3);
   return Math.round(20 + 16 * health);
 }
