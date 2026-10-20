@@ -7718,8 +7718,10 @@ var LIFE = {
   elderDays: 24,          // age when a creekfolk becomes a wise elder
   lifespanDays: 30,       // average length of a life
   lifespanSpread: 0.8,    // standard deviation, days (clamped to +/- 1.6)
-  pairBirthDays: 6.2,     // a pair with room has a child about this often (tuned by tools/year.cjs)
-  pairWarmth: 0.5,        // mutual warmth needed to pair up
+  pairBirthDays: 3.0,     // a pair with room has a child about this often (tuned by tools/year.cjs)
+  pairWarmth: 0.4,        // mutual warmth needed to pair up
+  settleDays: 2,          // after this many days grown, a good friend is enough
+  friendWarmth: 0.15,     // ...meaning this much mutual warmth
   floorAdults: 4,         // below this many adults, births speed up (the valley never empties)
   maxCapacity: 36,        // upper limit, set from the catch-up benchmark
   founders: 5,
@@ -7814,7 +7816,9 @@ function lifeTick(w) {
   schedule(w, t + LIFE.tick, "L");
   noteSeason(w);
   for (let c of w.creatures.slice()) growUp(w, c);
+  keepOnTheirWay(w);
   pairUp(w);
+  travelers(w);
   births(w);
   farewells(w);
   leaving(w);
@@ -7880,11 +7884,12 @@ function pairUp(w) {
   let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.partner && !c.leaving && !c.farewell);
   if (adults.length < 2) return;
   let few = adults.length + w.creatures.filter((c) => c.partner).length < LIFE.floorAdults;
-  let need = few ? 0.25 : LIFE.pairWarmth;
   for (let a of adults) {
     if (a.partner) continue;
+    // Falling for someone takes real warmth; after a couple of days grown, a good friend will do.
+    let settled = ageDays(w, a) > LIFE.childDays + LIFE.settleDays;
     let best = null,
-      bestW = need;
+      bestW = few ? 0.15 : settled ? LIFE.friendWarmth : LIFE.pairWarmth;
     for (let b of adults) {
       if (b === a || b.partner || isRelated(a, b)) continue;
       let ra = a.rel[b.id],
@@ -7925,12 +7930,13 @@ function births(w) {
   }
   let adults = w.creatures.filter((c) => stageOf(w, c) === "adult").length,
     boost = adults < LIFE.floorAdults ? 2.5 : 1;
-  // The floor: with too few adults even unpaired adults may raise a child together.
-  if (!pairs.length && adults >= 2 && adults < LIFE.floorAdults) {
-    let a = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell);
-    if (a.length >= 2) pairs.push([a[0], a[1]]);
-  }
-  let p = (LIFE.tick / (LIFE.pairBirthDays * DAY_S)) * boost;
+  // Births go on when the valley is full (young adults leave to make room), but pause
+  // if it is badly overcrowded.
+  if (w.creatures.length >= valleyCapacity(w) + 6) return;
+  // Fewer births as the valley fills: pairs have children about every pairBirthDays when
+  // the valley is nearly empty, and about 2.5 times less often when it is full.
+  let fill = clamp(w.creatures.length / valleyCapacity(w), 0, 1.2);
+  let p = (LIFE.tick / (LIFE.pairBirthDays * (1 + 1.5 * fill * fill) * DAY_S)) * boost;
   for (let [a, b] of pairs) if (w.rng.chance(p)) bear(w, a, b);
 }
 
@@ -8169,6 +8175,8 @@ function leaving(w) {
     let a = ageDays(w, c);
     return a >= LIFE.childDays && a < LIFE.childDays + 7 && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child");
   });
+  if (!young.length && over > 2)
+    young = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.farewell && !c.asleep && canBeInterrupted(c) && !(c.children || []).some((k) => w.byId[k] && stageOf(w, w.byId[k]) === "child"));
   if (!young.length) return;
   let c = w.rng.weighted(young, (y) => 0.2 + y.temp.curiosity + y.interests.exploring + (y.partner ? -0.3 : 0.3));
   if (!c) return;
@@ -8365,6 +8373,81 @@ function stageSpeed(c) {
 function groveStage(w, tree) {
   let d = (w.t - (tree.planted || 0)) / DAY_S;
   return d < 6 ? 1 : d < 40 ? 2 : 3;
+}
+
+// A creekfolk on its last walk, or leaving, can be distracted (hunger, a friend asking
+// for help). Put it back on its way; after two valley days of distraction, it goes anyway.
+function keepOnTheirWay(w) {
+  for (let c of w.creatures.slice()) {
+    let goal = c.farewell ? "farewell" : c.leaving ? "leave" : null;
+    if (!goal || (c.plan && c.plan.goal === goal)) continue;
+    let since = (c.farewell || c.leaving).t;
+    if (w.t - since > VALLEY_DAY * 2) {
+      if (c.farewell) passOn(w, c);
+      else depart(w, c);
+      continue;
+    }
+    if (c.asleep || !canBeInterrupted(c)) continue;
+    let spot = c.farewell || c.leaving;
+    setPlan(w, c, {
+      goal,
+      steps: [
+        { do: "walk", x: spot.x, z: spot.z, near: 0.3, why: goal },
+        { do: goal === "farewell" ? "farewell" : "depart" },
+      ],
+      i: 0,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Travelers: the valley never empties. When there are too few grown-ups, or none
+// who could pair (everyone left is family), a traveler comes up the creek from
+// somewhere downstream and stays. They bring their own way of speaking.
+// ---------------------------------------------------------------------------
+function travelers(w) {
+  let adults = w.creatures.filter((c) => stageOf(w, c) === "adult" && !c.leaving && !c.farewell);
+  let free = adults.filter((c) => !c.partner);
+  let canPair = free.some((a) => free.some((b) => a !== b && !isRelated(a, b)));
+  let paired = adults.some((c) => c.partner && w.byId[c.partner]);
+  // Someone grown and unpaired, with nobody they could pair with (everyone left is family),
+  // while the valley still has plenty of room.
+  let stuck = free.length >= 1 && !canPair && w.creatures.length < valleyCapacity(w) * 0.6;
+  let lonely = adults.length < LIFE.floorAdults || (!paired && !canPair) || stuck;
+  if (!lonely) {
+    w.lonelySince = null;
+    return;
+  }
+  w.lonelySince = w.lonelySince ?? w.t;
+  let wait = adults.length < 2 ? DAY_S * 0.25 : stuck && paired ? DAY_S * 1.5 : DAY_S;
+  if (w.t - w.lonelySince < wait || w.t - (w.lastTraveler || -1e9) < DAY_S * 1.5) return;
+  arriveTraveler(w);
+  w.lastTraveler = w.t;
+  w.lonelySince = null;
+}
+
+function arriveTraveler(w) {
+  let T = w.terrain,
+    side = w.rng.chance(0.5) ? 0 : 1,
+    at = null;
+  for (let z = 60; z > 40 && !at; z -= 0.5) {
+    let p = T.bankPoint(side, z, 1.5);
+    if (T.walkable(p.x, p.z)) at = p;
+  }
+  at = at || { x: w.meadow.x, z: w.meadow.z };
+  let nm = newName(w, []);
+  let c = register(w, makeFolk(w, nm.name, at.x, at.z));
+  initLife(w, c, Math.round(w.t - w.rng.range(7.5, 10) * DAY_S), { gen: 0 });
+  c.traveler = true;
+  c.home = null;
+  w.creatures.push(c);
+  w.stats.travelers = (w.stats.travelers || 0) + 1;
+  logEvent(w, 3, `A traveler came up the creek from somewhere downstream: ${c.name}. They looked around for a long while, and stayed.`, [c.id], at, "arrival");
+  remember(w, c, "life", "I followed the creek upstream and found this valley. I think I will stay.", 0.9, { x: at.x, z: at.z, pv: 0.3 });
+  c.asleep = false;
+  c.act = { type: "look", step: "look", t0: w.t, t1: w.t + 8, x: c.x, z: c.z, tok: c.tok, rc0: rainTotal(w, w.t), lookX: w.meadow.x, lookZ: w.meadow.z };
+  schedule(w, w.t + 8, "A", c.id, c.tok);
+  return c;
 }
 
 // ==== src/sim/hooks.js ====

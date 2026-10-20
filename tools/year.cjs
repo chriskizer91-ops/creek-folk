@@ -37,6 +37,7 @@ if (process.argv[2] === "--child") {
         births: w.stats.births || 0,
         passings: w.stats.passings || 0,
         departed: w.stats.departed || 0,
+        travelers: w.stats.travelers || 0,
         levels: w.stats.levels || 0,
         errors: w.stats.errors || 0,
         season: S.seasonAt(w).name,
