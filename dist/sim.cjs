@@ -316,12 +316,17 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
         this.lz0 = -40;
         this.lutN = Math.round((VL + 80) * 8);
         this.lut = new Float64Array((this.lutN + 1) * 4); // creekX, creekHW, axisX, floorHW
+        this.rimLut = new Float64Array(this.lutN + 1); // 1 / the rim's half-width, and dz^4, by z
+        this.dzLut = new Float64Array(this.lutN + 1);
         for (let n = 0; n <= this.lutN; n++) {
-          let z = this.lz0 + n / 8;
+          let z = this.lz0 + n / 8,
+            dz = (z - VL / 2) / (VL / 2 - 1);
           this.lut[n * 4] = this.creekXRaw(z);
           this.lut[n * 4 + 1] = 1.2;
           this.lut[n * 4 + 2] = this.axisXRaw(z);
           this.lut[n * 4 + 3] = this.floorHWRaw(z);
+          this.rimLut[n] = 1 / (35.2 + 1.3 * Math.sin(z * 0.07 + this.rimSeed) + 0.8 * Math.sin(z * 0.19 + this.rimSeed * 2));
+          this.dzLut[n] = dz * dz * dz * dz;
         }
         // the parts of the height field that never change
         let N = (VW + 1) * (VL + 1);
@@ -394,11 +399,11 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       // 0 in the middle of the valley, 1 at the rim (a rounded rectangle, so the old
       // thresholds keep their meaning: walkable below 0.9, hills rising above 0.82)
       valleyR(t, e) {
-        let rim = 35.2 + 1.3 * Math.sin(e * 0.07 + this.rimSeed) + 0.8 * Math.sin(e * 0.19 + this.rimSeed * 2),
-          dx = (t - this.axisX(e)) / rim,
-          dz = (e - VL / 2) / (VL / 2 - 1),
-          r = Math.pow(dx * dx * dx * dx + dz * dz * dz * dz, 0.25);
-        return r * (1 + 0.025 * Math.sin(e * 0.13 + t * 0.05 + this.rimSeed));
+        let n = (e - this.lz0) * 8;
+        n = n <= 0 ? 0 : n >= this.lutN ? this.lutN : Math.round(n);
+        let dx = (t - this.lut[n * 4 + 2]) * this.rimLut[n],
+          d2 = dx * dx;
+        return Math.sqrt(Math.sqrt(d2 * d2 + this.dzLut[n]));
       }
       // the fixed parts of the ground at (x, z): floor micro-relief, terraces, hills
       baseAt(x, z) {
@@ -4956,7 +4961,7 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
     t.kind === "dam")
     {
       for (let f of r) discover(i, i.byId[f], "dams", null);
-      creekSyncDams(i), creekCellWater(i, 0, seasonAt(i)), // CREEK: the dam goes into the creek model
+      creekSyncDams(i), // CREEK: the dam goes into the creek model
       n.name === "banks" && plantDamBanks(i, t);
     }
     o && t.kind === "home" && (o.sleepSpot = { x: t.x, z: t.z });
@@ -6912,7 +6917,8 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
       joints: {},
       tick: 0,
       onLog: null,
-      version: 2
+      version: 2,
+      build: BUILD_VERSION
     };
   }
   function createWorld(i, t = 6) {
@@ -7906,7 +7912,7 @@ var CREEK = {
   dropMax: 0.42, // the most a dam holds above the water just below it
   pipeHold: 0.18, // what a dam with too big a drop still holds above the water below
   raiseStep: 0.12, // a silted-up dam is raised this much at a time
-  raiseAbove: 0.3, // ... up to this far above the valley floor
+  raiseAbove: 0.1, // ... up to this far above the valley floor
   siltGap: 0.12, // a pond counts as silted up when the bed behind is this close to the crest
   // hydrology (rates per valley day unless named otherwise)
   springQ: 0.0004, // m3/s the spring gives in the dry season (more in the wet season)
@@ -8258,7 +8264,18 @@ function creekSyncDams(w) {
     }
   }
   for (let id in cr.dams) if (!seen[id]) delete cr.dams[id];
+  creekRefresh(w);
+}
+
+// Everything derived from the creek's saved state, brought up to date. Called after
+// every change to the creek (and after a load), so a reloaded valley is exactly the
+// valley that was saved.
+function creekRefresh(w) {
+  let cr = w.creek;
   creekDamIndex(cr);
+  creekPondLevels(cr);
+  creekPondNow(cr);
+  creekCellWater(w, 0, seasonAt(w));
 }
 
 // Would this dam still hold its pond if it were built `add` higher? (What someone who
@@ -8318,11 +8335,8 @@ function creekRaiseDam(w, s, who) {
     s,
     "wetland"
   );
-  creekDamIndex(cr);
   if (apron) creekDerive(w);
-  creekPondLevels(cr);
-  creekPondNow(cr);
-  creekCellWater(w, 0, seasonAt(w));
+  creekRefresh(w);
   return true;
 }
 function creekDamIndex(cr) {
@@ -8515,17 +8529,17 @@ function creekFloodWork(w, T, seed) {
   if (spills.length) creekSpread(w, spills, seed);
   cr.lastRise = +rose.toFixed(4);
   creekDerive(w);
-  creekPondLevels(cr);
-  creekPondNow(cr);
-  creekCellWater(w, 0, seasonAt(w));
+  creekRefresh(w);
   creekNotes(w);
 }
 
 // ---- Stage 0: water spreading over the valley floor ------------------------
 
-// Route each spill across the floor (steepest way down-valley on the floor's own
-// surface) and wear the cells it crosses a little deeper. Paths that carry water
-// get deeper and carry more next time, so side channels form and persist.
+// Route each spill across the floor and wear the cells it crosses a little deeper.
+// Water leaving the creek first works its way out across the floor, then follows
+// the floor's own fall down the valley, choosing the lowest way (the floor's hollows,
+// and the channels earlier floods wore). Paths that carry water get deeper and carry
+// more next time, so side channels form, branch and persist.
 function creekSpread(w, spills, seed) {
   let cr = w.creek,
     T = w.terrain,
@@ -8535,65 +8549,61 @@ function creekSpread(w, spills, seed) {
     W1 = VW + 1,
     flow = creekSpread.flow || (creekSpread.flow = new Float32Array(VERTS)),
     s = Math.floor(seed * 1e6) | 0,
-    jit = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 0.012;
+    jit = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 0.015;
   flow.fill(0);
-  let floorOK = (vx, vz) => {
-    let x = vx,
-      z = vz;
-    if (vx < 1 || vz < 1 || vx >= VW || vz >= VL) return false;
-    return Math.abs(x - T.axisX(z)) < T.floorHW(z) + 0.5 && T.valleyR(x, z) < 0.9;
-  };
+  let onFloor = (vx, vz) => vx >= 1 && vz >= 1 && vx < VW && vz < VL && Math.abs(vx - T.axisX(vz)) < T.floorHW(vz) + 0.5 && T.valleyR(vx, vz) < 0.9,
+    inCreek = (vx, vz) => {
+      let n = ns[creekNodeIndex(vz)];
+      return Math.abs(vx - T.creekX(vz)) < 0.5 * creekTopWidth(n);
+    };
   for (let i of spills) {
     let n = ns[i],
       cx = T.creekX(n.z),
       half = 0.5 * creekTopWidth(n);
-    for (let side = -1; side <= 1; side += 2) {
-      let vx = Math.round(cx + side * (half + 0.8)),
-        vz = Math.round(n.z),
-        q = n._ob * 0.5;
-      for (let step = 0; step < 70 && floorOK(vx, vz); step++) {
-        flow[vz * W1 + vx] += q;
-        let here = H[vz * W1 + vx],
-          best = null,
-          bh = here + 0.02;
-        for (let [dx, dz] of [[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
-          let nx = vx + dx,
-            nz = vz + dz;
-          if (!floorOK(nx, nz)) continue;
-          let zc = nz,
-            ccx = T.creekX(zc),
-            hh = H[nz * W1 + nx] + jit() - 0.004 * dz;
-          if (Math.abs(nx - ccx) < 0.5 * creekTopWidth(ns[creekNodeIndex(zc)]) + 0.4) {
-            // back into the creek: this thread rejoins it
-            best = null;
-            bh = -1e9;
+    for (let side = -1; side <= 1; side += 2)
+      for (let lane = 0; lane < 3; lane++) {
+        let vx = Math.round(cx + side * (half + 0.8 + lane * 1.6)),
+          vz = Math.round(n.z + (lane - 1) * 0.7),
+          q = n._ob / 6;
+        for (let step = 0; step < 90 && onFloor(vx, vz); step++) {
+          flow[vz * W1 + vx] += q;
+          let here = H[vz * W1 + vx] - chan[vz * W1 + vx] * 0,
+            best = null,
+            bh = here + 0.03,
+            out = step < 4; // first, away from the creek
+          for (let [dx, dz] of out ? [[side, 0], [side, 1], [0, 1]] : [[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
+            let nx = vx + dx,
+              nz = vz + dz;
+            if (!onFloor(nx, nz)) continue;
+            if (inCreek(nx, nz)) {
+              if (out) continue;
+              best = null; // back into the creek: this thread rejoins it
+              bh = -1e9;
+              break;
+            }
+            let hh = H[nz * W1 + nx] + jit() - 0.006 * dz;
+            if (hh < bh) (bh = hh), (best = [nx, nz]);
+          }
+          if (!best) {
+            // a hollow: the water ponds here and deepens it a little
+            if (bh > -1e8) chan[vz * W1 + vx] = Math.min(0.3, chan[vz * W1 + vx] + 0.008);
             break;
           }
-          if (hh < bh) (bh = hh), (best = [nx, nz]);
+          [vx, vz] = best;
         }
-        if (!best) {
-          if (bh > -1e8) {
-            // a hollow: the water ponds here and deepens it a little
-            chan[vz * W1 + vx] = Math.min(0.32, chan[vz * W1 + vx] + 0.006);
-          }
-          break;
-        }
-        [vx, vz] = best;
       }
-    }
   }
   let carved = 0;
   for (let v = 0; v < VERTS; v++) {
     let f = flow[v];
     if (f <= 0) continue;
-    let add = Math.min(0.025, 0.05 * Math.pow(f, 0.6));
-    if (add < 0.0005) continue;
+    let add = Math.min(0.03, 0.004 + 0.06 * Math.sqrt(f));
     let was = chan[v];
     chan[v] = Math.min(0.3, was + add);
     // the edges of a thread are worn a little too
     for (let o of [-1, 1, -W1, W1]) {
       let u = v + o;
-      if (u >= 0 && u < VERTS && chan[u] < chan[v] * 0.5) chan[u] = Math.min(0.3, chan[u] + add * 0.3);
+      if (u >= 0 && u < VERTS && chan[u] < chan[v] * 0.4) chan[u] = Math.min(0.3, chan[u] + add * 0.25);
     }
     carved += chan[v] - was;
   }
@@ -8803,8 +8813,8 @@ function creekSeason(w, s) {
     cr.minWet = 1;
     cr.minGreen = 1;
   }
-  // plants grow through spring and summer
-  if (s.idx === 1 || s.idx === 2) creekPlants(w);
+  // plants grow through spring and summer (benches change the creek's shape)
+  if (s.idx === 1 || s.idx === 2) creekPlants(w), creekDerive(w), creekRefresh(w);
   // a new valley year: stages from the year's change
   if (s.idx === 0) {
     for (let n of cr.nodes) {
@@ -8966,9 +8976,7 @@ function creekLoad(w, o) {
   w.creek = cr;
   creekDamIndex(cr);
   creekDerive(w);
-  creekPondLevels(cr);
-  creekPondNow(cr);
-  creekCellWater(w, 0, seasonAt(w));
+  creekRefresh(w);
   return cr;
 }
 

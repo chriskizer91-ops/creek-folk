@@ -76,7 +76,7 @@ for (let day = 0; day < days; day += 0.25) {
   for (const s of w.structures) {
     if (s.kind !== "dam") continue;
     if ((s.cond ?? 1) < 0.7 && !s.raise) s.cond = 1;
-    if (s.raise) S.creekRaiseDam(w, s, { name: "Lab", id: 0 });
+    if (s.raise) S.creekRaiseDam(w, s, { name: "Lab", id: 0, know: { downstream: 1 } });
   }
   const cr = w.creek;
   if (cr.driest.length > lastDriest) {

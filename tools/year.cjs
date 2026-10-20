@@ -82,6 +82,10 @@ if (process.argv[2] === "--child") {
         creek: creekRow(),
       });
     }
+    if (process.env.SAVE_AT && process.env.SAVE_AT.split(",").map(Number).includes(d)) {
+      fs.mkdirSync(path.join(__dirname, "../runs/worlds"), { recursive: true });
+      fs.writeFileSync(path.join(__dirname, `../runs/worlds/${seed}-day${d}.json`), S.saveWorld(w));
+    }
     if (d % +(process.env.EVERY || 30) === 0) process.send({ type: "progress", seed, day: d, pop: w.creatures.length, ms: Date.now() - t0, creek: creekRow() });
     if ((w.stats.errors || 0) > lastErr) lastErr = w.stats.errors;
   }

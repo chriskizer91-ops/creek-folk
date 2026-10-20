@@ -313,12 +313,17 @@
         this.lz0 = -40;
         this.lutN = Math.round((VL + 80) * 8);
         this.lut = new Float64Array((this.lutN + 1) * 4); // creekX, creekHW, axisX, floorHW
+        this.rimLut = new Float64Array(this.lutN + 1); // 1 / the rim's half-width, and dz^4, by z
+        this.dzLut = new Float64Array(this.lutN + 1);
         for (let n = 0; n <= this.lutN; n++) {
-          let z = this.lz0 + n / 8;
+          let z = this.lz0 + n / 8,
+            dz = (z - VL / 2) / (VL / 2 - 1);
           this.lut[n * 4] = this.creekXRaw(z);
           this.lut[n * 4 + 1] = 1.2;
           this.lut[n * 4 + 2] = this.axisXRaw(z);
           this.lut[n * 4 + 3] = this.floorHWRaw(z);
+          this.rimLut[n] = 1 / (35.2 + 1.3 * Math.sin(z * 0.07 + this.rimSeed) + 0.8 * Math.sin(z * 0.19 + this.rimSeed * 2));
+          this.dzLut[n] = dz * dz * dz * dz;
         }
         // the parts of the height field that never change
         let N = (VW + 1) * (VL + 1);
@@ -391,11 +396,11 @@
       // 0 in the middle of the valley, 1 at the rim (a rounded rectangle, so the old
       // thresholds keep their meaning: walkable below 0.9, hills rising above 0.82)
       valleyR(t, e) {
-        let rim = 35.2 + 1.3 * Math.sin(e * 0.07 + this.rimSeed) + 0.8 * Math.sin(e * 0.19 + this.rimSeed * 2),
-          dx = (t - this.axisX(e)) / rim,
-          dz = (e - VL / 2) / (VL / 2 - 1),
-          r = Math.pow(dx * dx * dx * dx + dz * dz * dz * dz, 0.25);
-        return r * (1 + 0.025 * Math.sin(e * 0.13 + t * 0.05 + this.rimSeed));
+        let n = (e - this.lz0) * 8;
+        n = n <= 0 ? 0 : n >= this.lutN ? this.lutN : Math.round(n);
+        let dx = (t - this.lut[n * 4 + 2]) * this.rimLut[n],
+          d2 = dx * dx;
+        return Math.sqrt(Math.sqrt(d2 * d2 + this.dzLut[n]));
       }
       // the fixed parts of the ground at (x, z): floor micro-relief, terraces, hills
       baseAt(x, z) {
@@ -4953,7 +4958,7 @@
     t.kind === "dam")
     {
       for (let f of r) discover(i, i.byId[f], "dams", null);
-      creekSyncDams(i), creekCellWater(i, 0, seasonAt(i)), // CREEK: the dam goes into the creek model
+      creekSyncDams(i), // CREEK: the dam goes into the creek model
       n.name === "banks" && plantDamBanks(i, t);
     }
     o && t.kind === "home" && (o.sleepSpot = { x: t.x, z: t.z });
@@ -6909,7 +6914,8 @@
       joints: {},
       tick: 0,
       onLog: null,
-      version: 2
+      version: 2,
+      build: BUILD_VERSION
     };
   }
   function createWorld(i, t = 6) {

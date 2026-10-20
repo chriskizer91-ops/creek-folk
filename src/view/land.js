@@ -381,6 +381,7 @@ GroundView = class {
       col = [],
       idx = [],
       tmp = new wt(),
+      tmp2 = new wt(),
       P = this.PAD,
       prev = -1,
       cols = 0,
@@ -416,9 +417,15 @@ GroundView = class {
           y = lip ? up + 0.03 : Math.min(T.section(z, Math.abs(o)), up + 0.01);
         pos.push(x, y, z);
         if (lip) ground(x, z);
-        else if (Math.abs(o) <= hw + 0.01) tmp.copy(wetBed ? LAND.bedWet : LAND.bedDry);
-        else if (k === L - 3) ground(x + Math.sign(o) * 0.6, z).lerp(LAND.cut, 0.35);
-        else tmp.copy(hash01(i * 7 + k) < 0.5 ? LAND.cut : LAND.cut2);
+        else {
+          // a trench that has filled up looks like the floor around it, not a bed
+          let deep = clamp((Ht - 0.25) / 0.35, 0, 1),
+            c2 = tmp2.copy(ground(x + Math.sign(o || 1) * (edge - Math.abs(o) + 0.8), z));
+          if (Math.abs(o) <= hw + 0.01) tmp.copy(wetBed ? LAND.bedWet : LAND.bedDry);
+          else if (k === L - 3) tmp.copy(c2).lerp(LAND.cut, 0.35);
+          else tmp.copy(hash01(i * 7 + k) < 0.5 ? LAND.cut : LAND.cut2);
+          tmp.lerp(c2.multiplyScalar(0.92), 1 - deep);
+        }
         col.push(tmp.r, tmp.g, tmp.b);
       }
       if (prev >= 0)
@@ -612,14 +619,15 @@ WaterView = class {
       n = 0,
       hsh = T.version;
     for (let k = 0; k < CELLS; k++) {
-      let on = c.d[k] > 0.15 && W[k] > c.h[k] - 0.06;
+      // standing water at least a couple of centimetres deep somewhere in the cell (a wet
+      // surface alone is marsh); the ground cuts the water's edge to its own shape
+      let on = c.d[k] > 0.15 && W[k] > c.h[k] - 0.05;
       if (on) {
-        // the water reaches above the lowest corner of the cell
         let x = k % VW,
           z = (k / VW) | 0,
           H = T.h,
           lo = Math.min(H[z * (VW + 1) + x], H[z * (VW + 1) + x + 1], H[(z + 1) * (VW + 1) + x], H[(z + 1) * (VW + 1) + x + 1]);
-        on = W[k] > lo + 0.004;
+        on = W[k] > lo + 0.025;
       }
       draw[k] = on ? 1 : 0;
       if (on) (n++), (hsh = (hsh * 31 + k * 7 + Math.round(W[k] * 50)) % 1000003);
