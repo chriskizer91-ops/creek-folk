@@ -307,9 +307,14 @@ function creekSlopes(cr) {
     raw = ns.map((n, i) => (i < N - 1 ? (eb[i] - eb[i + 1]) / CREEK.ds : (eb[i - 1] - eb[i]) / CREEK.ds));
   for (let i = 0; i < N; i++) {
     let s = 0,
-      c = 0;
-    for (let j = Math.max(0, i - 2); j <= Math.min(N - 1, i + 2); j++) (s += raw[j]), c++;
-    let wide = Math.max(s / c, 3e-4);
+      c = 0,
+      a = Math.max(0, i - 2),
+      b = Math.min(N - 1, i + 2);
+    for (let j = a; j <= b; j++) (s += raw[j]), c++;
+    // the reach's slope, but never much less than the valley floor's own (smooth)
+    // slope: a bumpy bed must not make its own humps look flat, or they keep growing
+    let fpS = (ns[a].fp - ns[b].fp) / ((b - a) * CREEK.ds),
+      wide = Math.max(s / c, 0.5 * fpS, 3e-4);
     ns[i]._S = clamp(raw[i], 0.3 * wide, 2.5 * wide);
     ns[i]._Sw = wide;
   }
@@ -587,21 +592,33 @@ function creekFloodWork(w, T, seed) {
     full = creekPondLevels(cr),
     spills = [];
   creekSlopes(cr);
-  // A. flow, depth and the force on the bed
+  // A. flow, depth and the force on the bed. Water can't stand lower than the water just
+  // below it, so a pool behind a hump of gravel (or a dam's pond) is slack water: pools
+  // fill and humps don't, which keeps the bed from growing into a sawtooth.
+  let hyd = new Array(N),
+    surf = new Float64Array(N);
+  for (let i = N - 1; i >= 0; i--) {
+    let n = ns[i],
+      Q = k * Math.pow(n.A, 0.8),
+      S = Math.max(n._S, 1e-4),
+      h = creekHydraulics(n, Q, S);
+    hyd[i] = h;
+    surf[i] = Math.max(n.bed + h.y, full[i], i < N - 1 && !(cr._damAt && cr._damAt[i]) ? surf[i + 1] : -1e9);
+  }
   for (let i = 0; i < N; i++) {
     let n = ns[i],
       Q = k * Math.pow(n.A, 0.8),
       S = Math.max(n._S, 1e-4),
-      h = creekHydraulics(n, Q, S),
+      h = hyd[i],
       y = h.y,
       tau = h.tau,
       ws = n.bed + y;
-    if (full[i] > n.bed + y) {
-      // the pond is deeper than the flow needs: slack water
-      let yp = full[i] - n.bed,
+    if (surf[i] > n.bed + y + 1e-4) {
+      // the water is deeper than the flow needs: slack water
+      let yp = surf[i] - n.bed,
         Se = S * Math.pow(y / yp, 10 / 3);
       tau = P.rho * P.g * Math.min(h.R * (yp / y), yp) * Se;
-      ws = full[i];
+      ws = surf[i];
     }
     n._tau = tau;
     n._ws = ws;
