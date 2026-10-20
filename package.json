@@ -1,13 +1,14 @@
 {
   "name": "creekfolk",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Creekfolk: a valley of small AI minds that lives for a real year",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node tools/build.mjs",
+    "build:dev": "node tools/build.mjs --dev",
+    "test": "node tools/build.mjs --dev && node tools/determinism.cjs 5",
+    "test:year": "node tools/year.cjs --seeds 2 --days 30",
+    "test:browser": "node tools/browser-test.mjs 3"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
   "devDependencies": {
     "@babel/generator": "^7.25.6",
@@ -15,5 +16,6 @@
     "@babel/traverse": "^7.25.6",
     "esbuild": "^0.23.1",
     "playwright": "^1.56.0"
-  }
+  },
+  "private": true
 }

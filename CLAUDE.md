@@ -3,7 +3,15 @@
 An ambient valley simulation: small creekfolk live beside a creek, learn from
 each other, invent words, build, and slowly turn the creek into wetland. The
 player mostly watches. This version is being turned into a valley that lives for
-a full real year (see `docs/BRIEF.md`).
+a full real year (see `docs/BRIEF.md`, and `docs/PHASE3-CHANGES.md`, which wins over
+the brief where they disagree).
+
+**Taking over, or splitting the work? Read `docs/HANDOFF.md` first.** It says where
+things stand, the author's rules, and how to split work between instances.
+
+Repository layout: `src/` (source), `tools/` (build, tests, benchmarks), `docs/`
+(brief, phase reports, plans), `ref/` (code from the author's other games to port),
+`releases/` (the playable build of each finished phase; never rebuild these).
 
 ## Build and run
 
