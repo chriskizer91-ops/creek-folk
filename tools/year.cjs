@@ -83,7 +83,7 @@ if (process.argv[2] === "--child") {
     saveKB: Math.round(S.saveWorld(w).length / 1024),
     minds: {
       stories: Object.keys(w.stories || {}).length,
-      myths: w.stats.myths || 0,
+      myths: w.stats.mythStories || 0,
       places: (w.placeNames || []).map((p) => p.name),
       lost: w.stats.skillsLost || 0,
       relearned: w.hist.filter((e) => /has learned again/.test(e.text)).length,

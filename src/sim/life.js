@@ -148,7 +148,7 @@ function noteSeason(w) {
   if (w.season !== s.name) {
     let first = !w.season;
     w.season = s.name;
-    if (!first) seasonGathering(w, s.name); // MINDS: the turning of the season, gathered
+    if (!first) w.gatherPending = { season: s.name, t: Math.round(w.t) }; // MINDS: they gather when the season turns
     if (!first)
       logEvent(w, 3, {
         spring: "Spring has come to the valley.",

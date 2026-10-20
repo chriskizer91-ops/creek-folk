@@ -91,7 +91,8 @@ function sameVersion(a, b) {
 function storyText(w, s, v) {
   let where = v.where ? ` at ${v.where}` : "",
     big = v.big || 0,
-    why = v.why === "giver" ? `, sent by ${giverName(w)}` : v.why === "creek" ? ", because the creek wished it" : v.why === "elders" ? ", as the elders had said it would" : "";
+    sent = ["founding", "storm", "gift", "frogs"].includes(s.kind),
+    why = v.why === "giver" ? (sent ? `, sent by ${giverName(w)}` : `, with the blessing of ${giverName(w)}`) : v.why === "creek" ? ", because the creek wished it" : v.why === "elders" ? ", as the elders had said it would" : "";
   switch (s.kind) {
     case "founding":
       return `The first ${numberWord(v.n)} woke in the meadow beside the creek${why}${big ? ", on the brightest morning there ever was" : ""}.`;
@@ -150,6 +151,7 @@ function retell(w, teller, listener, s, v) {
   let op = rng.pick(ops);
   if (op === "n") {
     if (s.kind === "founding") nv.n = rng.pick([3, 7, 12, 1]);
+    else if (s.kind === "passing") nv.n = nv.n + rng.int(2, 6); // an old one grows older in the telling
     else nv.n = Math.max(nv.n + 1, Math.round(nv.n * rng.range(1.3, 2)));
   } else if (op === "who") {
     // Deeds drift to famous names, or to the teller's own family.
@@ -306,10 +308,12 @@ function checkMyths(w) {
     if (top.n < hs.length * 0.5) continue;
     let key = JSON.stringify([top.v.who, top.v.n, top.v.where, top.v.why, top.v.big || 0]);
     if (sameTold(w, s, top.v, s.truth) || w.myths[k] === key) continue;
+    if (!(k in w.myths)) w.stats.mythStories = (w.stats.mythStories || 0) + 1;
     w.myths[k] = key;
     w.stats.myths = (w.stats.myths || 0) + 1;
     // Every myth shows in the village's stories; the important ones, at most one a day, in the history.
-    if (s.weight < 2 || w.t - (w.lastMythLog || -1e9) < 86400) continue;
+    if (s.weight < 2 || s.mythLogged || w.t - (w.lastMythLog || -1e9) < 3 * 86400) continue;
+    s.mythLogged = true;
     w.lastMythLog = w.t;
     logEvent(w, 3, `Most of the valley now believes that ${lower(storyText(w, s, top.v))} It wasn't quite like that: ${lower(storyText(w, s, s.truth))}`, [], s.x != null ? s : null, "myth");
   }
@@ -389,11 +393,11 @@ function storyBuilt(w, s, label, builders) {
 }
 
 function storyPassing(w, c, near) {
-  let notable = c.founder || c.traveler || (c.children || []).length >= 3 || !(w.stats.passings > 0);
+  let notable = c.founder || c.traveler || (c.children || []).length >= 4 || !(w.stats.passings > 0);
   let at = c.farewell || c;
   let place = placeNear(w, at.x, at.z, 3);
   if (!place && notable) place = namePlace(w, `${c.name}'s Rest`, at, "rest", 2.5, near[0] || null);
-  newStory(w, "passing", { who: c.name, n: Math.round(ageDays(w, c)), where: place ? place.name : null }, at, notable ? 2 : 1, witnessesNear(w, at, 8, near));
+  newStory(w, "passing", { who: c.name, n: Math.round(ageDays(w, c)), where: place ? place.name : null }, at, c.founder || c.traveler || !(w.stats.passings > 0) ? 2 : 1, witnessesNear(w, at, 8, near));
 }
 
 function storyStorm(w) {
@@ -460,7 +464,7 @@ function seasonGathering(w, season) {
   let meet = findStructure(w, "meeting", (s) => s.level > 0),
     at = meet ? { x: meet.x, z: meet.z } : w.meadow;
   let goers = w.creatures.filter((c) => !c.asleep && !c.farewell && !c.leaving && canBeInterrupted(c) && dist2d(c.x, c.z, at.x, at.z) < 30);
-  if (goers.length < 3) return;
+  if (goers.length < 3) return false;
   w.customs = w.customs || {};
   let g = (w.customs.seasons = w.customs.seasons || { n: 0 });
   g.n++;
@@ -484,6 +488,7 @@ function seasonGathering(w, season) {
     "custom",
   );
   for (let c of goers) wordFor(w, c, season);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,7 +553,7 @@ function snapshotForVisits(w, c) {
 
 function visits(w) {
   if (w.creatures.some((c) => c.visitor)) return;
-  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > MINDS.visitEveryDays * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
+  let cands = (w.downstream || []).filter((d) => d.snap && w.t - d.t > 2 * 86400 && w.t - (d.visited || 0) > 12 * 86400 && d.snap.born + d.snap.lifespan - w.t > 2 * 86400);
   if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
@@ -624,6 +629,9 @@ ACTIONS.goback = {
 
 // Runs inside the life tick.
 function mindsTick(w) {
+  // Gather for the turning of the season once it's daytime (within a real day).
+  let g = w.gatherPending;
+  if (g && (w.t - g.t > 86400 || (!isNight(w.t) && seasonGathering(w, g.season)))) w.gatherPending = null;
   endVisits(w);
   visits(w);
   if (!w.lastMyth || w.t - w.lastMyth >= MINDS.mythEvery) {

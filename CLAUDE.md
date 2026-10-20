@@ -26,6 +26,8 @@ name from earlier files.
 | `src/sim/core.js` | The original simulation: minds, needs, language, rituals, building, water, weather. Recovered from the first Creekfolk's single-file build (prettified, top-level names restored with `tools/rename.cjs` + `tools/rename-map.json`). Local variables are still short (`i` is usually the world, `t` the creature). |
 | `src/sim/calendar.js` | Real calendar: `valleyDate`, `seasonAt`, `dateText`. |
 | `src/sim/life.js` | Ages, stages, pairing, births, passing, the memorial grove, leaving downstream, housing. Tunables in `LIFE`. |
+| `src/sim/minds.js` | Stories and myths, named places, customs (passing offerings, season gatherings), lost skills, proposals, visitors from downstream. Tunables in `MINDS`. |
+| `src/sim/gift.js` | The player's 12-hour gift (rain, seeds, warm day, found object) and beliefs about the giver. |
 | `src/sim/hooks.js` | `newValley()` (five founders) and `upgradeWorld()` (runs on every load; migrates old saves). |
 | `src/sim/api.js` | `CreekSim`, the surface used by Node tools. |
 | `src/sim/worker.js` | Web Worker message handler (catch-up). Only in the worker build. |
@@ -35,6 +37,7 @@ name from earlier files.
 | `src/view/catchup.js` | Long catch-ups in a Web Worker (`CatchupWorker`). |
 | `src/view/dev.js` | Hidden developer menu and `devNow()`. |
 | `src/view/patches.js` | View patches for lives (body size, elder fur, panel lines, activity text) and the background-tab timer. |
+| `src/view/minds-view.js` | Gift button and sheet; Stories/Places/Customs in the village sheet; a creekfolk's Stories tab. |
 | `src/view/boot.js` | Starts the app. |
 | `src/page-head.html`, `src/page-tail.html` | The page around the scripts (CSS, fonts, HUD markup). |
 
@@ -90,6 +93,40 @@ Edits made inside the recovered files (`core.js`, `view.js`) are marked with a
   up the creek and stays (`travelers()`).
 - Generation time is about two weeks (children are born to parents aged 7–24
   days), so a year holds roughly 25–30 generations.
+
+## Minds (Phase 2)
+
+- **Stories** (`world.stories`): notable events (founding, first discoveries, first of
+  each thing built, notable passings, storms, travelers, leavings, news from visitors,
+  gifts, frogs, lost skills). Each has the `truth` and a weight. Each creekfolk holds
+  up to `MINDS.loreMax` versions in `creature.lore` (`v`, confidence, whether it was
+  there, who told it). Witnesses know the truth.
+- **Telling** (`tellStory`, after each chat): elders tell most, children listen
+  most. Each retelling may change one detail (`retell`): numbers grow, a deed moves
+  to a famous name or the teller's ancestor, a place name attaches, a cause is added
+  (the creek, the elders, the giver), the telling grows grander. Someone who was
+  there may correct the teller (`correct`); after six tries they give up.
+- **Myths** (`checkMyths`, every 6 h): when most of the living tell a version that
+  reads differently from the truth. Shown in the village's Stories tab; important
+  ones logged at most once a day. Stories nobody holds are logged as forgotten.
+- **Places** (`world.placeNames`): named after what happened there (the first pool,
+  a notable passing, the first crossing, the meeting stone, the Leaving Bank). Each
+  gets a word in their speech (concept `place:<id>`), which spreads like any word.
+- **Customs**: offerings at a passing become a custom once one kind dominates;
+  gatherings when the season turns (held in daytime); thanks for gifts.
+- **Lost skills**: when the last creekfolk who knew a skill is gone it's logged;
+  relearning it later is logged too.
+- **Proposals**: shared projects get reactions (liked it / wasn't sure).
+- **Visitors**: those who went downstream (snapshot in `world.downstream`) come back
+  about every `MINDS.visitEveryDays` days for two valley days, with news. Visitors
+  (`creature.visitor`) don't count for population, pairing or capacity.
+- **The gift**: `giveGift(world, kind)` once per 12 h of valley time. Effects help
+  growth, never survival. Rain changes the weather (weather events carry a token so
+  stale ones are skipped). Observers update `creature.beliefs.giver` by how much the
+  gift was needed and their temperament; believers coin a word for the giver
+  (concept `giver`), thank it with a gesture (can become a custom), notice a regular
+  rhythm, argue with doubters, and lose faith slowly if gifts stop for 3 days.
+- The year runner can play the gift: `GIFTS=regular|irregular|none|stop:<day>`.
 
 ## Saves
 
