@@ -418,6 +418,7 @@ function creekSyncDams(w) {
 function creekRefresh(w) {
   let cr = w.creek;
   creekDamIndex(cr);
+  creekSlopes(cr); // a dam's crest counts as bed for the slope
   creekPondLevels(cr);
   creekPondNow(cr);
   creekCellWater(w, 0, seasonAt(w));
