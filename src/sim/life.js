@@ -226,7 +226,21 @@ function valleyCapacity(w) {
     if (s.kind === "store" && s.level > 0) food += Math.min(3, s.level);
     if (s.kind === "garden" && s.level > 0) food += Math.min(4, s.level);
   }
-  return clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity);
+  let shelter = clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity);
+  // CREEK: and no more than the land can feed, which grows as the creek heals
+  return Math.min(shelter, creekFeed(w));
+}
+
+// The two ceilings, for the village panel and the dev menu.
+function capacityParts(w) {
+  let homes = 0,
+    food = 0;
+  for (let s of w.structures) {
+    if (s.kind === "home" && s.level > 0) homes++;
+    if (s.kind === "store" && s.level > 0) food += Math.min(3, s.level);
+    if (s.kind === "garden" && s.level > 0) food += Math.min(4, s.level);
+  }
+  return { shelter: clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity), feed: creekFeed(w) };
 }
 
 function births(w) {
@@ -328,7 +342,7 @@ function lovedPlace(w, c) {
   if (best) return best;
   let h = homeOf(w, c);
   if (h && h.level > 0) return { x: h.x + 0.8, z: h.z + 0.6 };
-  return w.terrain.bankPoint(w.terrain.side(c.x, c.z), clamp(c.z, 8, 56), 1.4);
+  return w.terrain.bankPoint(w.terrain.side(c.x, c.z), clamp(c.z, 8, VL - 8), 1.4);
 }
 
 function canBeInterrupted(c) {
@@ -432,15 +446,16 @@ function grovePlace(w) {
     bestS = -1e9,
     rng = new Rng(w.seed + ":grove");
   for (let k = 0; k < 200; k++) {
-    let x = rng.range(6, 58),
-      z = rng.range(6, 58);
+    let x = rng.range(6, VW - 6),
+      z = rng.range(6, VL - 6);
     if (!T.walkable(x, z)) continue;
     let r = T.valleyR(x, z),
       e = T.edgeDist(x, z);
-    if (r < 0.45 || r > 0.78 || e < 5) continue;
+    // CREEK: on the terrace slopes, off the valley floor (which turns to wetland)
+    if (r < 0.45 || r > 0.8 || e < 5 || T.floorWeight(x, z) > 0.05) continue;
     let crowd = 0;
     for (let s of w.structures) crowd += Math.max(0, 9 - Math.hypot(s.x - x, s.z - z));
-    let s = -crowd - Math.abs(r - 0.62) * 20 - Math.hypot(x - w.meadow.x, z - w.meadow.z) * 0.05 + rng.range(0, 2);
+    let s = -crowd - Math.abs(r - 0.68) * 20 - Math.hypot(x - w.meadow.x, z - w.meadow.z) * 0.12 + rng.range(0, 2);
     if (s > bestS) (bestS = s), (best = { x: +x.toFixed(2), z: +z.toFixed(2), n: 0 });
   }
   w.grove = best || { x: w.meadow.x + 8, z: w.meadow.z + 8, n: 0 };
@@ -542,7 +557,7 @@ function leaving(w) {
 function downstreamEdge(w, c) {
   let T = w.terrain,
     side = T.side(c.x, c.z);
-  for (let z = 61; z > 40; z -= 0.5) {
+  for (let z = VL - 3; z > VL - 24; z -= 0.5) {
     let p = T.bankPoint(side, z, 1.2);
     if (T.walkable(p.x, p.z)) return { x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
   }
@@ -750,7 +765,7 @@ function arriveTraveler(w) {
   let T = w.terrain,
     side = w.rng.chance(0.5) ? 0 : 1,
     at = null;
-  for (let z = 60; z > 40 && !at; z -= 0.5) {
+  for (let z = VL - 4; z > VL - 24 && !at; z -= 0.5) {
     let p = T.bankPoint(side, z, 1.5);
     if (T.walkable(p.x, p.z)) at = p;
   }

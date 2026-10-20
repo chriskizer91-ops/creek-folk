@@ -29,6 +29,7 @@ var SKILL_TEXT = {
   glowcap: "to find the mushrooms that glow",
   tools: "to make and use tools",
   dams: "to dam the creek",
+  downstream: "to build dams from the bottom of the creek up",
 };
 
 // ---------------------------------------------------------------------------
@@ -557,7 +558,7 @@ function visits(w) {
   if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
-  let edge = downstreamEdge(w, { x: w.terrain.creekX(58) + 2, z: 58 });
+  let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
   let c = makeFolk(w, d.name, edge.x, edge.z);
   let sn = d.snap;
   Object.assign(c, { id: d.id, look: sn.look, temp: sn.temp, interests: sn.interests, accent: sn.accent, lex: sn.lex, sig: sn.sig, rel: sn.rel, strength: sn.strength, adultStrength: sn.strength });

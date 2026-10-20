@@ -1,4 +1,5 @@
 "use strict";
+var BUILD_VERSION = "3a", DEV_BUILD = false;
 // ==== src/sim/core.js ====
   function hashSeed(i) {
     let t = String(i),
@@ -282,57 +283,104 @@
         return s / a;
       }
     },
+    // CREEK: the valley for Phase 3A. Longer (VL) and wider (VW), shaped like a real
+    // valley in cross-section: the creek's trench, the valley floor (bottomland) it
+    // has cut down below, a rise to the terraces where the village lives, and hills at
+    // the rim. The creek's centre line is fixed by the seed; its trench, its floor and
+    // the side channels worn across the floor come from the creek model
+    // (src/sim/creek.js), and setCreek() rebuilds the heights when they change.
     Terrain = class {
       constructor(t) {
         let e = new Rng(t + ":terrain");
-        this.noise = new ValueNoise(e),
-        this.cx = 34 + e.range(-1.5, 1.5),
-        this.a1 = e.range(3.5, 5.5),
-        this.f1 = e.range(0.11, 0.15),
-        this.p1 = e.range(0, 6.28),
-        this.a2 = e.range(1, 2),
-        this.f2 = e.range(0.25, 0.33),
-        this.p2 = e.range(0, 6.28),
-        this.wp = e.range(0, 6.28),
-        this.radiusNoiseSeed = e.range(0, 100),
-        this.lut = new Float64Array(1025 * 2);
-        for (let n = 0; n <= 1024; n++) {
-          let s = -32 + n / 8;
-          this.lut[n * 2] = this.creekXRaw(s),
-          this.lut[n * 2 + 1] = this.creekHWRaw(s);
+        this.noise = new ValueNoise(e);
+        this.ax0 = VW / 2 + e.range(-1.5, 1.5);
+        this.aa = e.range(1.5, 3.2);
+        this.af = (2 * Math.PI) / e.range(110, 170);
+        this.ap = e.range(0, 6.28);
+        this.fw0 = e.range(11.5, 13.2);
+        this.fwa = e.range(1.0, 2.0);
+        this.fwf = (2 * Math.PI) / e.range(60, 100);
+        this.fwp = e.range(0, 6.28);
+        this.cOff = e.range(2.5, 4); // the creek runs a little to one side, leaving more room on side 0
+        this.ma1 = e.range(1.6, 2.5);
+        this.mf1 = (2 * Math.PI) / e.range(36, 52);
+        this.mp1 = e.range(0, 6.28);
+        this.ma2 = e.range(0.35, 0.7);
+        this.mf2 = (2 * Math.PI) / e.range(13, 19);
+        this.mp2 = e.range(0, 6.28);
+        this.zKnee = e.range(44, 58); // the steeper upper stretch ends here
+        this.rimSeed = e.range(0, 100);
+        this.radiusNoiseSeed = this.rimSeed;
+        this.version = 0;
+        // look-up tables along z, from 40 m above the valley to 40 m below it
+        this.lz0 = -40;
+        this.lutN = Math.round((VL + 80) * 8);
+        this.lut = new Float64Array((this.lutN + 1) * 4); // creekX, creekHW, axisX, floorHW
+        for (let n = 0; n <= this.lutN; n++) {
+          let z = this.lz0 + n / 8;
+          this.lut[n * 4] = this.creekXRaw(z);
+          this.lut[n * 4 + 1] = 1.2;
+          this.lut[n * 4 + 2] = this.axisXRaw(z);
+          this.lut[n * 4 + 3] = this.floorHWRaw(z);
         }
-        this.N = 65, this.h = new Float32Array(this.N * this.N);
-        for (let n = 0; n < this.N; n++)
-        for (let s = 0; s < this.N; s++)
-        this.h[n * this.N + s] = this.heightRaw(s, n);
+        // the parts of the height field that never change
+        let N = (VW + 1) * (VL + 1);
+        this.N = VW + 1;
+        this.h = new Float32Array(N);
+        this.micro = new Float32Array(N);
+        this.terr = new Float32Array(N);
+        this.wF = new Float32Array(N);
+        this.hill = new Float32Array(N);
+        for (let z = 0; z <= VL; z++)
+        for (let x = 0; x <= VW; x++) {
+          let k = z * (VW + 1) + x,
+            b = this.baseAt(x, z);
+          this.micro[k] = b.micro;
+          this.terr[k] = b.terr;
+          this.wF[k] = b.wF;
+          this.hill[k] = b.hill;
+        }
+        this.initNodes = creekBuildNodes(this, t);
+        this.setCreek({ nodes: this.initNodes, chan: null });
       }
-      creekXRaw(t) {
-        return (
-          this.cx +
-          this.a1 * Math.sin(t * this.f1 + this.p1) +
-          this.a2 * Math.sin(t * this.f2 + this.p2));
-
+      axisXRaw(z) {
+        return this.ax0 + this.aa * Math.sin(z * this.af + this.ap);
       }
-      creekHWRaw(t) {
-        return (
-          1.35 + 0.35 * Math.sin(t * 0.19 + this.wp) + 0.15 * Math.sin(t * 0.53));
-
+      floorHWRaw(z) {
+        return this.fw0 + this.fwa * Math.sin(z * this.fwf + this.fwp);
       }
-      lookup(t, e) {
-        let n = (t + 32) * 8;
-        if (n <= 0 || n >= 1024)
-        return e ? this.creekHWRaw(t) : this.creekXRaw(t);
+      creekXRaw(z) {
+        // fairly straight: gentle bends about a line a little off the valley's axis
+        return this.axisXRaw(z) + this.cOff + this.ma1 * Math.sin(z * this.mf1 + this.mp1) + this.ma2 * Math.sin(z * this.mf2 + this.mp2);
+      }
+      lookup(z, k) {
+        let n = (z - this.lz0) * 8;
+        if (n <= 0) n = 0;
+        if (n >= this.lutN) n = this.lutN - 1e-6;
         let s = Math.floor(n),
           r = n - s,
-          o = this.lut[s * 2 + e],
-          a = this.lut[s * 2 + 2 + e];
+          o = this.lut[s * 4 + k],
+          a = this.lut[s * 4 + 4 + k];
         return o + (a - o) * r;
       }
-      creekX(t) {
-        return this.lookup(t, 0);
+      creekX(z) {
+        return this.lookup(z, 0);
       }
-      creekHW(t) {
-        return this.lookup(t, 1);
+      creekHW(z) {
+        return this.lookup(z, 1);
+      }
+      axisX(z) {
+        return this.lookup(z, 2);
+      }
+      floorHW(z) {
+        return this.lookup(z, 3);
+      }
+      // the old valley floor's level along the valley: steeper above the knee
+      fp0(z) {
+        let k = this.zKnee,
+          below = 0.9 + 0.0072 * (VL - Math.max(z, k)),
+          above = 0.0135 * Math.max(0, k - z);
+        return below + above;
       }
       edgeDist(t, e) {
         return Math.abs(t - this.creekX(e)) - this.creekHW(e);
@@ -343,43 +391,116 @@
       isWater(t, e) {
         return this.edgeDist(t, e) < 0;
       }
+      // 0 in the middle of the valley, 1 at the rim (a rounded rectangle, so the old
+      // thresholds keep their meaning: walkable below 0.9, hills rising above 0.82)
       valleyR(t, e) {
-        let n = t - 32,
-          s = e - 32,
-          r = Math.atan2(s, n),
-          o =
-          28.5 +
-          2.2 * Math.sin(r * 3 + this.radiusNoiseSeed) +
-          1.4 * Math.sin(r * 5 + this.radiusNoiseSeed * 2);
-        return Math.hypot(n, s) / o;
+        let rim = 35.2 + 1.3 * Math.sin(e * 0.07 + this.rimSeed) + 0.8 * Math.sin(e * 0.19 + this.rimSeed * 2),
+          dx = (t - this.axisX(e)) / rim,
+          dz = (e - VL / 2) / (VL / 2 - 1),
+          r = Math.pow(dx * dx * dx * dx + dz * dz * dz * dz, 0.25);
+        return r * (1 + 0.025 * Math.sin(e * 0.13 + t * 0.05 + this.rimSeed));
       }
-      heightRaw(t, e) {
+      // the fixed parts of the ground at (x, z): floor micro-relief, terraces, hills
+      baseAt(x, z) {
         let n = this.noise,
-          s = this.edgeDist(t, e),
-          r =
-          1.05 +
-          0.75 * (n.fbm(t * 0.07, e * 0.07) - 0.5) +
-          0.25 * (n.get(t * 0.3 + 40, e * 0.3) - 0.5),
-          o;
-        if (s < 0) {
-          let l = Math.min(1, -s / this.creekHW(e));
-          o = WATER_LEVEL - 0.28 - 0.3 * l;
-        } else o = WATER_LEVEL + 0.06 + (r - WATER_LEVEL) * smoothstep(0, 3.2, s);
-        let a = this.valleyR(t, e);
-        if (a > 0.82) {
-          let l = smoothstep(0.5, 4.5, s);
-          o +=
-          Math.pow(a - 0.82, 1.6) *
-          34 * (
-          0.65 + 0.7 * n.fbm(t * 0.11 + 9, e * 0.11 + 3)) *
-          l;
+          d = Math.abs(x - this.axisX(z)),
+          fhw = this.floorHW(z),
+          micro = 0.12 * (2 * n.fbm(x * 0.21 + 7, z * 0.21 + 3, 2) - 1) + 0.04 * (2 * n.get(x * 0.7, z * 0.7 + 11) - 1),
+          rise = 0.75 * smoothstep(fhw - 1, fhw + 4, d) + 0.014 * Math.max(0, d - fhw - 4) + 0.5 * (n.fbm(x * 0.06 + 20, z * 0.06, 3) - 0.5) * smoothstep(fhw, fhw + 6, d),
+          terr = this.fp0(z) + rise,
+          wF = 1 - smoothstep(fhw - 1.5, fhw + 2.5, d),
+          hill = 0,
+          r = this.valleyR(x, z);
+        if (r > 0.82) {
+          let lg = smoothstep(1.5, 8, Math.abs(x - this.creekXRaw(z)) - 2);
+          hill = Math.pow(r - 0.82, 1.6) * 34 * (0.65 + 0.7 * n.fbm(x * 0.11 + 9, z * 0.11 + 3)) * lg;
         }
-        return o;
+        return { micro, terr, wF, hill };
+      }
+      // the creek's cross-section at z, offset o from its centre line
+      section(z, o) {
+        let ns = this._nodes,
+          f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
+          i = Math.floor(f),
+          t = f - i,
+          a = this.secOf(ns[i], o),
+          b = this.secOf(ns[i + 1], o);
+        return a + (b - a) * t;
+      }
+      secOf(n, o) {
+        let hw = n.wb / 2;
+        if (o <= hw) return n.bed;
+        let Ht = Math.max(n.fp - n.bed, 0.05),
+          m = n.m,
+          Hz = n.bw > 0.05 ? clamp(n.bz - n.bed, 0, Ht - 0.03) : 0;
+        if (Hz > 0) {
+          let x1 = hw + m * Hz;
+          if (o <= x1) return n.bed + (o - hw) / m;
+          let x3 = x1 + n.bw / 2;
+          if (o <= x3) return n.bed + Hz;
+          let edge = x3 + m * (Ht - Hz);
+          return o <= edge ? n.bed + Hz + (o - x3) / m : n.fp + (o - edge) * 1.5;
+        }
+        let edge = hw + m * Ht;
+        return o <= edge ? n.bed + (o - hw) / m : n.fp + (o - edge) * 1.5;
+      }
+      fpAt(z) {
+        let ns = this._nodes,
+          f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
+          i = Math.floor(f),
+          t = f - i;
+        return ns[i].fp + (ns[i + 1].fp - ns[i].fp) * t;
+      }
+      // the creek has changed: rebuild the heights, the creek's half-width and the version
+      setCreek(cr) {
+        this._nodes = cr.nodes;
+        let chan = cr.chan;
+        for (let n = 0; n <= this.lutN; n++) {
+          let z = this.lz0 + n / 8,
+            f = clamp((z - CREEK.z0) / CREEK.ds, 0, cr.nodes.length - 1.0001),
+            i = Math.floor(f),
+            t = f - i,
+            hwA = this.hwOf(cr.nodes[i]),
+            hwB = this.hwOf(cr.nodes[i + 1]);
+          this.lut[n * 4 + 1] = hwA + (hwB - hwA) * t;
+        }
+        for (let z = 0; z <= VL; z++) {
+          let fp = this.fpAt(z),
+            cx = this.creekX(z);
+          for (let x = 0; x <= VW; x++) {
+            let k = z * (VW + 1) + x,
+              floor = fp + this.micro[k] - (chan ? chan[k] : 0),
+              w = this.wF[k],
+              h = w * floor + (1 - w) * Math.max(this.terr[k], floor) + this.hill[k],
+              s = this.section(z, Math.abs(x - cx));
+            this.h[k] = s < h ? s : h;
+          }
+        }
+        this.version++;
+      }
+      hwOf(n) {
+        let Ht = Math.max(n.fp - n.bed, 0.05),
+          y = Math.min(Ht, 0.6),
+          Hz = n.bw > 0.05 ? clamp(n.bz - n.bed, 0, Ht - 0.03) : 0,
+          w = n.wb + 2 * n.m * y + (n.bw > 0.05 && y > Hz ? n.bw : 0);
+        return clamp(w / 2, 0.6, 2.6);
+      }
+      // heights outside the grid (the hills and the creek's gorges around the valley)
+      heightRaw(t, e) {
+        let b = this.baseAt(t, e),
+          fp = this._nodes ? this.fpAt(e) : this.fp0(e),
+          floor = fp + b.micro,
+          h = b.wF * floor + (1 - b.wF) * Math.max(b.terr, floor) + b.hill;
+        if (this._nodes) {
+          let s = this.section(e, Math.abs(t - this.creekX(e)));
+          if (s < h) h = s;
+        }
+        return h;
       }
       heightAt(t, e) {
         let n = this.N,
-          s = clamp(t, 0, 64 - 0.001),
-          r = clamp(e, 0, 64 - 0.001),
+          s = clamp(t, 0, VW - 0.001),
+          r = clamp(e, 0, VL - 0.001),
           o = Math.floor(s),
           a = Math.floor(r),
           l = s - o,
@@ -390,26 +511,32 @@
           f = this.h[(a + 1) * n + o + 1];
         return (h + (d - h) * l) * (1 - c) + (u + (f - u) * l) * c;
       }
+      // on the valley floor (the bottomland that can turn to wetland): 0..1
+      floorWeight(t, e) {
+        let d = Math.abs(t - this.axisX(e)),
+          f = this.floorHW(e);
+        return 1 - smoothstep(f - 1, f + 2, d);
+      }
       walkable(t, e) {
         return (
           t > 1 &&
           e > 1 &&
-          t < 63 &&
-          e < 63 &&
+          t < VW - 1 &&
+          e < VL - 1 &&
           this.valleyR(t, e) < 0.9 &&
           this.edgeDist(t, e) > 0.2);
 
       }
       bankPoint(t, e, n = 0.55) {
-        e = clamp(e, 4, 60);
+        e = clamp(e, 4, VL - 4);
         let s = this.creekX(e),
           r = this.creekHW(e);
         return { x: t === 0 ? s - r - n : s + r + n, z: e };
       }
       randomPoint(t, e = {}) {
         for (let n = 0; n < 400; n++) {
-          let s = t.range(3, 61),
-            r = t.range(3, 61);
+          let s = t.range(3, VW - 3),
+            r = t.range(3, VL - 3);
           if (
           !this.walkable(s, r) ||
           e.side !== void 0 && this.side(s, r) !== e.side)
@@ -421,6 +548,10 @@
           !(e.maxEdge !== void 0 && o > e.maxEdge) &&
           !(e.maxR !== void 0 && this.valleyR(s, r) > e.maxR) &&
           !(e.minR !== void 0 && this.valleyR(s, r) < e.minR) &&
+          !(e.zMin !== void 0 && r < e.zMin) &&
+          !(e.zMax !== void 0 && r > e.zMax) &&
+          !(e.offFloor && this.floorWeight(s, r) > 0.2) &&
+          !(e.onFloor && this.floorWeight(s, r) < 0.8) &&
           !(e.near && Math.hypot(s - e.near.x, r - e.near.z) > e.near.r) &&
           !(
           e.avoid &&
@@ -1470,7 +1601,7 @@
         concept: "dam",
         radius: 2.2,
         inWater: !0,
-        multi: 3,
+        multi: 14, // CREEK: a valley's worth of dams (was 3)
         likes: "water",
         know: "dams",
         levels: [
@@ -2324,7 +2455,7 @@
       0.3,
       { who: t.id }
     ));
-    for (let r of ["mud", "planting", "clay", "glowcap", "tools"])
+    for (let r of ["mud", "planting", "clay", "glowcap", "tools", "downstream"]) // CREEK: and how to build dams from the bottom up
     if (
     t.know[r] &&
     !e.know[r] &&
@@ -2335,7 +2466,8 @@
         planting: `${t.name} told ${e.name} that seeds grow into plants.`,
         clay: `${t.name} told ${e.name} about the clay across the creek.`,
         glowcap: `${t.name} told ${e.name} about the mushrooms that glow at night.`,
-        tools: `${t.name} showed ${e.name} how to use tools.`
+        tools: `${t.name} showed ${e.name} how to use tools.`,
+        downstream: `${t.name} explained to ${e.name} why dams have to be built from the bottom of the creek up.`
       }[r];
       discover(i, e, r, o, 1);
       break;
@@ -2386,91 +2518,17 @@
       spread: [0, 2.6, 4.6, 6.8],
       tol: [0, 0.35, 0.45, 0.55]
     },
-    SNAG_POND = { len: 2.4, rise: 0.06, spread: 1.4, tol: 0.25 },
     HYDRO_EVERY = 10,
     HYDRO_DT = HYDRO_EVERY * 60;
-  function pondShape(i) {
-    return {
-      len: POND_SHAPE.len[i],
-      rise: POND_SHAPE.rise[i],
-      spread: POND_SHAPE.spread[i],
-      tol: POND_SHAPE.tol[i]
-    };
-  }
-  function pondTarget(i) {
-    return i.level > 0 ? clamp(0.35 + 1.3 * (i.cond ?? 1), 0.35, 1) : 0;
-  }
-  function pondSources(i) {
-    let t = [];
-    for (let e of i.structures)
-    e.kind !== "dam" ||
-    !(e.level > 0) ||
-    !(e.pond > 0.005) ||
-    t.push({
-      id: e.id,
-      x: e.x,
-      z: e.z,
-      fill: e.pond,
-      planted: e.level >= 3,
-      ...pondShape(e.level)
-    });
-    for (let e of i.res)
-    e.kind === "snag" &&
-    t.push({ id: e.id, x: e.x, z: e.z, fill: 1, snag: !0, ...SNAG_POND });
-    return t;
-  }
-  function pondAt(i, t, e = 3) {
-    return { x: i, z: t, fill: 1, planted: e >= 3, ...pondShape(e) };
-  }
-  function pondSurface(i, t) {
-    if (t > i.z + 0.25) return null;
-    let e = (t - (i.z - i.len)) / i.len;
-    return e < 0 ? null : WATER_LEVEL + i.rise * i.fill * Math.sqrt(Math.min(1, e));
-  }
-  function wetnessFrom(i, t, e, n) {
-    let s = t.z - t.len,
-      r = t.spread * 0.6;
-    if (n > t.z + 1.6 || n < s - r) return 0;
-    let o = i.edgeDist(e, n);
-    if (o < 0) return 0;
-    let a = clamp(n, s, t.z),
-      l = WATER_LEVEL + t.rise * t.fill * Math.sqrt(clamp((a - s) / t.len, 0, 1)),
-      c = i.heightAt(e, n),
-      h = clamp(1 - (c - l) / t.tol, 0, 1),
-      d = clamp(1 - o / t.spread, 0, 1),
-      u = 1;
-    n > t.z ?
-    u = 0.5 * clamp(1 - (n - t.z) / 1.6, 0, 1) :
-    n < s && (u = clamp(1 - (s - n) / r, 0, 1));
-    let f = h * Math.pow(d, 0.7) * u;
-    return (
-      c < l - 0.02 && o < t.spread && (f = Math.max(f, 0.9 * u)),
-      t.planted && (f = Math.min(1, f * 1.15 + 0.06 * d * u)),
-      f * t.fill);
-
-  }
-  function waterLevelAt(i, t, e) {
-    let n = WATER_LEVEL;
-    for (let s of i.structures) {
-      if (
-      s.kind !== "dam" ||
-      !(s.level > 0) ||
-      !(s.pond > 0.02) ||
-      e > s.z + 0.25 ||
-      e < s.z - POND_SHAPE.len[s.level])
-
-      continue;
-      let r = pondSurface({ z: s.z, fill: s.pond, ...pondShape(s.level) }, e);
-      r !== null && r > n && (n = r);
-    }
-    return n;
-  }
+  // CREEK: ponds, marsh and drying now come from the creek model (src/sim/creek.js).
+  // What is left here reads its results: marsh per cell, the milestones the valley
+  // notices, and what the creekfolk can see of each dam.
   function wetAt(i, t, e) {
     let n = Math.floor(t),
       s = Math.floor(e);
-    return n < 0 || s < 0 || n >= 64 || s >= 64 || !i.wet ?
+    return n < 0 || s < 0 || n >= VW || s >= VL || !i.wet ?
     0 :
-    i.wet[s * 64 + n];
+    i.wet[s * VW + n];
   }
   function wetNear(i, t, e, n = 1.5) {
     let s = 0;
@@ -2478,18 +2536,24 @@
     for (let o = -n; o <= n; o += 1) s = Math.max(s, wetAt(i, t + o, e + r));
     return s;
   }
+  // Ground that is wet now, or valley floor that will turn to wetland as the creek heals.
   function wetPotential(i, t, e) {
-    let n = wetAt(i, t, e);
-    for (let s of i.structures)
-    s.kind === "dam" && (
-    n = Math.max(n, wetnessFrom(i.terrain, pondAt(s.x, s.z, 3), t, e)));
-    return n;
+    return Math.max(wetAt(i, t, e), 0.8 * i.terrain.floorWeight(t, e));
+  }
+  // How well the ground here is fed by water from below (0 dry .. 1 wet): gardens
+  // near a pond or a healed creek stay damp through the dry season.
+  function seepAt(i, t, e) {
+    if (!i.wt) return 0;
+    let n = clamp(Math.floor(t), 0, VW - 1),
+      s = clamp(Math.floor(e), 0, VL - 1),
+      dw = i.terrain.heightAt(t, e) - i.wt[s * VW + n];
+    return clamp(1 - (dw - 0.25) / 0.7, 0, 1);
   }
   function placeSnag(i) {
     let t = i.terrain,
       e = new Rng(i.seed + ":snag");
     for (let n = 0; n < 80; n++) {
-      let s = e.range(14, 50),
+      let s = e.range(24, VL - 24),
         r = t.creekX(s);
       if (
       t.valleyR(r, s) > 0.72 ||
@@ -2513,62 +2577,12 @@
     }
     return null;
   }
-  function seedWetness(i) {
-    let t = i.terrain,
-      e = i.wet;
-    for (let n of pondSources(i))
-    forPondCells(n, (s, r, o) => {
-      let a = wetnessFrom(t, n, s + 0.5, r + 0.5) * 0.85;
-      a > e[o] && (e[o] = a);
-    });
-  }
-  function forPondCells(i, t) {
-    let e = Math.max(0, Math.floor(i.z - i.len - i.spread * 0.6)),
-      n = Math.min(63, Math.ceil(i.z + 1.6)),
-      s = 3 + i.spread + 1,
-      r = Math.max(0, Math.floor(i.x - s - 6)),
-      o = Math.min(63, Math.ceil(i.x + s + 6));
-    for (let a = e; a <= n; a++)
-    for (let l = r; l <= o; l++) t(l, a, a * 64 + l);
-  }
-  var hydroScratch = null,
-    hydroMask = null;
   function updateHydro(i) {
-    let t = i.hydro || (i.hydro = newHydro()),
-      e = i.weather.rain;
-    for (let n of i.structures) {
-      if (n.kind !== "dam") continue;
-      let s = pondTarget(n),
-        r = n.pond || 0;
-      if (r === s) continue;
-      let o = s > r ? e > 0 ? 0.02 : 0.009 : 0.02,
-        a = r + (s - r) * o;
-      Math.abs(a - s) < 0.003 && (a = s),
-      n.pond = +a.toFixed(5),
-      n.level > 0 &&
-      n.pond > (n.level === 1 ? 0.6 : 0.85) &&
-      (n.pondLv || 0) < n.level &&
-      n.level <= 2 && (
-      n.pondLv = n.level,
-      n.level === 1 ?
-      logEvent(
-        i,
-        2,
-        "Water has backed up behind the weir into a quiet little pool.",
-        [],
-        n,
-        "wetland"
-      ) :
-      logEvent(
-        i,
-        2,
-        "The pond behind the dam has filled, wide and still.",
-        [],
-        n,
-        "wetland"
-      ));
-    }
-    i.tick % HYDRO_EVERY === 3 && spreadWetland(i, t, e);
+    let t = i.hydro || (i.hydro = newHydro());
+    if (i.tick % HYDRO_EVERY !== 3 || !i.creek) return;
+    creekHydro(i);
+    damPonds(i);
+    spreadWetland(i, t);
   }
   function newHydro() {
     return {
@@ -2583,40 +2597,91 @@
       notes: {}
     };
   }
-  function spreadWetland(i, t, e) {
+  // What each dam's pond looks like to the creekfolk, and what they can notice.
+  function damPonds(i) {
+    let cr = i.creek;
+    creekSyncDams(i);
+    for (let n of i.structures) {
+      if (n.kind !== "dam" || !(n.level > 0)) continue;
+      let d = cr.dams[n.id];
+      if (!d) {
+        creekSyncDams(i);
+        d = cr.dams[n.id];
+        if (!d) continue;
+      }
+      let node = cr.nodes[d.i],
+        depth = d.pl - node.bed;
+      n.pond = +clamp(depth / 0.35, 0, 1).toFixed(3);
+      n.leaks = d.hold ? 0 : 1;
+      if (n.pond > (n.level === 1 ? 0.6 : 0.85) && (n.pondLv || 0) < n.level && n.level <= 2) {
+        n.pondLv = n.level;
+        n.level === 1 ?
+        logEvent(i, 2, "Water has backed up behind the weir into a quiet little pool.", [], n, "wetland") :
+        logEvent(i, 2, "The pond behind the dam has filled, wide and still.", [], n, "wetland");
+      }
+      // silted up: the bed behind it has risen almost to the crest
+      let behind = cr.nodes[Math.max(0, d.i - 1)];
+      n.silted = behind.bed >= d.crest - CREEK.siltGap && d.crest < node.fp + CREEK.raiseAbove ? 1 : 0;
+      if (n.silted && !n.building && !n.raise && (n.cond ?? 1) > 0.55 && i.t - (n.raiseAskT || 0) > 2 * VALLEY_DAY) {
+        n.cond = 0.55;
+        n.raise = 1;
+        n.raiseAskT = Math.round(i.t);
+        if (!n.siltNoted) {
+          n.siltNoted = 1;
+          logEvent(i, 1, `The pond behind the ${builtLevelDef(n).label} has filled with silt; it needs building up.`, [], n, "wetland");
+        }
+      }
+      damLeakNotice(i, n, d);
+    }
+  }
+  // A dam that can't hold its pond because the water below is too far down: someone
+  // nearby notices, and an elder who knows dams may work out why.
+  function damLeakNotice(i, n, d) {
+    if (d.hold || n.building) return;
+    // looked at once a valley day, by whoever is close by
+    let day = Math.floor(i.t / VALLEY_DAY);
+    if (n.leakDay === day) return;
+    for (let t of i.creatures) {
+      if (t.asleep || t.visitor) continue;
+      if ((t.x - n.x) ** 2 + (t.z - n.z) ** 2 > 64) continue;
+      n.leakDay = day;
+      if (!n.leakSeen) {
+        n.leakSeen = 1;
+        logEvent(i, 2, `${t.name} noticed that the pond behind the ${builtLevelDef(n).label} won't fill: the water slips out underneath it.`, [t.id], n, "wetland");
+        remember(i, t, "nature", "The pond behind the high dam won't fill. The water slips out underneath.", 0.6);
+        i.stats.leakSeen = (i.stats.leakSeen || 0) + 1;
+      }
+      t.counts.leakSeen = (t.counts.leakSeen || 0) + 1;
+      if (
+      !t.know.downstream &&
+      t.know.dams &&
+      t.counts.leakSeen > 2 &&
+      stageOf(i, t) !== "child" &&
+      i.rng.chance((stageOf(i, t) === "elder" ? 0.08 : 0.006) * (0.5 + t.temp.curiosity)))
+      {
+        discover(i, t, "downstream", `${t.name} worked out why the high dam won't hold: the water falls too far on its low side and digs under it. A dam lower down, holding water against its foot, would let it fill.`, 3);
+      }
+    }
+  }
+  // Marsh across the valley floor, and the milestones the valley notices as it grows.
+  function spreadWetland(i, t) {
     let n = i.terrain,
-      s = i.wet;
-    hydroScratch || (hydroScratch = new Float32Array(4096));
-    let r = hydroScratch;
-    r.fill(0), hydroMask || (hydroMask = new Uint8Array(4096)), hydroMask.fill(0);
-    for (let x of pondSources(i))
-    forPondCells(x, (g, m, b) => {
-      let T = wetnessFrom(n, x, g + 0.5, m + 0.5);
-      T > r[b] && (r[b] = T), !x.snag && T > 0.05 && (hydroMask[b] = 1);
-    });
-    let o = HYDRO_DT / (2.2 * 86400) * (e > 0 ? 1.5 : 1),
-      a = HYDRO_DT / (5 * 86400),
+      s = i.wet,
+      c0 = creekCells(i),
       l = 0,
       c = 0,
       h = 0,
       d = 0,
       u = [];
     for (let x = 0; x < s.length; x++) {
-      let g = r[x],
-        m = s[x];
-      if (g > m) s[x] = m + (g - m) * o * (0.5 + g);else
-      if (m > 0) {
-        let T = m - (m - g) * a;
-        s[x] = T < 0.01 && g <= 0 ? 0 : T;
-      }
+      if (!c0.floor[x] && c0.d[x] > 6 || c0.d[x] <= 0) continue; // the floor beside the creek, not the creek itself
       let b = s[x];
-      hydroMask[x] && (
       b > 0.5 ? (
       l++,
-      h += x % 64,
-      d += Math.floor(x / 64),
+      h += x % VW,
+      d += Math.floor(x / VW),
       b > 0.62 && u.push(x)) :
-      b > 0.25 && c++);
+      b > 0.25 && c++;
     }
     t.marsh = l,
     t.damp = c,
@@ -2686,7 +2751,7 @@
       x && !x.lex.frog && (x.lex.frog = { [frogWord(i)]: 1 });
     }
     if (
-    l >= 45 &&
+    l >= 60 &&
     !p.wide && (
     p.wide = 1,
     logEvent(
@@ -2697,7 +2762,7 @@
       f,
       "wetland"
     )),
-    l >= 90 &&
+    l >= 240 &&
     !p.wetland && (
     p.wetland = 1,
     logEvent(
@@ -2708,12 +2773,23 @@
       f,
       "wetland"
     )),
+    l >= 0.5 * c0.nFloor &&
+    !p.floor && (
+    p.floor = 1,
+    logEvent(
+      i,
+      3,
+      "Half the valley floor is marsh now: channels, ponds and reeds from one side to the other.",
+      [],
+      f,
+      "wetland"
+    )),
     t.best = Math.max(t.best || 0, l),
-    u.length >= 8 && t.reeds < 6 && i.rng.chance(1 / 18))
+    u.length >= 8 && t.reeds < 6 + Math.floor(l / 60) && i.rng.chance(1 / 18))
     {
       let x = u[i.rng.int(0, u.length - 1)],
-        g = x % 64 + 0.5,
-        m = Math.floor(x / 64) + 0.5;
+        g = x % VW + 0.5,
+        m = Math.floor(x / VW) + 0.5;
       if (
       n.walkable(g, m) &&
       !i.res.some(
@@ -2764,34 +2840,39 @@
   }
   function damDescription(i, t) {
     let e = [],
-      n = t.pond || 0;
+      n = t.pond || 0,
+      d = i.creek && i.creek.dams[t.id];
     if (
     t.level > 0 ?
+    t.leaks ?
+    e.push("Water slips out underneath it, so the pond barely fills. The water below it is too far down.") :
     n < 0.15 ?
-    e.push("Water is just starting to back up behind it.") :
+    e.push(t.silted ? "Silt has filled the pond behind it almost to the top." : "Hardly any water stands behind it now.") :
     n < 0.6 ?
     e.push(
       t.level >= 2 ?
-      "The pond behind it is filling." :
-      "A pool is filling behind it."
+      "The pond behind it is low." :
+      "A small pool sits behind it."
     ) :
     e.push(
       t.level >= 2 ?
       "A wide, still pond sits behind it." :
       "A quiet pool sits behind it."
     ) :
-    e.push("Once it\u2019s built, water will back up behind it."),
+    e.push("Once it’s built, water will back up behind it."),
     t.level > 0 &&
     (t.cond ?? 1) < 0.5 &&
-    e.push("It\u2019s leaking \u2014 it needs mending."),
-    t.level > 0)
+    e.push(t.raise ? "It needs building up a hand higher." : "It’s leaking — it needs mending."),
+    t.level > 0 && d)
     {
       let s = 0,
-        r = 0;
-      forPondCells({ x: t.x, z: t.z, ...pondShape(t.level) }, (o, a, l) => {
-        let c = i.wet[l];
+        r = 0,
+        c0 = creekCells(i);
+      for (let k = 0; k < CELLS; k++) {
+        if (Math.abs(c0.node[k] - d.i) > 10 || c0.node[k] > d.i + 1) continue;
+        let c = i.wet[k];
         c > 0.5 ? s++ : c > 0.25 && r++;
-      }),
+      }
       s >= 30 ?
       e.push(
         "A marsh full of reeds, frogs and dragonflies has grown up around it."
@@ -2805,6 +2886,13 @@
       );
     }
     return e.join(" ");
+  }
+  var WEATHER = { storm: 0.2 }; // CREEK: chance a heavy rain turns to a storm, times the season's wetness squared
+  function greenFactor(i, t, e) {
+    if (!i.green) return 1;
+    let n = clamp(Math.floor(t), 0, VW - 1),
+      s = clamp(Math.floor(e), 0, VL - 1);
+    return 0.45 + 0.55 * i.green[s * VW + n];
   }
   var WALK_SPEED = 1.15,
     WORK_ACTS = new Set([
@@ -2856,7 +2944,7 @@
     for (let l = 0; l <= o; l++) {
       let c = Math.floor(t + (n - t) * l / o),
         h = Math.floor(e + (s - e) * l / o);
-      a += i.wear[clamp(h, 0, 63) * 64 + clamp(c, 0, 63)];
+      a += i.wear[clamp(h, 0, VL - 1) * VW + clamp(c, 0, VW - 1)];
     }
     return a / (o + 1);
   }
@@ -2867,7 +2955,7 @@
       let l = Math.floor(t + (n - t) * a / o),
         c = Math.floor(e + (s - e) * a / o);
       if (i.terrain.isWater(l + 0.5, c + 0.5)) continue;
-      let h = clamp(c, 0, 63) * 64 + clamp(l, 0, 63);
+      let h = clamp(c, 0, VL - 1) * VW + clamp(l, 0, VW - 1);
       i.wear[h] = Math.min(60, i.wear[h] + 0.3);
     }
   }
@@ -3300,7 +3388,8 @@
         clay: "There is sticky clay across the creek. It holds its shape.",
         glowcap: "Some mushrooms across the creek glow in the dark.",
         tools: "A stick, a basket or a mallet can make work easier.",
-        dams: "Branches across the creek slow the water down. The ground behind them stays wet and green."
+        dams: "Branches across the creek slow the water down. The ground behind them stays wet and green.",
+        downstream: "A dam only holds its pond if water already stands against its foot. Build the lowest one first."
       }[e] || "I learned about " + e,
       0.8,
       { x: t.x, z: t.z, pv: 0.2 }
@@ -4497,6 +4586,7 @@
         t.counts.repairs = (t.counts.repairs || 0) + 1,
         n.cond >= 0.95)
         {
+          if (n.raise && n.kind === "dam" && creekRaiseDam(i, n, t)) return !0; // CREEK: built up a hand higher
           n.wornNoted = !1, i.stats.repairs = (i.stats.repairs || 0) + 1;
           let r =
           n.owner && i.byId[n.owner] ?
@@ -4841,10 +4931,7 @@
     t.kind === "dam")
     {
       for (let f of r) discover(i, i.byId[f], "dams", null);
-      let u = t.level;
-      u >= 2 &&
-      t.pond && (
-      t.pond = +(t.pond * POND_SHAPE.rise[u - 1] / POND_SHAPE.rise[u]).toFixed(5)),
+      creekSyncDams(i), creekCellWater(i, 0, seasonAt(i)), // CREEK: the dam goes into the creek model
       n.name === "banks" && plantDamBanks(i, t);
     }
     o && t.kind === "home" && (o.sleepSpot = { x: t.x, z: t.z });
@@ -6277,6 +6364,26 @@
       o.length < r.multi &&
       o.every((h) => h.level >= 2 && a(h, 36)) &&
       !(t.noSite && t.noSite[e] && i.t - t.noSite[e] < 6 * 3600);
+    if (e === "dam") {
+      // CREEK: a valley's worth of dams. Someone who knows dams must be built from the
+      // bottom up won't heighten a weir that has no water standing below it; they build
+      // a new one lower down instead.
+      let safe = (h) => !t.know.downstream || h.level !== 1 || creekSafeToRaise(i, h, 0.25);
+      l = o.
+      filter(
+        (h) => h.level < r.levels.length && canBuildLevel(i, h, h.level, t) && a(h, 16) && safe(h)
+      ).
+      sort((h, d) => h.level - d.level || d.z - h.z)[0];
+      c =
+      o.length < r.multi &&
+      o.every((h) => (h.level >= 2 || !safe(h)) && a(h, 30)) &&
+      !(t.noSite && t.noSite[e] && i.t - t.noSite[e] < 6 * 3600);
+      return l && (l.level < 2 || !c) ?
+      { thr: 0.8 + 0.22 * l.level, upgrade: l } :
+      c ?
+      { thr: 0.8 + 0.08 * o.length, target: "new" } :
+      null;
+    }
     return l && (l.level < 2 || !c) ?
     { thr: 0.8 + 0.22 * l.level, upgrade: l } :
     c ?
@@ -6455,40 +6562,32 @@
     }
     return null;
   }
-  var siteCache = new WeakMap();
-  function cachedSites(i, t) {
-    let e = siteCache.get(i);
-    e || (e = new Map(), siteCache.set(i, e));
-    let n = Math.round(t * 2);
-    if (e.has(n)) return e.get(n);
-    let s = pondAt(i.creekX(t), t, 2),
-      r = 0;
-    for (let o = Math.floor(t - 10); o <= Math.ceil(t + 2); o++)
-    for (let a = Math.floor(s.x - 10); a <= Math.ceil(s.x + 10); a++)
-    a < 0 ||
-    o < 0 ||
-    a >= 64 ||
-    o >= 64 ||
-    wetnessFrom(i, s, a + 0.5, o + 0.5) > 0.45 && r++;
-    return e.set(n, r), r;
-  }
+  // CREEK: where to put a dam. Along the creek inside the valley, away from other dams
+  // and crossings. Without the "downstream" knowledge they choose by what they can see:
+  // near home, where the valley floor is low beside the creek, below the garden, just
+  // under the snag. With it, they look for a spot where the pond below already holds
+  // water against the new dam's foot, or start a new series lower down the creek.
   function damSite(i, t, e) {
     let n = i.terrain,
       s = i.rng,
+      cr = i.creek,
       r = i.structures.filter((h) => h.kind === "dam"),
       o = i.res.find((h) => h.kind === "snag"),
       a = findStructure(i, "garden"),
+      knows = !!(t.know && t.know.downstream),
+      full = creekPondLevels(cr),
+      lowest = r.length ? Math.max(...r.map((h) => h.z)) : -1,
       l = null,
       c = -1e9;
-    for (let h = 10; h <= 54; h += 0.5) {
+    for (let h = 14; h <= VL - 14; h += 1) {
       let d = n.creekX(h);
-      if (n.valleyR(d, h) > 0.78) continue;
+      if (n.valleyR(d, h) > 0.8) continue;
       let u = n.bankPoint(0, h, 0.4),
         f = n.bankPoint(1, h, 0.4);
       if (
       !n.walkable(u.x, u.z) ||
       !n.walkable(f.x, f.z) ||
-      r.some((y) => Math.abs(y.z - h) < 10.5) ||
+      r.some((y) => Math.abs(y.z - h) < 7) ||
       i.structures.some(
         (y) =>
         y.kind === "crossing" && y.z > h - POND_SHAPE.len[3] - 1 && y.z < h + 3
@@ -6496,54 +6595,29 @@
       o && Math.abs(o.z - h) < 1.6)
 
       continue;
-      let p = pondAt(d, h, 3),
-        x = !1,
-        g = !1;
-      for (let y of i.structures) {
-        if (y.kind === "dam" || y.kind === "crossing") continue;
-        let S = STRUCTURES[y.kind].radius * 0.7,
-          M = wetnessFrom(n, p, y.x, y.z);
-        for (let A = 0; A < 4; A++)
-        M = Math.max(
-          M,
-          wetnessFrom(
-            n,
-            p,
-            y.x + Math.cos(A * 1.57) * S,
-            y.z + Math.sin(A * 1.57) * S
-          )
-        );
-        if (
-        y.kind === "garden" ?
-        M > 0.75 ?
-        x = !0 :
-        M > 0.12 && (g = !0) :
-        M > 0.3 && (x = !0),
-        x)
-
-        break;
-      }
-      if (x) continue;
-      let m = cachedSites(n, h),
+      let j = creekNodeIndex(h),
+        below = Math.min(cr.nodes.length - 1, j + 1),
+        standing = full[below] - cr.nodes[below].bed,
+        g = !!(a && a.z < h - 1 && a.z > h - 14),
         b = o && o.z < h - 1.5 && o.z > h - 7 ? 4 : 0,
-        T =
-        m -
-        n.creekHW(h) * 5 + (
-        g ? 10 : 0) +
-        b -
-        dist2d(d, h, e.x, e.z) * 0.18 +
-        s.range(0, 4);
+        low = 3 * (n.floorWeight(u.x - 2, h) + n.floorWeight(f.x + 2, h)),
+        T = low + (g ? 10 : 0) + b - dist2d(d, h, e.x, e.z) * (knows ? 0.08 : 0.16) + s.range(0, 4),
+        why =
+        g && a ?
+        "downstream of the garden, so its soil will stay damp" :
+        b ?
+        "just below the tangle of branches where the water already pools" :
+        "where the low ground beside the creek could hold water";
+      if (knows) {
+        if (standing > 0.15) (T += 14), (why = "where the pond below already holds water against its foot");
+        else if (h > lowest + 6) (T += 6), (why = "below the others, so the water can stand from the bottom up");
+        else T -= 8;
+      }
       if (T > c) {
         c = T;
         let y = n.side(t.x, t.z),
-          S = n.bankPoint(y, h, 0.5),
-          M =
-          g && a ?
-          "downstream of the garden, so its soil will stay damp" :
-          b ?
-          "just below the tangle of branches where the water already pools" :
-          "where the low ground beside the creek could hold water";
-        l = { x: d, z: h, wx: S.x, wz: S.z, why: M };
+          S = n.bankPoint(y, h, 0.5);
+        l = { x: d, z: h, wx: S.x, wz: S.z, why };
       }
     }
     return l;
@@ -6802,8 +6876,8 @@
       structures: [],
       byId: {},
       weather: { state: "clear", rain: 0, since: 0, until: 0, cum: 0, cumT: 0 },
-      wear: new Float32Array(4096),
-      wet: new Float32Array(4096),
+      wear: new Float32Array(CELLS), // CREEK: the bigger valley
+      wet: new Float32Array(CELLS),
       hydro: newHydro(),
       log: [],
       hist: [],
@@ -6813,7 +6887,7 @@
       joints: {},
       tick: 0,
       onLog: null,
-      version: 1
+      version: 2
     };
   }
   function createWorld(i, t = 6) {
@@ -6835,80 +6909,80 @@
         return e.res.push(x), r.push({ x: f.x, z: f.z, r: p.space ?? 2.2 }), x;
       },
       a = (u) => n.randomPoint(s, { avoid: r, ...u }),
-      l = n.randomPoint(s, {
-        side: 0,
-        minEdge: 6,
-        maxEdge: 11,
-        maxR: 0.55
-      }) || { x: 20, z: 32 };
+      // CREEK: the village starts at the upstream end, up on the terrace away from the water
+      l = n.randomPoint(s, { side: 0, offFloor: !0, minEdge: 9, zMin: 18, zMax: 36, maxR: 0.8 }) ||
+      n.randomPoint(s, { side: 0, offFloor: !0, zMin: 12, zMax: 50 }) || { x: n.axisX(26) - n.floorHW(26) - 6, z: 26 };
     e.meadow = { x: +l.x.toFixed(2), z: +l.z.toFixed(2) },
     r.push({ x: l.x, z: l.z, r: 4.5 });
     let c = ["oak", "oak", "birch", "pine"];
-    for (let u = 0; u < 11; u++)
-    o("tree", a({ side: 0, minEdge: 2.5, maxR: 0.84 }), {
+    // CREEK: about two and a half times as much of everything, for a longer valley
+    for (let u = 0; u < 26; u++)
+    o("tree", a({ side: 0, minEdge: 2.5, maxR: 0.86 }), {
       variant: s.pick(c),
       amt: s.int(1, 3),
       max: 3,
       canopy: s.range(1.6, 2.2),
       space: 2.6
     });
-    for (let u = 0; u < 7; u++)
-    o("tree", a({ side: 1, minEdge: 2.5, maxR: 0.84 }), {
+    for (let u = 0; u < 18; u++)
+    o("tree", a({ side: 1, minEdge: 2.5, maxR: 0.86 }), {
       variant: s.pick(c),
       amt: s.int(1, 3),
       max: 3,
       canopy: s.range(1.6, 2.2),
       space: 2.6
     });
-    for (let u = 0; u < 6; u++)
-    o("tree", a({ side: u % 2, minEdge: 0.8, maxEdge: 2.2, maxR: 0.8 }), {
+    for (let u = 0; u < 12; u++)
+    o("tree", a({ side: u % 2, minEdge: 0.8, maxEdge: 2.2, maxR: 0.82 }), {
       variant: "willow",
       amt: s.int(0, 2),
       max: 2,
       canopy: 2,
       space: 3
     });
-    for (let u = 0; u < 2; u++)
+    for (let u = 0; u < 3; u++)
     o(
       "podtree",
       a({
         side: 0,
         minEdge: 3,
-        maxR: 0.75,
-        near: { x: l.x, z: l.z, r: 16 }
+        maxR: 0.8,
+        near: { x: l.x, z: l.z, r: 18 }
       }) || a({ side: 0, minEdge: 3 }),
       { canopy: 2.2, nextPod: s.range(400, 1600), space: 3.5 }
     );
-    for (let u = 0; u < 2; u++)
-    o("podtree", a({ side: 1, minEdge: 3, maxR: 0.8 }), {
+    for (let u = 0; u < 3; u++)
+    o("podtree", a({ side: 1, minEdge: 3, maxR: 0.84 }), {
       canopy: 2.2,
       nextPod: s.range(1200, 5e3),
       space: 3.5
     });
-    for (let u = 0; u < 5; u++)
+    for (let u = 0; u < 11; u++)
     o(
       "bush",
-      a({
+      (u < 5 ? a({
         side: 0,
         minEdge: 2,
-        maxR: 0.8,
+        maxR: 0.84,
         near: { x: l.x, z: l.z, r: 18 }
-      }) || a({ side: 0, minEdge: 2 }),
+      }) : null) || a({ side: 0, minEdge: 2, maxR: 0.86 }),
       { food: "berry", amt: s.int(4, 7), max: 7, space: 2 }
     );
-    let h = a({ side: 1, minEdge: 3, maxR: 0.78 }) || { x: 50, z: 30 };
-    for (let u = 0; u < 5; u++)
-    o(
-      "bush",
-      a({ side: 1, minEdge: 1.5, near: { x: h.x, z: h.z, r: 6 } }) ||
-      a({ side: 1, minEdge: 1.5 }),
-      { food: "bluberry", amt: s.int(7, 11), max: 11, space: 1.8 }
-    );
-    for (let u = 0; u < 9; u++) {
-      let f = u < 5 ? 0 : 1,
+    for (let k = 0; k < 2; k++) {
+      let h = a({ side: 1, minEdge: 3, maxR: 0.8, zMin: k ? VL / 2 : 12, zMax: k ? VL - 12 : VL / 2 }) || { x: n.creekX(50 + k * 60) + 8, z: 50 + k * 60 };
+      for (let u = 0; u < 5; u++)
+      o(
+        "bush",
+        a({ side: 1, minEdge: 1.5, near: { x: h.x, z: h.z, r: 6 } }) ||
+        a({ side: 1, minEdge: 1.5 }),
+        { food: "bluberry", amt: s.int(7, 11), max: 11, space: 1.8 }
+      );
+    }
+    for (let u = 0; u < 20; u++) {
+      let f = u < 10 ? 0 : 1,
         p = null;
       for (let x = 0; x < 30 && !p; x++) {
-        let g = s.range(8, 56),
+        let g = s.range(10, VL - 10),
           m = n.bankPoint(f, g, 0.35);
         n.valleyR(m.x, m.z) < 0.86 &&
         !r.some((b) => Math.hypot(b.x - m.x, b.z - m.z) < 3) && (
@@ -6916,12 +6990,12 @@
       }
       o("reeds", p, { amt: s.int(5, 9), max: 10, space: 3 });
     }
-    o("stones", a({ side: 0, minEdge: 4, minR: 0.5, maxR: 0.85 }), {
+    o("stones", a({ side: 0, minEdge: 4, minR: 0.5, maxR: 0.86, near: { x: l.x, z: l.z, r: 30 } }) || a({ side: 0, minEdge: 4 }), {
       amt: 12,
       max: 14,
       space: 3
     }),
-    o("stones", a({ side: 0, minEdge: 1, maxEdge: 3, maxR: 0.85 }), {
+    o("stones", a({ side: 0, minEdge: 1, maxEdge: 3, maxR: 0.85, zMax: 70 }), {
       amt: 9,
       max: 10,
       space: 3
@@ -6936,33 +7010,40 @@
       max: 16,
       space: 3
     });
-    for (let u = 0; u < 2; u++) {
+    for (let u = 0; u < 3; u++)
+    o("stones", a({ side: u % 2, minEdge: 2, maxR: 0.86, zMin: VL / 2 }), {
+      amt: 12,
+      max: 14,
+      space: 3
+    });
+    for (let u = 0; u < 4; u++) {
       let f = null;
       for (let p = 0; p < 40 && !f; p++) {
-        let x = n.bankPoint(1, s.range(10, 54), 0.9);
+        let x = n.bankPoint(u === 3 ? 0 : 1, s.range(14, VL - 14), 0.9);
         n.valleyR(x.x, x.z) < 0.82 &&
         !r.some((g) => Math.hypot(g.x - x.x, g.z - x.z) < 3) && (
         f = x);
       }
       o("clay", f, { amt: 16, max: 20, space: 3 });
     }
-    o("glowcap", a({ side: 1, minEdge: 3, minR: 0.6, maxR: 0.87 }), {
+    for (let u = 0; u < 3; u++)
+    o("glowcap", a({ side: u ? s.int(0, 1) : 1, minEdge: 3, minR: 0.6, maxR: 0.87 }), {
       amt: 4,
       max: 8,
       space: 2.5
     });
-    for (let u = 0; u < 2; u++)
-    o("log", a({ side: u === 0 ? 0 : s.int(0, 1), minEdge: 2, maxR: 0.82 }), {
+    for (let u = 0; u < 5; u++)
+    o("log", a({ side: u === 0 ? 0 : s.int(0, 1), minEdge: 2, maxR: 0.84 }), {
       rot: s.range(0, 3.14),
       space: 2.4
     });
-    for (let u = 0; u < 4; u++)
-    o("boulder", a({ minEdge: 2, maxR: 0.86 }), {
+    for (let u = 0; u < 10; u++)
+    o("boulder", a({ minEdge: 2, maxR: 0.87 }), {
       size: s.range(0.7, 1.3),
       rot: s.range(0, 6.28),
       space: 2.4
     });
-    placeSnag(e), seedWetness(e);
+    placeSnag(e), creekInit(e);
     let d = new Set();
     for (let u = 0; u < t; u++) {
       let f;
@@ -7076,18 +7157,19 @@
     let n = e.state,
       s = n,
       r,
-      o = t.next();
+      o = t.next(),
+      sw = seasonAt(i).wet; // CREEK: rain and storms in the wet season, little in the dry
     n === "clear" ?
-    s = o < 0.62 ? "cloudy" : "clear" :
+    s = o < 0.22 + 0.5 * sw ? "cloudy" : "clear" :
     n === "cloudy" ?
-    s = o < 0.48 ? "rain" : "clear" :
+    s = o < 0.06 + 0.5 * sw ? "rain" : "clear" :
     n === "rain" ?
-    s = o < 0.1 ? "storm" : o < 0.75 ? "cloudy" : "rain" :
+    s = o < WEATHER.storm * sw * sw ? "storm" : o < 0.75 ? "cloudy" : "rain" :
     s = "rain",
     r = {
-      clear: t.range(2400, 6600),
+      clear: t.range(2400, 6600) * (1.7 - 0.9 * sw),
       cloudy: t.range(900, 2700),
-      rain: t.range(700, 2400),
+      rain: t.range(700, 2400) * (0.6 + 0.6 * sw),
       storm: t.range(480, 1200)
     }[s],
     e.state = s,
@@ -7095,7 +7177,7 @@
     e.since = i.t,
     e.until = i.t + r,
     schedule(i, e.until, "R", 0, e.tok || 0),
-    s === "storm" && n !== "storm" && storyStorm(i), // MINDS
+    s === "storm" && n !== "storm" && (storyStorm(i), creekStorm(i)), // MINDS, CREEK: every storm is a flood
     e.rain > 0 && !(n === "rain" || n === "storm") ? (
     i.stats.rains = (i.stats.rains || 0) + 1,
     logEvent(
@@ -7133,7 +7215,7 @@
         a.amt < a.max &&
         t.chance(
           (a.food === "bluberry" ? 1 / 5.5 : 1 / 7.5) * (
-          wetAt(i, a.x, a.z) > 0.25 ? 1.4 : 1)
+          wetAt(i, a.x, a.z) > 0.25 ? 1.4 : 1) * greenFactor(i, a.x, a.z) // CREEK: less in a brown, dry valley
         ) &&
         a.amt++;
         break;
@@ -7472,7 +7554,7 @@
     let n = builtLevelDef(t);
     if (!t.beds) return;
     let s = n && n.growth || 1,
-      r = i.tick % 10 === 4 ? wetNear(i, t.x, t.z, 1.5) : t.dampSoil || 0;
+      r = i.tick % 10 === 4 ? Math.max(wetNear(i, t.x, t.z, 1.5), seepAt(i, t.x, t.z)) : t.dampSoil || 0; // CREEK: seepage
     i.tick % 10 === 4 && (
     t.dampSoil = +r.toFixed(3),
     r >= 0.3 &&
@@ -7482,7 +7564,7 @@
     logEvent(
       i,
       2,
-      "The garden soil stays damp now, fed by water seeping from the pond.",
+      "The garden soil stays damp now, fed by water seeping up from the creek.",
       [],
       t,
       "wetland"
@@ -7604,6 +7686,9 @@
   "byId",
   "wear",
   "wet",
+  "wt", // CREEK: derived from the creek, rebuilt on load
+  "green",
+  "creek",
   "onLog",
   "__obs",
   "_obs",
@@ -7615,98 +7700,1229 @@
     return (
       e.rngState = i.rng.getState(),
       e.events = i.heap.a,
-      e.wearB64 = floatsToB64(i.wear),
+      e.wearS = sparseToB64(i.wear),
       e.wetS = sparseToB64(i.wet),
-      e.version = 1,
+      e.creek = creekSave(i.creek), // CREEK
+      e.build = BUILD_VERSION,
+      e.version = 2,
       Object.assign(e, t),
       JSON.stringify(e));
 
   }
   function loadWorld(i) {
     let t = typeof i == "string" ? JSON.parse(i) : i;
-    if (!t || t.version !== 1) throw new Error("Unsupported save version");
+    if (!t || t.version !== 2 || t.build !== BUILD_VERSION) throw new Error(OTHER_BUILD_TEXT); // CREEK: every build keeps its own saves
     let e = emptyWorld(t.seed);
     for (let n in t)
     n === "rngState" ||
     n === "events" ||
-    n === "wearB64" ||
+    n === "wearS" ||
+    n === "creek" ||
     n === "wetS" || (
     e[n] = t[n]);
     e.rng.setState(t.rngState),
     e.heap = new EventHeap(t.events),
-    e.wear = b64ToFloats(t.wearB64, 4096),
+    e.wear = b64ToSparse(t.wearS, CELLS),
     e.byId = {};
     for (let n of [e.creatures, e.res, e.pods, e.items, e.structures])
     for (let s of n) e.byId[s.id] = s;
-    e.wet = t.wetS !== void 0 ? b64ToSparse(t.wetS, 4096) : new Float32Array(4096),
-    t.hydro || (e.hydro = newHydro(), placeSnag(e), seedWetness(e));
+    e.wet = b64ToSparse(t.wetS, CELLS),
+    creekLoad(e, t.creek); // CREEK: the creek's shape, ponds and water table
     for (let n of e.creatures) n.desire.dam === void 0 && (n.desire.dam = 0);
     return upgradeWorld(e); // LIFE: day cycle, ages and the calendar (src/sim/hooks.js)
   }
 
 // ==== src/sim/calendar.js ====
 // ==========================================================================
-// The real calendar.
+// The valley's own calendar (Phase 3A).
 //
-// The valley's date is the player's real date. A world remembers the moment it
-// began (calStart, epoch ms) and the player's time-zone offset at that moment
-// (tzMin), so the same world gives the same dates in the page, the worker and
-// the Node tests. Seasons are astronomical, Northern Hemisphere: a temperate
-// four-season valley.
+// One valley day is one real hour. A valley year is 192 valley days, about
+// eight real days, so a season lasts two real days: not exactly a week, so the
+// seasons drift across weekdays and a weekend player still sees all four. A
+// creekfolk lives about four valley years; a real year holds about 45.
 //
-// One valley day lasts one real hour (see VALLEY_DAY), so a season is roughly
-// 2,200 valley days long: an era, as far as any one creekfolk can tell.
+// Winter and spring are the wet season (storms, a running creek); summer and
+// autumn are the dry season. A new valley begins on the first morning of spring.
+// Valley dates no longer follow the real calendar; world.calStart is kept only
+// to say when, in real life, the valley began.
 // ==========================================================================
 
 var VALLEY_DAY = 3600; // seconds of real time in one valley day
 var REAL_DAY = 86400;
-
-// Day-of-year (1-based, non-leap reckoning is close enough) where each season starts.
-var SEASON_STARTS = [
-  { name: "spring", doy: 79 },  // ~Mar 20
-  { name: "summer", doy: 172 }, // ~Jun 21
-  { name: "autumn", doy: 265 }, // ~Sep 22
-  { name: "winter", doy: 355 }, // ~Dec 21
-];
+var YEAR_DAYS = 192; // valley days in a valley year
+var SEASON_DAYS = YEAR_DAYS / 4;
+var SEASON_NAMES = ["spring", "summer", "autumn", "winter"];
+var MIDWINTER_DOY = 168; // the middle of winter: their midwinter
+var MIDSUMMER_DOY = 72;
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-// The valley's local date as a UTC-based Date whose UTC fields read as local time.
+// Valley days since the first midnight before the valley began (fractional).
+// The day cycle's offset puts t = 0 at mid-morning of the first day.
+function valleyDays(w, t = w.t) {
+  let off = (w && w.cycle && w.cycle.off) ?? 0.27;
+  return t / VALLEY_DAY + off;
+}
+
+// The real date (UTC-based Date whose UTC fields read as the player's local time).
 function valleyDate(w, t = w.t) {
   return new Date((w.calStart || 0) + t * 1000 - (w.tzMin || 0) * 60000);
 }
 
-function dayOfYear(d) {
-  let start = Date.UTC(d.getUTCFullYear(), 0, 1);
-  return Math.floor((d.getTime() - start) / 864e5) + 1;
+// How wet the season is at day-of-year doy, 0 (the heart of the dry season) .. 1
+// (the heart of the wet season). Wettest where winter turns to spring, driest
+// where summer turns to autumn; above 0.5 all through winter and spring.
+function seasonWetness(doy) {
+  let c = Math.cos((2 * Math.PI * doy) / YEAR_DAYS); // 1 wettest .. -1 driest
+  return clamp(0.5 + 0.6 * c, 0, 1);
 }
 
-// Season at time t: { name, progress (0..1 through the season), doy, warmth (0 coldest .. 1 warmest) }
+// Season at time t:
+//   name, idx (0 spring .. 3 winter), progress (0..1 through the season),
+//   doy (0..192, fractional), day (1-based day of the season), year (1-based),
+//   warmth (0 midwinter .. 1 midsummer), wet (0..1, see seasonWetness),
+//   wetSeason (winter or spring)
 function seasonAt(w, t = w.t) {
-  let d = valleyDate(w, t),
-    doy = dayOfYear(d) + (d.getUTCHours() + d.getUTCMinutes() / 60) / 24;
-  let idx = 3; // winter wraps the year end
-  for (let k = 0; k < SEASON_STARTS.length; k++) if (doy >= SEASON_STARTS[k].doy) idx = k;
-  let start = SEASON_STARTS[idx].doy,
-    next = idx === 3 ? SEASON_STARTS[0].doy + 365 : SEASON_STARTS[idx + 1].doy,
-    pos = idx === 3 && doy < start ? doy + 365 : doy;
-  // Coldest around Jan 20, warmest around Jul 21.
-  let warmth = 0.5 - 0.5 * Math.cos((2 * Math.PI * (doy - 20)) / 365);
+  let days = valleyDays(w, t),
+    year = Math.floor(days / YEAR_DAYS),
+    doy = days - year * YEAR_DAYS,
+    idx = Math.min(3, Math.floor(doy / SEASON_DAYS)),
+    into = doy - idx * SEASON_DAYS;
   return {
-    name: SEASON_STARTS[idx].name,
-    progress: clamp((pos - start) / (next - start), 0, 1),
+    name: SEASON_NAMES[idx],
+    idx,
+    progress: into / SEASON_DAYS,
     doy,
-    warmth: +warmth.toFixed(3),
+    day: Math.floor(into) + 1,
+    year: year + 1,
+    warmth: +(0.5 - 0.5 * Math.cos((2 * Math.PI * (doy - MIDWINTER_DOY)) / YEAR_DAYS)).toFixed(3),
+    wet: +seasonWetness(doy).toFixed(3),
+    wetSeason: idx === 0 || idx === 3,
   };
 }
 
+// "Day 12 of spring, year 3"
 function dateText(w, t = w.t) {
-  let d = valleyDate(w, t);
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  let s = seasonAt(w, t);
+  return `Day ${s.day} of ${s.name}, year ${s.year}`;
+}
+
+// The real-world date the valley began, for the settings panel.
+function realStartText(w) {
+  let d = valleyDate(w, 0);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+}
+
+// Valley days until the next midwinter morning (their midwinter).
+function daysToMidwinter(w, t = w.t) {
+  let doy = seasonAt(w, t).doy,
+    d = MIDWINTER_DOY + 0.22 - doy;
+  return d < 0 ? d + YEAR_DAYS : d;
 }
 
 // How long the valley has existed, in real days.
 function valleyAgeDays(w, t = w.t) {
   return t / REAL_DAY;
+}
+
+// ==== src/sim/creek.js ====
+// ==========================================================================
+// The creek (Phase 3A).
+//
+// Creek Care's river model (ref/creek-care-river-core.js), ported and rescaled
+// for a small stream, plus what Creekfolk needs on top of it:
+//
+//   SHAPE      The creek is a chain of nodes 2 m apart along the valley (z). Each
+//              node has a bed, an old valley floor it has cut down below (fp), a
+//              trench (bottom width wb, side slope m), maybe an inset bench (bw, bz),
+//              plants (veg) and a water table under the floor beside it (g).
+//   FLOODS     Each storm is one flood. Flow from the drained area (Q = k(T) A^0.8),
+//              depth from Manning's equation in the compound channel. Behind a dam
+//              the water is deeper than the flow needs, so the energy slope (and the
+//              force on the bed) drops: that is how ponds trap gravel and mud.
+//   ONLY BUILDS  The author's settled rule: floods reshape the creek only in ways that
+//              build. Gravel and mud settle; nothing is scoured; banks don't retreat;
+//              dams never wash out. The bed stays a little below the floor.
+//   STAGE 0    Where floods go over the bank, the water is routed across the valley
+//              floor and wears shallow side channels that reinforce themselves, so a
+//              healed valley floor becomes many channels, ponds and marsh.
+//   WATER      Every 10 minutes: the spring and the hills feed the creek; the creek and
+//              the floor's water table trade water; a deep trench drains the floor;
+//              ponds fill, spill, evaporate and seep; plants draw the water table down
+//              in the dry season. From the water table each cell of the valley gets
+//              its depth to water, which makes it open water, marsh, green or brown.
+//   DAMS       A dam is a crest on one node. It can hold water at most CREEK.dropMax
+//              above the water just below it; higher than that the water digs under
+//              and the pond barely holds. That is where "build downstream first" comes
+//              from: nothing scripted, just the drop.
+//
+// Units: metres, seconds, m3/s, Pa. x across the valley, z along it (downstream is +z).
+// Everything random comes from the creek's own seeded generator (saved with the world).
+// ==========================================================================
+
+var VW = 80, // valley grid: cells across
+  VL = 160, // cells along the creek
+  CELLS = VW * VL,
+  VERTS = (VW + 1) * (VL + 1);
+
+var CREEK = {
+  ds: 2, // metres between nodes
+  z0: -24, // the model runs a little beyond both ends of the valley
+  z1: VL + 24,
+  A0: 0.05, // km2 drained at the upstream end (the spring and the hills above it)
+  lam: 0.1, // km2 more per km of valley
+  D50: 0.016, // gravel size (m)
+  // sediment brought by a valley year of floods, per km2 drained (m3 of solid)
+  gravelYield: 30,
+  fineYield: 800,
+  stormsPerYear: 8, // expected storms (floods) in one valley year
+  pondTrap: 0.03, // share of the passing mud that settles in each node of a pond
+  // dams
+  crest: [0, 0.3, 0.55, 0.55], // crest above the bed by dam level (weir, mud dam, planted banks)
+  dropMax: 0.42, // the most a dam holds above the water just below it
+  pipeHold: 0.18, // what a dam with too big a drop still holds above the water below
+  raiseStep: 0.12, // a silted-up dam is raised this much at a time
+  raiseAbove: 0.3, // ... up to this far above the valley floor
+  siltGap: 0.12, // a pond counts as silted up when the bed behind is this close to the crest
+  // hydrology (rates per valley day unless named otherwise)
+  springQ: 0.0004, // m3/s the spring gives in the dry season (more in the wet season)
+  upFill: 0.55, // upstream storage gained per valley day of rain (relative units)
+  upTau: 2.2, // valley days for the upstream storage to drain
+  upQ: 0.05, // m3/s per unit of upstream storage
+  latRun: 0.00003, // m3/s per metre of valley while it rains (runoff from the sides)
+  soilWet: 1.2, // topsoil moisture gained per valley day of rain
+  soilDry: 0.018, // lost per valley day at full warmth
+  rech: 0.05, // m of water-table rise per valley day of rain
+  et: 0.004, // m of water-table fall per valley day at full warmth with roots in reach
+  root: 1.3, // m: how deep roots reach
+  tauDeep: 2.5, // valley days for a deep, cut-down trench to drain the floor
+  tauShallow: 40, // ... and a creek near the top of its floor
+  bedLoss: 1.6e-5, // m/s of water lost into a bed sitting above the water table
+  deep: 0.016, // m/valley day the water table sinks into the gravel below a bare bed
+  evap: 0.0011, // m/valley day off open water at full warmth
+  pondSeep: 0.0004, // m/valley day a pond loses into drier ground around it
+  lambda: 3, // m: how far the creek's water level reaches into the floor's water table
+  floodTau: 0.12, // valley days for a flood to drain away
+};
+
+var CREEK_PHYS = { g: 9.81, rho: 1000, srel: 1.65, por: 0.35 };
+
+// Saves from another build are refused with the author's wording.
+var OTHER_BUILD_TEXT = "This valley was made in an earlier version of Creekfolk and can't be opened here";
+
+var CREEK_STAGES = {
+  0: { name: "Stage 0: valley-floor wetland", text: "The creek has filled its trench and spread across the valley floor in many small channels, ponds and marsh." },
+  I: { name: "Stage I: steady", text: "The creek reaches its floor, so floods spread out and lose their punch." },
+  II: { name: "Stage II: cut down", text: "The creek sits in a trench below its old floor. Floods can't spread out, and the floor beside it dries." },
+  III: { name: "Stage III: banks falling in", text: "The banks are too tall to stand." },
+  IV: { name: "Stage IV: refilling", text: "Gravel and mud are piling up and the bed is rising; a new floor is growing inside the old trench." },
+  V: { name: "Stage V: healed", text: "A new floor has built up inside the trench and plants hold it. Floods can spread out again." },
+};
+
+// ---- Creek Care's hydraulics, unchanged in substance ----------------------
+
+// Peak flow per km2^0.8 for a flood of return period T (years).
+function creekKofT(T) {
+  if (T <= 1) return 5.4 * Math.max(T, 0.05);
+  let lt = Math.log10(T);
+  return lt <= 1 ? 5.4 + 10.4 * lt : 15.8 + 14.2 * (lt - 1);
+}
+function creekDurH(T) {
+  return T < 1 ? 12 : T < 2 ? 10 : T < 10 ? 8 : 6;
+}
+// The natural bankfull channel for a drained area: width and depth (m).
+function creekNatural(A) {
+  let Q = creekKofT(1.5) * Math.pow(Math.max(A, 0.005), 0.8);
+  return { Q, w: 2.7 * Math.sqrt(Q), d: 0.3 * Math.cbrt(Q) };
+}
+var creekTrench = (n) => Math.max(n.fp - n.bed, 0.05);
+var creekBenchDepth = (n) => (n.bw > 0.05 ? clamp(n.bz - n.bed, 0, creekTrench(n) - 0.03) : 0);
+var creekTopWidth = (n) => n.wb + 2 * n.m * creekTrench(n) + n.bw;
+function creekWidthAt(n, y) {
+  let Ht = creekTrench(n),
+    Hz = creekBenchDepth(n),
+    yy = Math.min(y, Ht),
+    w = n.wb + 2 * n.m * yy;
+  if (n.bw > 0.05 && yy > Hz) w += n.bw;
+  if (y > Ht) w = Math.max(n.Wv || 20, creekTopWidth(n));
+  return w;
+}
+function creekConveyance(n, y, S, o) {
+  let Ht = creekTrench(n),
+    Hz = creekBenchDepth(n),
+    m = n.m,
+    sq = Math.sqrt(1 + m * m),
+    sS = Math.sqrt(S),
+    y1 = Math.min(y, Ht),
+    A,
+    P,
+    Qb = 0,
+    Qf = 0;
+  if (Hz > 0) {
+    let wch = n.wb + 2 * m * Hz,
+      yb = Math.min(y1, Hz);
+    A = n.wb * yb + m * yb * yb + (y1 > Hz ? wch * (y1 - Hz) : 0);
+    P = n.wb + 2 * yb * sq;
+    if (y1 > Hz) {
+      let Ab = n.bw * (y1 - Hz),
+        Pb = n.bw + (y1 - Hz);
+      Qb = (Ab * Math.pow(Ab / Pb, 2 / 3) * sS) / n.nB;
+    }
+  } else {
+    A = n.wb * y1 + m * y1 * y1;
+    P = n.wb + 2 * y1 * sq;
+  }
+  if (y > Ht) {
+    let yo = y - Ht,
+      wt = creekTopWidth(n);
+    A += wt * yo;
+    let Wf = Math.max((n.Wv || 20) - wt, 4);
+    Qf = (Math.pow(yo, 5 / 3) * Wf * sS) / n.nF;
+  }
+  let Qc = ((A * Math.cbrt(A * A)) / Math.cbrt(P * P) * sS) / n.nC;
+  if (o) (o.A = A), (o.P = P), (o.Qc = Qc), (o.Qb = Qb), (o.Qf = Qf);
+  return Qc + Qb + Qf;
+}
+function creekSolveDepth(n, Q, S) {
+  let lo = 0.001,
+    hi = 0,
+    y = clamp(Math.pow((Q * n.nC) / (Math.max(n.wb, 0.3) * Math.sqrt(S)), 0.6), 0.005, 20);
+  for (let it = 0; it < 40; it++) {
+    let f = creekConveyance(n, y, S) - Q;
+    f < 0 ? (lo = y) : (hi = y);
+    if (Math.abs(f) < 1e-4 * Q) return y;
+    let dy = Math.max(1e-3 * y, 1e-5),
+      d = (creekConveyance(n, y + dy, S) - Q - f) / dy,
+      yn = d > 1e-12 ? y - f / d : hi ? 0.5 * (lo + hi) : y * 1.6;
+    if (yn <= lo || (hi && yn >= hi) || !(yn > 0)) yn = hi ? 0.5 * (lo + hi) : Math.max(y * 1.6, lo * 2);
+    if (Math.abs(yn - y) < 1e-6) return yn;
+    y = yn;
+  }
+  return y;
+}
+function creekHydraulics(n, Q, S) {
+  let o = {},
+    y = creekSolveDepth(n, Q, S);
+  creekConveyance(n, y, S, o);
+  let R = o.A / Math.max(o.P, 0.05),
+    share = o.Qf / Math.max(o.Qc + o.Qb + o.Qf, 1e-12),
+    tau = CREEK_PHYS.rho * CREEK_PHYS.g * Math.min(R, y) * S * Math.sqrt(Math.max(1 - 0.8 * share, 0.2));
+  return { y, yo: Math.max(y - creekTrench(n), 0), tau, R, share, Qf: o.Qf };
+}
+function creekRough(n) {
+  n.nC = 0.03 * Math.pow(n.D50 / 0.03, 1 / 6) + 0.012 * n.veg;
+  n.nB = 0.045 + 0.05 * n.veg;
+  n.nF = 0.06 + 0.07 * n.veg;
+  return n;
+}
+// Depth of a small flow in the bottom of the channel (wide-rectangle Manning).
+function creekLowDepth(n, q, S) {
+  if (q <= 1e-6) return 0;
+  return Math.pow((q * n.nC) / (Math.max(n.wb, 0.3) * Math.sqrt(Math.max(S, 2e-4))), 0.6);
+}
+
+// ---- building the creek for a new valley ---------------------------------
+
+// The creek on day one, from the terrain's fixed shape and the seed. Incised:
+// the bed sits about a metre below the old valley floor in a narrow trench.
+function creekBuildNodes(terrain, seed) {
+  let rng = new Rng(seed + ":creek-build"),
+    p1 = rng.range(0, 6.28),
+    p2 = rng.range(0, 6.28),
+    nodes = [];
+  for (let z = CREEK.z0; z <= CREEK.z1 + 1e-6; z += CREEK.ds) {
+    let A = CREEK.A0 + (CREEK.lam * (z - CREEK.z0)) / 1000,
+      nat = creekNatural(A),
+      fp = terrain.fp0(z),
+      // how far it has cut down: deeper in the middle reaches, a little more on the steep upper stretch
+      D = 0.98 + 0.22 * (0.5 + 0.5 * Math.sin(z * 0.031 + p1)) + 0.1 * Math.sin(z * 0.083 + p2) + (z < terrain.zKnee ? 0.12 : 0),
+      n = {
+        z: +z.toFixed(2),
+        x: +terrain.creekX(z).toFixed(3),
+        A: +A.toFixed(5),
+        aLat: +(z === CREEK.z0 ? CREEK.A0 : (CREEK.lam * CREEK.ds) / 1000).toFixed(6),
+        len: CREEK.ds,
+        fp,
+        bed: fp - D,
+        wb: +(0.78 * nat.w).toFixed(3),
+        m: 0.62,
+        bw: 0,
+        bz: -1e9,
+        D50: CREEK.D50,
+        veg: 0.28,
+        vegT: 0.28,
+        g: 0,
+        wl: 0,
+        q: 0,
+        emaBed: 0,
+        yBed: 0,
+        stage: "II",
+        spread: 0,
+      };
+    nodes.push(n);
+  }
+  // the bed always falls downstream
+  for (let i = nodes.length - 2; i >= 0; i--) {
+    let a = nodes[i],
+      b = nodes[i + 1];
+    if (a.bed < b.bed + 0.003 * CREEK.ds) a.bed = b.bed + 0.003 * CREEK.ds;
+  }
+  for (let n of nodes) {
+    n.bed = +n.bed.toFixed(4);
+    n.g = +(n.bed + 0.1).toFixed(4);
+    n.wl = n.bed;
+    n.yBed = n.bed;
+    n.bedMin = n.bed;
+  }
+  return nodes;
+}
+
+// A new valley's creek state (world.creek).
+function creekInit(w) {
+  let T = w.terrain,
+    nodes = T.initNodes.map((n) => ({ ...n }));
+  let cr = {
+    v: 1,
+    rng: new Rng(w.seed + ":creek").getState(),
+    nodes,
+    dams: {},
+    soil: 0.9,
+    up: 1.2,
+    flood: null,
+    floods: 0,
+    sIdx: -1,
+    yearNo: 1,
+    minWet: 1,
+    minGreen: 1,
+    driest: [],
+    wetNow: 0,
+    greenNow: 0,
+    flowLen: 0,
+    notes: {},
+    chan: new Float32Array(VERTS),
+    init: nodes.map((n) => [n.bed, n.fp, n.wb]),
+  };
+  w.creek = cr;
+  creekDerive(w);
+  creekHydro(w, true);
+  return cr;
+}
+
+// ---- derived values (rebuilt after a load and after the shape changes) ----
+
+// Per-node slope, roughness and floor width; per-cell lookups for the water table.
+function creekDerive(w) {
+  let cr = w.creek,
+    ns = cr.nodes,
+    T = w.terrain;
+  for (let n of ns) {
+    n.Wv = 2 * T.floorHW(n.z);
+    creekRough(n);
+  }
+  creekSlopes(cr);
+  T.setCreek(cr);
+  creekCellIndex(w);
+}
+
+// Bed slope at each node from the effective bed (a dam's crest counts as bed).
+function creekSlopes(cr) {
+  let ns = cr.nodes,
+    N = ns.length,
+    eb = ns.map((n, i) => creekEffBed(cr, i)),
+    raw = ns.map((n, i) => (i < N - 1 ? (eb[i] - eb[i + 1]) / CREEK.ds : (eb[i - 1] - eb[i]) / CREEK.ds));
+  for (let i = 0; i < N; i++) {
+    let s = 0,
+      c = 0;
+    for (let j = Math.max(0, i - 2); j <= Math.min(N - 1, i + 2); j++) (s += raw[j]), c++;
+    let wide = Math.max(s / c, 3e-4);
+    ns[i]._S = clamp(raw[i], 0.3 * wide, 2.5 * wide);
+    ns[i]._Sw = wide;
+  }
+}
+
+function creekDamAt(cr, i) {
+  for (let id in cr.dams) if (cr.dams[id].i === i) return cr.dams[id];
+  return null;
+}
+function creekEffBed(cr, i) {
+  let n = cr.nodes[i],
+    d = cr._damAt ? cr._damAt[i] : creekDamAt(cr, i);
+  return d ? Math.max(n.bed, d.crest) : n.bed;
+}
+function creekNodeIndex(z) {
+  return clamp(Math.round((z - CREEK.z0) / CREEK.ds), 0, Math.round((CREEK.z1 - CREEK.z0) / CREEK.ds));
+}
+// Interpolated node values at z (for drawing and lookups).
+function creekAt(cr, z, key) {
+  let f = clamp((z - CREEK.z0) / CREEK.ds, 0, cr.nodes.length - 1.0001),
+    i = Math.floor(f),
+    t = f - i,
+    a = cr.nodes[i],
+    b = cr.nodes[i + 1];
+  return a[key] + (b[key] - a[key]) * t;
+}
+
+// Static per-cell lookups: which node, distance from the trench edge, floor weight.
+var creekCellCache = new WeakMap();
+function creekCellIndex(w) {
+  let T = w.terrain,
+    cr = w.creek,
+    c = creekCellCache.get(cr);
+  if (!c) {
+    c = {
+      node: new Int16Array(CELLS),
+      d: new Float32Array(CELLS),
+      floor: new Uint8Array(CELLS),
+      h: new Float32Array(CELLS),
+      nFloor: 0,
+    };
+    creekCellCache.set(cr, c);
+  }
+  let nf = 0;
+  for (let cz = 0; cz < VL; cz++) {
+    let z = cz + 0.5,
+      i = creekNodeIndex(z),
+      n = cr.nodes[i],
+      cx = T.creekX(z),
+      half = 0.5 * creekTopWidth(n),
+      fhw = T.floorHW(z),
+      ax = T.axisX(z);
+    for (let cxI = 0; cxI < VW; cxI++) {
+      let k = cz * VW + cxI,
+        x = cxI + 0.5;
+      c.node[k] = i;
+      c.d[k] = Math.max(0, Math.abs(x - cx) - half);
+      // the valley floor: the bottomland, with the creek in it
+      let fl = (Math.abs(x - ax) < fhw - 0.5 || Math.abs(x - cx) <= half) && T.valleyR(x, z) < 0.9 && z > 0 && z < VL ? 1 : 0;
+      c.floor[k] = fl;
+      nf += fl;
+      c.h[k] = 0.25 * (T.h[cz * (VW + 1) + cxI] + T.h[cz * (VW + 1) + cxI + 1] + T.h[(cz + 1) * (VW + 1) + cxI] + T.h[(cz + 1) * (VW + 1) + cxI + 1]);
+    }
+  }
+  c.nFloor = nf;
+  return c;
+}
+function creekCells(w) {
+  return creekCellCache.get(w.creek) || creekCellIndex(w);
+}
+
+// ---- dams ----------------------------------------------------------------
+
+// Bring the model's dams in line with the dam structures (call when one is built,
+// raised or removed, and after a load).
+function creekSyncDams(w) {
+  let cr = w.creek,
+    seen = {};
+  for (let s of w.structures) {
+    if (s.kind !== "dam" || !(s.level > 0)) continue;
+    seen[s.id] = 1;
+    let d = cr.dams[s.id];
+    if (!d) {
+      let i = creekNodeIndex(s.z);
+      d = cr.dams[s.id] = { id: s.id, i, crest: cr.nodes[i].bed + CREEK.crest[s.level], lv: s.level, pl: cr.nodes[i].bed, plMax: cr.nodes[i].bed, hold: 1, raised: 0 };
+    }
+    if (s.level > d.lv) {
+      // a new level: mud-packing the weir makes it taller
+      if (CREEK.crest[s.level] > CREEK.crest[d.lv]) d.crest = Math.max(d.crest + CREEK.crest[s.level] - CREEK.crest[d.lv], cr.nodes[d.i].bed + CREEK.crest[s.level]);
+      d.lv = s.level;
+    }
+    d.cond = s.cond ?? 1;
+    // willow-planted banks: plants take hold along the pond
+    if (s.level >= 3 && !d.planted) {
+      d.planted = 1;
+      for (let i = Math.max(0, d.i - 6); i <= Math.min(cr.nodes.length - 1, d.i + 2); i++) cr.nodes[i].vegT = Math.max(cr.nodes[i].vegT, 0.85);
+    }
+  }
+  for (let id in cr.dams) if (!seen[id]) delete cr.dams[id];
+  creekDamIndex(cr);
+}
+
+// Would this dam still hold its pond if it were built `add` higher? (What someone who
+// knows "downstream" can judge by eye: is there water standing at its foot?)
+function creekSafeToRaise(w, s, add) {
+  let cr = w.creek,
+    d = cr && cr.dams[s.id];
+  if (!d) return true;
+  if (d.tail === undefined) creekPondLevels(cr);
+  return d.crest + add - d.tail <= CREEK.dropMax;
+}
+
+// A silted-up dam built up a hand higher (the tending chore). Returns true if it rose.
+function creekRaiseDam(w, s, who) {
+  let cr = w.creek,
+    d = cr && cr.dams[s.id];
+  s.raise = 0;
+  s.siltNoted = 0;
+  if (!d) return false;
+  let n = cr.nodes[d.i],
+    top = n.fp + CREEK.raiseAbove;
+  if (d.crest >= top - 0.01) return false;
+  // someone who knows the water must stand at its foot won't build it up into a leak
+  if (who && who.know && who.know.downstream && !creekSafeToRaise(w, s, CREEK.raiseStep)) return false;
+  d.crest = +Math.min(top, d.crest + CREEK.raiseStep).toFixed(4);
+  d.raised = (d.raised || 0) + 1;
+  s.raised = d.raised;
+  s.cond = 1;
+  w.stats.raises = (w.stats.raises || 0) + 1;
+  logEvent(
+    w,
+    w.stats.raises === 1 ? 2 : 1,
+    d.crest > n.fp ?
+    `${who.name} built the ${builtLevelDef(s).label} up above the valley floor. Its pond will spread out over the floor now.` :
+    `${who.name} built the ${builtLevelDef(s).label} up a hand higher, over the silt.`,
+    [who.id],
+    s,
+    "wetland"
+  );
+  creekDamIndex(cr);
+  creekPondLevels(cr);
+  creekCellWater(w, 0, seasonAt(w));
+  return true;
+}
+function creekDamIndex(cr) {
+  let at = new Array(cr.nodes.length).fill(null);
+  for (let id in cr.dams) at[cr.dams[id].i] = cr.dams[id];
+  cr._damAt = at;
+  cr._damIds = Object.keys(cr.dams).sort((a, b) => cr.dams[b].i - cr.dams[a].i); // downstream first
+}
+
+// Full-pond levels: what each dam can hold, judged from the water standing below it.
+// Fills cr._pond (the full-pond level over each node, or -1e9), cr._pondOwner (the dam
+// whose basin a node lies in, or -1) and each dam's plMax, tail and hold.
+function creekPondLevels(cr) {
+  let ns = cr.nodes,
+    N = ns.length,
+    full = cr._pondFull && cr._pondFull.length === N ? cr._pondFull : (cr._pondFull = new Float64Array(N)),
+    owner = cr._pondOwner && cr._pondOwner.length === N ? cr._pondOwner : (cr._pondOwner = new Int32Array(N));
+  full.fill(-1e9);
+  owner.fill(-1);
+  if (!cr._damIds) creekDamIndex(cr);
+  for (let id of cr._damIds) {
+    let d = cr.dams[id],
+      j = d.i,
+      below = Math.min(N - 1, j + 1),
+      tail = Math.max(ns[below].bed + 0.05, full[below]),
+      leak = 0.3 * Math.pow(1 - clamp(d.cond ?? 1, 0, 1), 1.5),
+      top = d.crest - leak,
+      max = top - tail <= CREEK.dropMax ? top : Math.min(top, tail + CREEK.pipeHold);
+    d.plMax = +max.toFixed(5);
+    d.tail = +tail.toFixed(5);
+    d.hold = top - tail <= CREEK.dropMax ? 1 : 0; // 0: the water digs under it
+    d.drowned = 0;
+    for (let i = j; i >= 0; i--) {
+      if (i < j && cr._damAt[i] && cr._damAt[i].crest >= max) break;
+      if (ns[i].bed >= max) break;
+      if (max > full[i]) {
+        if (i < j && cr._damAt[i]) cr._damAt[i].drowned = 1;
+        full[i] = max;
+        owner[i] = +id;
+      }
+    }
+  }
+  return full;
+}
+
+// The water standing in each pond now (ponds shrink in the dry season): cr._pondNow[i]
+// is the owning pond's level where it is above the bed, or -1e9.
+function creekPondNow(cr) {
+  let ns = cr.nodes,
+    N = ns.length,
+    now = cr._pondNow && cr._pondNow.length === N ? cr._pondNow : (cr._pondNow = new Float64Array(N)),
+    owner = cr._pondOwner;
+  if (!owner) creekPondLevels(cr), (owner = cr._pondOwner);
+  for (let i = 0; i < N; i++) {
+    let o = owner[i],
+      d = o >= 0 ? cr.dams[o] : null;
+    now[i] = d && d.pl > ns[i].bed ? d.pl : -1e9;
+  }
+  return now;
+}
+
+// ---- floods --------------------------------------------------------------
+
+// Expected sum of k^1.5 * duration over a valley year's storms, so each flood can
+// carry its fair share of the year's sediment.
+var creekYearWork = (() => {
+  let s = 0,
+    n = 4000;
+  for (let k = 0; k < n; k++) {
+    let u = (k + 0.5) / n,
+      T = Math.min(200, 1 / (CREEK.stormsPerYear * u));
+    s += Math.pow(creekKofT(T), 1.5) * creekDurH(T);
+  }
+  return (s / n) * CREEK.stormsPerYear;
+})();
+
+// A storm has begun: one flood. Returns the flood's return period.
+function creekStorm(w, Tforce) {
+  let cr = w.creek;
+  if (!cr) return 0;
+  let rng = new Rng(1);
+  rng.setState(cr.rng);
+  let T = Tforce || Math.min(200, Math.max(0.15, 1 / (CREEK.stormsPerYear * Math.max(rng.next(), 1e-4))));
+  let seed = rng.next();
+  cr.rng = rng.getState();
+  creekFloodWork(w, T, seed);
+  cr.floods++;
+  cr.flood = { t0: w.t, k: creekKofT(T), T: +T.toFixed(2) };
+  return T;
+}
+
+function creekFloodWork(w, T, seed) {
+  let cr = w.creek,
+    ns = cr.nodes,
+    N = ns.length,
+    P = CREEK_PHYS,
+    k = creekKofT(T),
+    durS = creekDurH(T) * 3600,
+    share = (Math.pow(k, 1.5) * creekDurH(T)) / creekYearWork,
+    full = creekPondLevels(cr),
+    spills = [];
+  creekSlopes(cr);
+  // A. flow, depth and the force on the bed
+  for (let i = 0; i < N; i++) {
+    let n = ns[i],
+      Q = k * Math.pow(n.A, 0.8),
+      S = Math.max(n._S, 1e-4),
+      h = creekHydraulics(n, Q, S),
+      y = h.y,
+      tau = h.tau,
+      ws = n.bed + y;
+    if (full[i] > n.bed + y) {
+      // the pond is deeper than the flow needs: slack water
+      let yp = full[i] - n.bed,
+        Se = S * Math.pow(y / yp, 10 / 3);
+      tau = P.rho * P.g * Math.min(h.R * (yp / y), yp) * Se;
+      ws = full[i];
+    }
+    n._tau = tau;
+    n._ws = ws;
+    n._y = ws - n.bed;
+    n._ob = ws > n.fp ? h.Qf + (full[i] > n.fp ? 0.3 * Q : 0) : 0;
+    n.ob = +(ws > n.fp ? Math.min(1, (ws - n.fp) / 0.2) : 0).toFixed(3);
+    if (n._ob > 0 && n.z > 0 && n.z < VL) spills.push(i);
+  }
+  // B. gravel: moves where the force is enough, settles where it is not. A flood can
+  // carry on gravel that an earlier, smaller flood dropped loose on the bed, but it
+  // never digs below what has settled for good (bedMin): the creek only builds.
+  let qgUp = 0,
+    deposit = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    let n = ns[i],
+      qgIn = qgUp + (CREEK.gravelYield * n.aLat * share) / durS,
+      th = n._tau / (P.srel * P.rho * P.g * n.D50),
+      qb = th > 0.045 ? 8 * Math.pow(th - 0.045, 1.5) * Math.sqrt(P.srel * P.g * Math.pow(n.D50, 3)) : 0,
+      cap = qb * Math.max(n.wb, 0.5),
+      f = 1 - Math.exp(-n.len / Math.max(8, 8 * n.wb)),
+      qgOut = cap * f + qgIn * (1 - f),
+      area = (1 - P.por) * Math.max(n.wb, 0.5) * n.len;
+    if (qgOut > qgIn) {
+      let loose = Math.max(0, n.bed - (n.bedMin ?? n.bed)) * area;
+      qgOut = qgIn + Math.min(qgOut - qgIn, loose / durS);
+    }
+    deposit[i] += (qgIn - qgOut) * durS;
+    qgUp = Math.max(0, qgOut);
+  }
+  // C. mud: settles in ponds, among plants, and on the floor when the water goes over the bank
+  let qfUp = 0,
+    floorDep = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    let n = ns[i],
+      qfIn = qfUp + (CREEK.fineYield * n.aLat * share) / durS,
+      pondy = full[i] > n.bed ? clamp((full[i] - n.bed) / 0.5, 0, 1) : 0,
+      slow = clamp(1 - n._tau / 15, 0, 1),
+      trap = clamp(CREEK.pondTrap * pondy + slow * (0.03 * Math.max(0, n.veg - 0.3) + (n.bw > 0.05 ? 0.015 : 0)), 0, 0.4),
+      dep = trap * qfIn;
+    deposit[i] += dep * durS;
+    let over = n.ob > 0 ? clamp(0.18 * n.ob, 0, 0.25) : 0,
+      fdep = over * (qfIn - dep);
+    floorDep[i] = fdep * durS;
+    qfUp = Math.max(0, qfIn - dep - fdep);
+  }
+  // D. the bed and the floor rise
+  let rose = 0;
+  for (let i = 0; i < N; i++) {
+    let n = ns[i],
+      wWet = deposit[i] < 0 ? Math.max(n.wb, 0.5) : Math.max(n.wb + n.m * Math.min(creekTrench(n), Math.max(n._y, 0.1)), 0.5),
+      dz = deposit[i] / ((1 - P.por) * wWet * n.len),
+      cap = Math.min(n.fp - 0.05, Math.max(full[i], n.bed + 0.3)),
+      floor0 = n.bedMin ?? n.bed;
+    dz = clamp(dz, floor0 - n.bed, Math.max(0, cap - n.bed));
+    dz = Math.min(dz, 0.12);
+    n.bed = +(n.bed + dz).toFixed(5);
+    rose += dz;
+    // loose deposits settle for good: quickly in still water or among plants
+    let k = full[i] > n.bed + 0.05 ? 0.5 : n.veg > 0.55 ? 0.2 : 0.03;
+    n.bedMin = +(floor0 + Math.max(0, n.bed - floor0) * k).toFixed(5);
+    let fw = Math.max(n.Wv - creekTopWidth(n), 6),
+      dfp = floorDep[i] / ((1 - P.por) * fw * n.len);
+    if (dfp > 0) n.fp = +(n.fp + Math.min(dfp, 0.02)).toFixed(5);
+    // a bench buried by the rising bed is gone
+    if (n.bw > 0.05 && n.bz <= n.bed + 0.05) (n.bw = 0), (n.bz = -1e9);
+    // a bench rises with the mud that floods leave on it
+    if (n.bw > 0.05 && n._ws > n.bz) {
+      let nat = creekNatural(n.A);
+      n.bz = Math.min(n.fp - 0.05, n.bz + clamp(0.004 + 0.01 * n.veg, 0, 0.02) * Math.min(1, (n._ws - n.bz) / 0.2) * (n.bz - n.bed < nat.d ? 1.5 : 1));
+    }
+  }
+  // E. water over the floor wears side channels
+  if (spills.length) creekSpread(w, spills, seed);
+  cr.lastRise = +rose.toFixed(4);
+  creekDerive(w);
+  creekPondLevels(cr);
+  creekPondNow(cr);
+  creekCellWater(w, 0, seasonAt(w));
+  creekNotes(w);
+}
+
+// ---- Stage 0: water spreading over the valley floor ------------------------
+
+// Route each spill across the floor (steepest way down-valley on the floor's own
+// surface) and wear the cells it crosses a little deeper. Paths that carry water
+// get deeper and carry more next time, so side channels form and persist.
+function creekSpread(w, spills, seed) {
+  let cr = w.creek,
+    T = w.terrain,
+    ns = cr.nodes,
+    chan = cr.chan,
+    H = T.h,
+    W1 = VW + 1,
+    flow = creekSpread.flow || (creekSpread.flow = new Float32Array(VERTS)),
+    s = Math.floor(seed * 1e6) | 0,
+    jit = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * 0.012;
+  flow.fill(0);
+  let floorOK = (vx, vz) => {
+    let x = vx,
+      z = vz;
+    if (vx < 1 || vz < 1 || vx >= VW || vz >= VL) return false;
+    return Math.abs(x - T.axisX(z)) < T.floorHW(z) + 0.5 && T.valleyR(x, z) < 0.9;
+  };
+  for (let i of spills) {
+    let n = ns[i],
+      cx = T.creekX(n.z),
+      half = 0.5 * creekTopWidth(n);
+    for (let side = -1; side <= 1; side += 2) {
+      let vx = Math.round(cx + side * (half + 0.8)),
+        vz = Math.round(n.z),
+        q = n._ob * 0.5;
+      for (let step = 0; step < 70 && floorOK(vx, vz); step++) {
+        flow[vz * W1 + vx] += q;
+        let here = H[vz * W1 + vx],
+          best = null,
+          bh = here + 0.02;
+        for (let [dx, dz] of [[0, 1], [-1, 1], [1, 1], [-1, 0], [1, 0]]) {
+          let nx = vx + dx,
+            nz = vz + dz;
+          if (!floorOK(nx, nz)) continue;
+          let zc = nz,
+            ccx = T.creekX(zc),
+            hh = H[nz * W1 + nx] + jit() - 0.004 * dz;
+          if (Math.abs(nx - ccx) < 0.5 * creekTopWidth(ns[creekNodeIndex(zc)]) + 0.4) {
+            // back into the creek: this thread rejoins it
+            best = null;
+            bh = -1e9;
+            break;
+          }
+          if (hh < bh) (bh = hh), (best = [nx, nz]);
+        }
+        if (!best) {
+          if (bh > -1e8) {
+            // a hollow: the water ponds here and deepens it a little
+            chan[vz * W1 + vx] = Math.min(0.32, chan[vz * W1 + vx] + 0.006);
+          }
+          break;
+        }
+        [vx, vz] = best;
+      }
+    }
+  }
+  let carved = 0;
+  for (let v = 0; v < VERTS; v++) {
+    let f = flow[v];
+    if (f <= 0) continue;
+    let add = Math.min(0.025, 0.05 * Math.pow(f, 0.6));
+    if (add < 0.0005) continue;
+    let was = chan[v];
+    chan[v] = Math.min(0.3, was + add);
+    // the edges of a thread are worn a little too
+    for (let o of [-1, 1, -W1, W1]) {
+      let u = v + o;
+      if (u >= 0 && u < VERTS && chan[u] < chan[v] * 0.5) chan[u] = Math.min(0.3, chan[u] + add * 0.3);
+    }
+    carved += chan[v] - was;
+  }
+  cr.carved = (cr.carved || 0) + carved;
+}
+
+// ---- water through the year ---------------------------------------------
+
+var CREEK_HYDRO_DT = 600; // seconds between hydrology steps
+
+// One hydrology step. With init true, settle levels without advancing anything.
+function creekHydro(w, init = false) {
+  let cr = w.creek;
+  if (!cr) return;
+  let ns = cr.nodes,
+    N = ns.length,
+    s = seasonAt(w),
+    dtS = init ? 0 : CREEK_HYDRO_DT,
+    dtD = dtS / VALLEY_DAY,
+    rain = w.weather ? w.weather.rain || 0 : 0,
+    warm = 0.25 + 0.75 * s.warmth,
+    cloudy = w.weather && (w.weather.state === "cloudy" || rain > 0) ? 0.55 : 1,
+    sy = 0.2;
+  if (!cr._damIds) creekDamIndex(cr);
+  // the topsoil, the same everywhere: rain wets it, warmth dries it
+  cr.soil = clamp(cr.soil + rain * CREEK.soilWet * dtD - CREEK.soilDry * warm * cloudy * dtD * (0.4 + 0.6 * cr.soil), 0, 1);
+  // what comes down from the spring and the hills above the valley
+  cr.up += rain * CREEK.upFill * dtD;
+  let rel = cr.up * (1 - Math.exp(-dtD / CREEK.upTau));
+  cr.up -= rel;
+  let Qin = CREEK.springQ * (0.3 + 1.7 * s.wet) + CREEK.upQ * (cr.up / CREEK.upTau);
+  // a flood drains away over a few valley hours
+  let fk = 0;
+  if (cr.flood) {
+    let age = (w.t - cr.flood.t0) / VALLEY_DAY;
+    fk = cr.flood.k * Math.exp(-age / CREEK.floodTau);
+    if (fk < 0.02) (cr.flood = null), (fk = 0);
+  }
+  // ponds: what each dam can hold now, and which basin each node drains into
+  creekPondLevels(cr);
+  let owner = cr._pondOwner;
+  for (let id in cr.dams) cr.dams[id]._in = 0;
+  let q = Qin,
+    flowLen = 0;
+  for (let i = 0; i < N; i++) {
+    let n = ns[i],
+      S = Math.max(n._S || 0.005, 2e-4),
+      d = owner[i] >= 0 ? cr.dams[owner[i]] : null,
+      wetPond = !!d && d.pl > n.bed;
+    q += rain * CREEK.latRun * n.len;
+    let level = wetPond ? d.pl : n.bed + creekLowDepth(n, q, S),
+      fw = Math.max(n.Wv - creekTopWidth(n), 6) * n.len; // floor area beside this node
+    if (!init) {
+      // the floor's water table and the creek trade water: a deep trench drains the
+      // floor quickly, a creek near the top of its floor slowly
+      let tau = CREEK.tauDeep + (CREEK.tauShallow - CREEK.tauDeep) * Math.pow(1 - clamp((n.fp - level) / 1.1, 0, 1), 2),
+        dg = 0;
+      if (n.g > level) {
+        let out = (n.g - level) * (1 - Math.exp(-dtD / tau)), // m of water table
+          gain = (out * sy * fw) / dtS;
+        dg -= out;
+        if (wetPond) d._in += gain;
+        else q += gain;
+      } else if (wetPond) {
+        // a pond seeps slowly into the ground around it (mud seals its bottom)
+        let seep = (CREEK.pondSeep * clamp((level - n.g) / 0.5, 0, 1) * Math.max(creekWidthAt(n, level - n.bed), 0.5) * n.len) / VALLEY_DAY;
+        d._in -= seep;
+        dg += (seep * dtS) / (sy * fw);
+      } else if (q > 0) {
+        // a flowing creek loses water into a bed that sits above the water table
+        let lost = Math.min(q, CREEK.bedLoss * Math.max(n.wb, 0.5) * n.len * clamp((level - n.g) / 0.3, 0, 1) * (n.g < n.bed ? 1 : 0.35));
+        q -= lost;
+        dg += (lost * dtS) / (sy * fw);
+      }
+      // rain soaks in; roots draw water up in the warm months; a bare gravel bed lets
+      // water sink away below it
+      dg += rain * CREEK.rech * dtD;
+      let depth = n.fp - n.g;
+      if (depth < CREEK.root) dg -= CREEK.et * warm * cloudy * (1 - depth / CREEK.root) * dtD;
+      let fill = clamp((n.bed - (cr.init[i] ? cr.init[i][0] : n.bed)) / 0.6, 0, 1); // mud in the bed seals it
+      if (n.g > n.bed - 1) dg -= CREEK.deep * (1 - 0.85 * fill) * (1 - 0.7 * n.veg * fill) * dtD;
+      n.g = clamp(n.g + dg, n.bed - 1.6, n.fp + 0.02);
+      if (wetPond && d.pl > n.fp) n.g = Math.max(n.g, d.pl);
+    }
+    // the water surface for drawing: the pond, the flood, or the flow
+    let wl = wetPond ? d.pl : q > 2e-5 ? n.bed + creekLowDepth(n, q, S) : Math.min(n.bed - 0.05, n.g);
+    if (fk > 0) {
+      let fh = creekHydraulics(n, fk * Math.pow(n.A, 0.8) + q, S);
+      wl = Math.max(wl, n.bed + fh.y);
+    }
+    if (q > 2e-5 && n.z >= 0 && n.z <= VL) flowLen += CREEK.ds;
+    // water reaching a pond's basin goes into the pond
+    if (d) (d._in += q), (q = 0);
+    let D = cr._damAt[i];
+    if (D && !D.drowned) {
+      // the dam: a reservoir; it spills over the crest once it is full
+      let area = creekPondArea(w, D);
+      if (!init) D.pl += ((D._in - (CREEK.evap * warm * cloudy * area) / VALLEY_DAY) * dtS) / area;
+      if (D.pl >= D.plMax) {
+        if (!init) q += Math.max(0, ((D.pl - D.plMax) * area) / dtS);
+        D.pl = D.plMax;
+      }
+      D.pl = +Math.max(D.pl, n.bed).toFixed(5);
+      if (D.pl > n.bed) wl = Math.max(wl, D.pl);
+    }
+    n.q = +q.toFixed(6);
+    n.wl = +wl.toFixed(4);
+  }
+  creekPondNow(cr);
+  cr.flowLen = flowLen;
+  cr.Qin = +Qin.toFixed(6);
+  creekCellWater(w, init ? 0 : dtD, s);
+  if (!init) creekSeason(w, s);
+}
+
+// Surface area of a dam's pond at its present level (m2).
+function creekPondArea(w, d) {
+  let cr = w.creek,
+    ns = cr.nodes,
+    owner = cr._pondOwner,
+    id = d.id,
+    a = 0;
+  for (let i = d.i; i >= 0; i--) {
+    if (owner[i] !== id) break;
+    let n = ns[i];
+    if (n.bed >= d.pl) continue;
+    let y = d.pl - n.bed;
+    a += (y > creekTrench(n) ? creekTopWidth(n) + (n.Wv - creekTopWidth(n)) * clamp((d.pl - n.fp + 0.12) / 0.24, 0, 1) : creekWidthAt(n, y)) * n.len;
+  }
+  return Math.max(a, 0.5);
+}
+
+// Each cell of the valley: water table, depth to water, marsh and green.
+//   world.wt[k]     water table (m)
+//   world.green[k]  0 brown .. 1 green
+//   world.wet[k]    marsh (lagged: soaks in over a day, dries over a few)
+function creekCellWater(w, dtD, s) {
+  let cr = w.creek,
+    c = creekCells(w),
+    ns = cr.nodes,
+    T = w.terrain;
+  if (!w.wt || w.wt.length !== CELLS) w.wt = new Float32Array(CELLS);
+  if (!w.green || w.green.length !== CELLS) w.green = new Float32Array(CELLS);
+  if (!w.wet || w.wet.length !== CELLS) w.wet = new Float32Array(CELLS);
+  let wt = w.wt,
+    green = w.green,
+    wet = w.wet,
+    soil = cr.soil,
+    pondNow = cr._pondNow,
+    lam = CREEK.lambda,
+    up = dtD > 0 ? 1 - Math.exp(-dtD / 0.8) : 1,
+    down = dtD > 0 ? 1 - Math.exp(-dtD / 3) : 1,
+    nWet = 0,
+    nGreen = 0,
+    nf = 0;
+  let decay = new Float32Array(32);
+  for (let j = 0; j < 32; j++) decay[j] = 1 - Math.exp(-j / 2 / lam); // d in half-metre steps
+  for (let k = 0; k < CELLS; k++) {
+    let i = c.node[k],
+      n = ns[i],
+      d = c.d[k],
+      lv = n.wl,
+      pn = pondNow[i];
+    if (pn > lv) lv = pn;
+    let g = n.g,
+      f = d >= 15.5 ? 1 : decay[Math.floor(d * 2)],
+      table = lv + (g - lv) * f;
+    if (pn > n.fp) table = Math.max(table, pn - 0.02 * d);
+    wt[k] = table;
+    let dw = c.h[k] - table,
+      gr = Math.max(soil, dw < 0.55 ? 1 : dw < CREEK.root ? 1 - (dw - 0.55) / (CREEK.root - 0.55) : 0),
+      target = dw < 0.02 ? 1 : dw < 0.32 ? 1 - (dw - 0.02) / 0.3 : 0;
+    // well away from the floor there is no water table to speak of
+    if (!c.floor[k] && d > 8) (gr = soil), (target = 0);
+    green[k] = gr;
+    if (dtD <= 0) continue;
+    let cur = wet[k];
+    wet[k] = target > cur ? cur + (target - cur) * up : cur - (cur - target) * down;
+    if (wet[k] < 0.01) wet[k] = 0;
+    if (c.floor[k]) {
+      nf++;
+      if (wet[k] > 0.35) nWet++;
+      if (gr > 0.5) nGreen++;
+    }
+  }
+  if (dtD > 0) {
+    cr.wetNow = +(nWet / Math.max(1, nf)).toFixed(4);
+    cr.greenNow = +(nGreen / Math.max(1, nf)).toFixed(4);
+  }
+}
+
+// Seasonal bookkeeping: the driest point of each valley year, plants, stages.
+function creekSeason(w, s) {
+  let cr = w.creek;
+  if (!s.wetSeason) {
+    cr.minWet = Math.min(cr.minWet, cr.wetNow);
+    cr.minGreen = Math.min(cr.minGreen, cr.greenNow);
+  }
+  if (cr.sIdx === s.idx) return;
+  let was = cr.sIdx;
+  cr.sIdx = s.idx;
+  if (was < 0) return;
+  // the first winter rains: the dry season is over; record its driest point
+  if (s.idx === 3) {
+    cr.driest.push({ year: s.year, wet: +cr.minWet.toFixed(4), green: +cr.minGreen.toFixed(4), t: Math.round(w.t) });
+    if (cr.driest.length > 60) cr.driest.splice(0, cr.driest.length - 60);
+    cr.minWet = 1;
+    cr.minGreen = 1;
+  }
+  // plants grow through spring and summer
+  if (s.idx === 1 || s.idx === 2) creekPlants(w);
+  // a new valley year: stages from the year's change
+  if (s.idx === 0) {
+    for (let n of cr.nodes) {
+      let dz = n.bed - n.yBed;
+      n.emaBed = +(0.6 * n.emaBed + 0.4 * dz).toFixed(5);
+      n.yBed = n.bed;
+    }
+    cr.yearNo = s.year;
+  }
+  creekClassify(w);
+}
+
+// Plants: reeds and willows creep into a wet, quiet channel; a dry trench stays grassy.
+// Plants only ever increase (the creek only gets better), toward a target set by water.
+function creekPlants(w) {
+  let cr = w.creek,
+    pondNow = cr._pondNow || [];
+  for (let i = 0; i < cr.nodes.length; i++) {
+    let n = cr.nodes[i],
+      wetish = n.q > 2e-5 || pondNow[i] > n.bed || n.g > n.bed + 0.1,
+      target = Math.max(n.vegT, wetish ? 0.72 : 0.32);
+    n.veg = +Math.min(1, n.veg + Math.max(0, target - n.veg) * 0.12).toFixed(3);
+    // a quiet, planted trench traps mud along its edges and starts a bench
+    let nat = creekNatural(n.A),
+      Ht = creekTrench(n);
+    if (Ht > Math.max(1.2 * nat.d, nat.d + 0.3) && n.veg > 0.45 && Ht > 0.6) {
+      if (n.bw < 0.05) (n.bz = n.bed + clamp(0.3 * Ht, 0.2, 0.45)), (n.bw = 0.3);
+      else n.bw = +Math.min(n.bw + 0.12 * (n.veg - 0.3), 1.6 * Math.max(n.wb, 1)).toFixed(3);
+    }
+    creekRough(n);
+  }
+}
+
+// Channel evolution stages per node (Creek Care's rules, with Stage 0 added).
+function creekClassify(w) {
+  let cr = w.creek,
+    c = creekCells(w);
+  // how much of the floor beside each node carries water
+  let wetBy = new Float32Array(cr.nodes.length),
+    nBy = new Float32Array(cr.nodes.length);
+  for (let k = 0; k < CELLS; k++) {
+    if (!c.floor[k]) continue;
+    nBy[c.node[k]]++;
+    if (w.wet[k] > 0.5) wetBy[c.node[k]]++;
+  }
+  for (let i = 0; i < cr.nodes.length; i++) {
+    let n = cr.nodes[i],
+      nat = creekNatural(n.A),
+      Ht = creekTrench(n),
+      Hz = creekBenchDepth(n),
+      spread = nBy[i] ? wetBy[i] / nBy[i] : 0,
+      incised = Ht > Math.max(1.5 * nat.d, nat.d + 0.35);
+    n.spread = +spread.toFixed(3);
+    let st;
+    if (!incised) st = spread > 0.3 ? "0" : "I";
+    else if (n.bw > 0.6 * n.wb && Hz > 0.5 * nat.d && Math.abs(n.emaBed) < 0.01 && n.veg > 0.45) st = "V";
+    else if (n.emaBed > 0.004 || n.bw > 0.3 * n.wb) st = "IV";
+    else st = "II";
+    n.stage = st;
+  }
+}
+
+// ---- what the rest of the game asks ---------------------------------------
+
+// Water surface at a point, or null where it's dry.
+function creekWaterAt(w, x, z) {
+  if (!w.creek || !w.wt) return null;
+  let cx = Math.floor(x),
+    cz = Math.floor(z);
+  if (cx < 0 || cz < 0 || cx >= VW || cz >= VL) return null;
+  let k = cz * VW + cx,
+    h = w.terrain.heightAt(x, z);
+  return w.wt[k] > h ? w.wt[k] : null;
+}
+
+// What the land can feed: about 20 in a cut-down valley, up to 36 when it's healed.
+function creekFeed(w) {
+  let cr = w.creek;
+  if (!cr) return LIFE.maxCapacity;
+  let d = cr.driest.length ? cr.driest[cr.driest.length - 1].wet : 0,
+    healed = 0,
+    L = 0;
+  for (let n of cr.nodes) {
+    if (n.z < 0 || n.z > VL) continue;
+    L++;
+    if (n.stage === "V" || n.stage === "0" || n.stage === "I") healed++;
+    else if (n.stage === "IV") healed += 0.35;
+  }
+  let ponds = 0;
+  for (let id in cr.dams) if (cr.dams[id].pl > cr.nodes[cr.dams[id].i].bed + 0.15) ponds++;
+  let health = clamp(0.55 * Math.min(1, d / 0.75) + 0.25 * (healed / Math.max(1, L)) + 0.2 * Math.min(1, ponds / 6), 0, 1);
+  cr.health = +health.toFixed(3);
+  return Math.round(20 + 16 * health);
+}
+
+// Share of the valley floor that stayed wet at the driest point of the last valley year.
+function creekDriest(w) {
+  let cr = w.creek;
+  return cr && cr.driest.length ? cr.driest[cr.driest.length - 1] : null;
+}
+
+// Plain words for a share of the floor.
+function creekShareWords(f) {
+  return f <= 0.004 ? "none of it" : f < 0.04 ? "only a pool or two" : f < 0.15 ? "a little of it" : f < 0.3 ? "about a quarter" : f < 0.42 ? "about a third" : f < 0.6 ? "about half" : f < 0.85 ? "most of it" : f < 0.97 ? "nearly all of it" : "all of it";
+}
+
+// Stage of the creek at z (for the dev overlay and the panel).
+function creekStageAt(w, z) {
+  return w.creek ? w.creek.nodes[creekNodeIndex(z)].stage : "II";
+}
+
+// Milestones worth a line in the valley's history.
+function creekNotes(w) {
+  let cr = w.creek,
+    nt = cr.notes,
+    inValley = cr.nodes.filter((n) => n.z > 4 && n.z < VL - 4);
+  if (!nt.over && inValley.some((n) => n.ob > 0.2)) {
+    nt.over = 1;
+    logEvent(w, 3, "For the first time anyone can remember, the flood spilled over the banks and spread across the valley floor.", [], null, "wetland");
+  }
+  if (!nt.chan && (cr.carved || 0) > 2) {
+    nt.chan = 1;
+    logEvent(w, 2, "The floods have worn little side channels across the valley floor.", [], null, "wetland");
+  }
+  let filled = inValley.filter((n) => creekTrench(n) < 0.5).length / Math.max(1, inValley.length);
+  if (!nt.fill1 && filled > 0.15) {
+    nt.fill1 = 1;
+    logEvent(w, 3, "Behind the dams the creek has filled its old trench almost to the top.", [], null, "wetland");
+  }
+  if (!nt.fill2 && filled > 0.6) {
+    nt.fill2 = 1;
+    logEvent(w, 3, "Most of the creek has climbed back up to its valley floor.", [], null, "wetland");
+  }
+}
+
+// ---- saving -------------------------------------------------------------
+
+function creekSave(cr) {
+  let o = {};
+  for (let k in cr) if (k[0] !== "_" && k !== "chan" && k !== "nodes" && k !== "dams") o[k] = cr[k];
+  o.nodes = cr.nodes.map((n) => {
+    let m = {};
+    for (let k in n) if (k[0] !== "_" && k !== "Wv" && k !== "nC" && k !== "nB" && k !== "nF") m[k] = n[k];
+    return m;
+  });
+  o.dams = {};
+  for (let id in cr.dams) {
+    let d = {};
+    for (let k in cr.dams[id]) if (k[0] !== "_") d[k] = cr.dams[id][k];
+    o.dams[id] = d;
+  }
+  o.chanS = sparseToB64(cr.chan);
+  return o;
+}
+function creekLoad(w, o) {
+  let cr = { ...o };
+  delete cr.chanS;
+  cr.chan = o.chanS !== void 0 ? b64ToSparse(o.chanS, VERTS) : new Float32Array(VERTS);
+  w.creek = cr;
+  creekDamIndex(cr);
+  creekDerive(w);
+  creekPondLevels(cr);
+  creekPondNow(cr);
+  creekCellWater(w, 0, seasonAt(w));
+  return cr;
 }
 
 // ==== src/sim/life.js ====
@@ -7938,7 +9154,21 @@ function valleyCapacity(w) {
     if (s.kind === "store" && s.level > 0) food += Math.min(3, s.level);
     if (s.kind === "garden" && s.level > 0) food += Math.min(4, s.level);
   }
-  return clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity);
+  let shelter = clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity);
+  // CREEK: and no more than the land can feed, which grows as the creek heals
+  return Math.min(shelter, creekFeed(w));
+}
+
+// The two ceilings, for the village panel and the dev menu.
+function capacityParts(w) {
+  let homes = 0,
+    food = 0;
+  for (let s of w.structures) {
+    if (s.kind === "home" && s.level > 0) homes++;
+    if (s.kind === "store" && s.level > 0) food += Math.min(3, s.level);
+    if (s.kind === "garden" && s.level > 0) food += Math.min(4, s.level);
+  }
+  return { shelter: clamp(8 + 4 * homes + 2 * food, 8, LIFE.maxCapacity), feed: creekFeed(w) };
 }
 
 function births(w) {
@@ -8040,7 +9270,7 @@ function lovedPlace(w, c) {
   if (best) return best;
   let h = homeOf(w, c);
   if (h && h.level > 0) return { x: h.x + 0.8, z: h.z + 0.6 };
-  return w.terrain.bankPoint(w.terrain.side(c.x, c.z), clamp(c.z, 8, 56), 1.4);
+  return w.terrain.bankPoint(w.terrain.side(c.x, c.z), clamp(c.z, 8, VL - 8), 1.4);
 }
 
 function canBeInterrupted(c) {
@@ -8144,15 +9374,16 @@ function grovePlace(w) {
     bestS = -1e9,
     rng = new Rng(w.seed + ":grove");
   for (let k = 0; k < 200; k++) {
-    let x = rng.range(6, 58),
-      z = rng.range(6, 58);
+    let x = rng.range(6, VW - 6),
+      z = rng.range(6, VL - 6);
     if (!T.walkable(x, z)) continue;
     let r = T.valleyR(x, z),
       e = T.edgeDist(x, z);
-    if (r < 0.45 || r > 0.78 || e < 5) continue;
+    // CREEK: on the terrace slopes, off the valley floor (which turns to wetland)
+    if (r < 0.45 || r > 0.8 || e < 5 || T.floorWeight(x, z) > 0.05) continue;
     let crowd = 0;
     for (let s of w.structures) crowd += Math.max(0, 9 - Math.hypot(s.x - x, s.z - z));
-    let s = -crowd - Math.abs(r - 0.62) * 20 - Math.hypot(x - w.meadow.x, z - w.meadow.z) * 0.05 + rng.range(0, 2);
+    let s = -crowd - Math.abs(r - 0.68) * 20 - Math.hypot(x - w.meadow.x, z - w.meadow.z) * 0.12 + rng.range(0, 2);
     if (s > bestS) (bestS = s), (best = { x: +x.toFixed(2), z: +z.toFixed(2), n: 0 });
   }
   w.grove = best || { x: w.meadow.x + 8, z: w.meadow.z + 8, n: 0 };
@@ -8254,7 +9485,7 @@ function leaving(w) {
 function downstreamEdge(w, c) {
   let T = w.terrain,
     side = T.side(c.x, c.z);
-  for (let z = 61; z > 40; z -= 0.5) {
+  for (let z = VL - 3; z > VL - 24; z -= 0.5) {
     let p = T.bankPoint(side, z, 1.2);
     if (T.walkable(p.x, p.z)) return { x: +p.x.toFixed(2), z: +p.z.toFixed(2) };
   }
@@ -8462,7 +9693,7 @@ function arriveTraveler(w) {
   let T = w.terrain,
     side = w.rng.chance(0.5) ? 0 : 1,
     at = null;
-  for (let z = 60; z > 40 && !at; z -= 0.5) {
+  for (let z = VL - 4; z > VL - 24 && !at; z -= 0.5) {
     let p = T.bankPoint(side, z, 1.5);
     if (T.walkable(p.x, p.z)) at = p;
   }
@@ -8515,6 +9746,7 @@ var SKILL_TEXT = {
   glowcap: "to find the mushrooms that glow",
   tools: "to make and use tools",
   dams: "to dam the creek",
+  downstream: "to build dams from the bottom of the creek up",
 };
 
 // ---------------------------------------------------------------------------
@@ -9043,7 +10275,7 @@ function visits(w) {
   if (!cands.length || !w.rng.chance(LIFE.tick / (MINDS.visitEveryDays * 86400))) return;
   let d = w.rng.pick(cands);
   d.visited = Math.round(w.t);
-  let edge = downstreamEdge(w, { x: w.terrain.creekX(58) + 2, z: 58 });
+  let edge = downstreamEdge(w, { x: w.terrain.creekX(VL - 6) + 2, z: VL - 6 });
   let c = makeFolk(w, d.name, edge.x, edge.z);
   let sn = d.snap;
   Object.assign(c, { id: d.id, look: sn.look, temp: sn.temp, interests: sn.interests, accent: sn.accent, lex: sn.lex, sig: sn.sig, rel: sn.rel, strength: sn.strength, adultStrength: sn.strength });
@@ -9483,6 +10715,26 @@ var CreekSim = {
   storyText,
   giftNeed,
   giverName,
+  // Phase 3A: the creek
+  CREEK,
+  VW,
+  VL,
+  YEAR_DAYS,
+  creekStorm,
+  creekHydro,
+  creekFeed,
+  creekDriest,
+  creekSyncDams,
+  creekShareWords,
+  creekStageAt,
+  creekTrench,
+  creekNatural,
+  capacityParts,
+  WEATHER,
+  BUILD_VERSION,
+  creekRaiseDam,
+  creekPondLevels,
+  creekCells,
 };
 
 module.exports = CreekSim;
