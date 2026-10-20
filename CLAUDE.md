@@ -143,9 +143,9 @@ Phase 1 view edits; later edits were made directly.
   request. When a gift is due, believers keep watch at the Giving Place (goal `watch`)
   and sometimes leave an offering for the giver (`world.offerings`). Every gift is a
   notch on the Giving Stone (`stats.gifts`). After 3 days with no gift (or 1.5 times the
-  rhythm they know, `restAfter`): "the creek is resting" and a lantern (`world.lantern`). Rhythm is noticed in valley days and the
-  valley hour (`giftRhythm`, `rhythmText`): "the creek gives at dawn, every twenty-four
-  days".
+  rhythm they know, `restAfter`): "the creek is resting" and a lantern
+  (`world.lantern`). Rhythm is noticed in valley days and the valley hour (`giftRhythm`,
+  `rhythmText`): "the creek gives at dawn, every twenty-four days".
 - **Gifts**: 17 kinds in four groups (`GIFT_KINDS`, `giftNeedWhy`): weather (rain, warm
   day, snow day, starry night, rainbow), living things (seeds, flowers, fruit trees,
   goats, bees, fish, a new bird), materials (a fallen great tree, a bank of clay, a pile
