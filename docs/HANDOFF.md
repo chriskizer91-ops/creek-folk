@@ -13,13 +13,13 @@ what is done.
 5. The plan for the part you are on, e.g. `docs/phase3a-plan.md`.
 
 ## Where things stand
-_Last updated: 2026-10-20, Phase 3A built; being measured before showing the author._
+_Last updated: 2026-10-20, Phase 3A done and shown to the author; waiting for their go-ahead on 3B._
 
 | Part | State | Branch |
 |---|---|---|
 | Phase 1: foundation | done, shown to the author | `main` (`releases/creekfolk-phase1.html`) |
 | Phase 2: minds | done, shown to the author | `main` (`releases/creekfolk-phase2.html`) |
-| Phase 3A: the land | built; final measurements and report in progress | `phase-3a` |
+| Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`) | `phase-3a` |
 | Phase 3B: belief and the temple | not started | |
 | Phase 3C: life and the ending | not started | |
 | Phase 4: visuals | not started | |
@@ -38,11 +38,14 @@ Phase 3A pieces (details in `docs/phase3a-plan.md`, results in `docs/PHASE3A.md`
 | Dams on the model, drop rule, "downstream first" knowledge, raising, aprons | done |
 | Capacity from the creek, village panel Land tab | done |
 | Drawing the creek, ponds and floor water from the model | done (`src/view/land.js`) |
-| Measurements, determinism, year-arc runs, screenshots, report | in progress |
+| Measurements, determinism, year-arc runs, screenshots, report | done (`docs/PHASE3A.md`, `runs/p3a-arc7.txt`) |
 
 Known gaps left for later parts: beavers and the Returning (3C; the dev menu has
 disabled buttons for them), the sky calendar (no sky calendar exists yet;
-`daysToMidwinter()` is ready for it), the creek's main channel does not migrate.
+`daysToMidwinter()` is ready for it), the creek's main channel does not migrate, the
+population swings between about 17 and 31 while the land feeds 33 (births and leaving;
+tune in 3C), phone catch-up not measured. After any change to `creek.js`, check
+`creekBumpiness()` in the creek lab: a growing bed or floor number means a sawtooth.
 
 ## Rules the author has set
 - Finish a part, then **stop and show the author** before starting the next part.

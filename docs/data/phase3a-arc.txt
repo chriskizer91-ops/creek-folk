@@ -1,56 +1,56 @@
-  year-2 day 10: 14 creekfolk (28 s) | creek: wet now 6%, at the driest 0%, trench 1.059m, dams 3!3!, raised 0, feed 21, downstream-knowers 0
-  year-1 day 10: 14 creekfolk (28 s) | creek: wet now 8%, at the driest 1%, trench 1.043m, dams 3!33, raised 0, feed 22, downstream-knowers 14
-  year-2 day 20: 17 creekfolk (70 s) | creek: wet now 6%, at the driest 1%, trench 1.034m, dams 3333311, raised 0, feed 24, downstream-knowers 17
-  year-1 day 20: 19 creekfolk (84 s) | creek: wet now 7%, at the driest 4%, trench 1.005m, dams 33332331, raised 0, feed 25, downstream-knowers 19
-  year-2 day 30: 25 creekfolk (120 s) | creek: wet now 9%, at the driest 7%, trench 0.858m, dams 33333313332, raised 0, feed 26, downstream-knowers 24
-  year-1 day 30: 22 creekfolk (135 s) | creek: wet now 11%, at the driest 9%, trench 0.951m, dams 333333333331, raised 0, feed 26, downstream-knowers 22
-  year-2 day 40: 20 creekfolk (180 s) | creek: wet now 19%, at the driest 9%, trench 0.697m, dams 33333333333313!, raised 0, feed 27, downstream-knowers 20
-  year-1 day 40: 20 creekfolk (195 s) | creek: wet now 15%, at the driest 11%, trench 0.849m, dams 33333333333333!, raised 0, feed 27, downstream-knowers 20
-  year-1 day 50: 21 creekfolk (242 s) | creek: wet now 13%, at the driest 10%, trench 0.8m, dams 33333333333333!, raised 0, feed 27, downstream-knowers 21
-  year-2 day 50: 24 creekfolk (254 s) | creek: wet now 21%, at the driest 10%, trench 0.583m, dams 33333333333333, raised 1, feed 27, downstream-knowers 24
-  year-1 day 60: 22 creekfolk (307 s) | creek: wet now 11%, at the driest 11%, trench 0.748m, dams 33333333333333!, raised 0, feed 27, downstream-knowers 22
-  year-2 day 60: 26 creekfolk (318 s) | creek: wet now 15%, at the driest 11%, trench 0.555m, dams 33333333333333, raised 2, feed 27, downstream-knowers 25
-  year-1 day 70: 25 creekfolk (371 s) | creek: wet now 13%, at the driest 13%, trench 0.669m, dams 33333333333333!, raised 1, feed 26, downstream-knowers 25
-  year-2 day 70: 24 creekfolk (387 s) | creek: wet now 17%, at the driest 16%, trench 0.518m, dams 33333333333333, raised 2, feed 27, downstream-knowers 23
-  year-1 day 80: 22 creekfolk (447 s) | creek: wet now 52%, at the driest 19%, trench 0.59m, dams 33333333333333!, raised 3, feed 26, downstream-knowers 22
-  year-2 day 80: 22 creekfolk (462 s) | creek: wet now 62%, at the driest 22%, trench 0.477m, dams 33333333333333, raised 3, feed 27, downstream-knowers 22
-  year-1 day 90: 24 creekfolk (520 s) | creek: wet now 51%, at the driest 24%, trench 0.561m, dams 33333333333333!, raised 3, feed 27, downstream-knowers 24
-  year-2 day 90: 18 creekfolk (529 s) | creek: wet now 71%, at the driest 28%, trench 0.43m, dams 33333333333333, raised 3, feed 28, downstream-knowers 17
-  year-1 day 100: 21 creekfolk (596 s) | creek: wet now 36%, at the driest 29%, trench 0.534m, dams 33333333333333!, raised 4, feed 27, downstream-knowers 21
-  year-2 day 100: 21 creekfolk (599 s) | creek: wet now 46%, at the driest 39%, trench 0.417m, dams 33333333333333, raised 5, feed 30, downstream-knowers 21
-  year-1 day 110: 25 creekfolk (664 s) | creek: wet now 40%, at the driest 40%, trench 0.509m, dams 33333333333333!, raised 5, feed 30, downstream-knowers 24
-  year-2 day 110: 23 creekfolk (675 s) | creek: wet now 49%, at the driest 46%, trench 0.403m, dams 33333333333333, raised 5, feed 31, downstream-knowers 23
-  year-1 day 120: 27 creekfolk (752 s) | creek: wet now 62%, at the driest 42%, trench 0.495m, dams 33333333333333!, raised 5, feed 30, downstream-knowers 27
-  year-2 day 120: 26 creekfolk (767 s) | creek: wet now 75%, at the driest 45%, trench 0.398m, dams 33333333333333, raised 6, feed 31, downstream-knowers 26
-  year-1 day 130: 26 creekfolk (838 s) | creek: wet now 52%, at the driest 41%, trench 0.479m, dams 33333333333333!, raised 5, feed 30, downstream-knowers 26
-  year-2 day 130: 27 creekfolk (855 s) | creek: wet now 63%, at the driest 44%, trench 0.388m, dams 33333333333333, raised 6, feed 30, downstream-knowers 27
-  year-1 day 140: 27 creekfolk (925 s) | creek: wet now 45%, at the driest 43%, trench 0.471m, dams 33333333333333!, raised 5, feed 30, downstream-knowers 27
-  year-2 day 140: 24 creekfolk (946 s) | creek: wet now 58%, at the driest 47%, trench 0.377m, dams 33333333333333, raised 6, feed 31, downstream-knowers 24
-  year-1 day 150: 29 creekfolk (1025 s) | creek: wet now 46%, at the driest 46%, trench 0.459m, dams 33333333333333!, raised 5, feed 31, downstream-knowers 29
-  year-2 day 150: 31 creekfolk (1033 s) | creek: wet now 57%, at the driest 53%, trench 0.364m, dams 33333333333333, raised 7, feed 32, downstream-knowers 31
-  year-1 day 160: 27 creekfolk (1122 s) | creek: wet now 69%, at the driest 47%, trench 0.448m, dams 33333333333333!, raised 6, feed 31, downstream-knowers 27
-  year-2 day 160: 28 creekfolk (1141 s) | creek: wet now 67%, at the driest 55%, trench 0.354m, dams 33333333333333, raised 7, feed 32, downstream-knowers 28
-  year-1 day 170: 24 creekfolk (1206 s) | creek: wet now 62%, at the driest 49%, trench 0.443m, dams 33333333333333!, raised 6, feed 32, downstream-knowers 23
-  year-2 day 170: 29 creekfolk (1246 s) | creek: wet now 83%, at the driest 53%, trench 0.337m, dams 33333333333333, raised 7, feed 32, downstream-knowers 29
-  year-1 day 180: 30 creekfolk (1298 s) | creek: wet now 51%, at the driest 49%, trench 0.436m, dams 33333333333333!, raised 6, feed 31, downstream-knowers 30
-  year-2 day 180: 27 creekfolk (1352 s) | creek: wet now 61%, at the driest 59%, trench 0.328m, dams 33333333333333, raised 7, feed 33, downstream-knowers 27
-  year-1 day 190: 25 creekfolk (1396 s) | creek: wet now 52%, at the driest 52%, trench 0.429m, dams 33333333333333!, raised 8, feed 32, downstream-knowers 24
-  year-2 day 190: 29 creekfolk (1459 s) | creek: wet now 61%, at the driest 59%, trench 0.322m, dams 33333333333333, raised 8, feed 33, downstream-knowers 28
-  year-1 day 200: 29 creekfolk (1485 s) | creek: wet now 70%, at the driest 52%, trench 0.427m, dams 33333333333333!, raised 8, feed 32, downstream-knowers 28
-  year-2 day 200: 24 creekfolk (1553 s) | creek: wet now 84%, at the driest 59%, trench 0.314m, dams 33333333333333, raised 8, feed 33, downstream-knowers 24
-  year-1 day 210: 26 creekfolk (1572 s) | creek: wet now 70%, at the driest 52%, trench 0.413m, dams 33333333333333!, raised 9, feed 32, downstream-knowers 26
-  year-2 day 210: 29 creekfolk (1635 s) | creek: wet now 83%, at the driest 60%, trench 0.306m, dams 33333333333333, raised 8, feed 33, downstream-knowers 28
+  year-2 day 10: 14 creekfolk (24 s) | creek: wet now 7%, at the driest 0%, trench 1.1m, dams 3!3, raised 0, feed 21, bumpy 0.002/0, downstream-knowers 11
+  year-1 day 10: 12 creekfolk (25 s) | creek: wet now 7%, at the driest 1%, trench 1.048m, dams 3!33, raised 0, feed 22, bumpy 0.004/0, downstream-knowers 12
+  year-2 day 20: 15 creekfolk (59 s) | creek: wet now 7%, at the driest 1%, trench 1.082m, dams 3333331, raised 0, feed 24, bumpy 0.002/0, downstream-knowers 15
+  year-1 day 20: 16 creekfolk (60 s) | creek: wet now 9%, at the driest 3%, trench 0.985m, dams 333333311, raised 0, feed 25, bumpy 0.006/0, downstream-knowers 16
+  year-2 day 30: 19 creekfolk (97 s) | creek: wet now 12%, at the driest 9%, trench 0.979m, dams 33333333133, raised 0, feed 26, bumpy 0.009/0, downstream-knowers 19
+  year-1 day 30: 22 creekfolk (97 s) | creek: wet now 13%, at the driest 12%, trench 0.963m, dams 3333333333331, raised 0, feed 26, bumpy 0.008/0, downstream-knowers 22
+  year-2 day 40: 21 creekfolk (136 s) | creek: wet now 13%, at the driest 9%, trench 0.739m, dams 33333333333331, raised 0, feed 27, bumpy 0.032/0, downstream-knowers 19
+  year-1 day 40: 24 creekfolk (153 s) | creek: wet now 11%, at the driest 11%, trench 0.766m, dams 3333333333331, raised 0, feed 27, bumpy 0.024/0, downstream-knowers 24
+  year-2 day 50: 22 creekfolk (193 s) | creek: wet now 17%, at the driest 7%, trench 0.635m, dams 33333333333333!, raised 1, feed 25, bumpy 0.044/0, downstream-knowers 22
+  year-1 day 50: 20 creekfolk (210 s) | creek: wet now 15%, at the driest 9%, trench 0.676m, dams 3333333333331, raised 0, feed 27, bumpy 0.034/0, downstream-knowers 20
+  year-2 day 60: 19 creekfolk (244 s) | creek: wet now 10%, at the driest 9%, trench 0.593m, dams 33333333333333!, raised 2, feed 26, bumpy 0.052/0, downstream-knowers 19
+  year-1 day 60: 17 creekfolk (264 s) | creek: wet now 9%, at the driest 9%, trench 0.612m, dams 3333333333331, raised 1, feed 25, bumpy 0.032/0.001, downstream-knowers 17
+  year-2 day 70: 19 creekfolk (303 s) | creek: wet now 14%, at the driest 12%, trench 0.527m, dams 33333333333333, raised 2, feed 26, bumpy 0.045/0, downstream-knowers 19
+  year-1 day 70: 16 creekfolk (310 s) | creek: wet now 9%, at the driest 8%, trench 0.546m, dams 3333333333331, raised 3, feed 25, bumpy 0.032/0.001, downstream-knowers 16
+  year-1 day 80: 19 creekfolk (359 s) | creek: wet now 54%, at the driest 10%, trench 0.501m, dams 3333333333332!, raised 4, feed 25, bumpy 0.022/0.001, downstream-knowers 18
+  year-2 day 80: 22 creekfolk (362 s) | creek: wet now 51%, at the driest 15%, trench 0.477m, dams 33333333333333, raised 9, feed 26, bumpy 0.031/0, downstream-knowers 21
+  year-1 day 90: 20 creekfolk (417 s) | creek: wet now 53%, at the driest 15%, trench 0.484m, dams 3333333333333!, raised 7, feed 26, bumpy 0.018/0.001, downstream-knowers 20
+  year-2 day 90: 22 creekfolk (430 s) | creek: wet now 80%, at the driest 23%, trench 0.408m, dams 33333333333333, raised 12, feed 28, bumpy 0.027/0.001, downstream-knowers 22
+  year-1 day 100: 22 creekfolk (484 s) | creek: wet now 23%, at the driest 18%, trench 0.469m, dams 3333333333333!, raised 8, feed 27, bumpy 0.018/0.001, downstream-knowers 22
+  year-2 day 100: 25 creekfolk (499 s) | creek: wet now 65%, at the driest 44%, trench 0.353m, dams 33333333333333, raised 13, feed 31, bumpy 0.03/0.001, downstream-knowers 24
+  year-1 day 110: 22 creekfolk (555 s) | creek: wet now 25%, at the driest 25%, trench 0.443m, dams 3333333333333!, raised 8, feed 27, bumpy 0.017/0.001, downstream-knowers 22
+  year-2 day 110: 28 creekfolk (584 s) | creek: wet now 65%, at the driest 63%, trench 0.335m, dams 33333333333333, raised 17, feed 33, bumpy 0.028/0.001, downstream-knowers 28
+  year-1 day 120: 20 creekfolk (640 s) | creek: wet now 69%, at the driest 33%, trench 0.416m, dams 3333333333333!, raised 8, feed 29, bumpy 0.017/0.001, downstream-knowers 20
+  year-2 day 120: 26 creekfolk (685 s) | creek: wet now 89%, at the driest 70%, trench 0.28m, dams 33333333333333, raised 19, feed 33, bumpy 0.024/0.001, downstream-knowers 26
+  year-1 day 130: 19 creekfolk (707 s) | creek: wet now 66%, at the driest 42%, trench 0.402m, dams 3333333333333!, raised 10, feed 30, bumpy 0.013/0.001, downstream-knowers 19
+  year-1 day 140: 22 creekfolk (772 s) | creek: wet now 56%, at the driest 42%, trench 0.371m, dams 3333333333333!, raised 12, feed 30, bumpy 0.014/0.001, downstream-knowers 22
+  year-2 day 130: 24 creekfolk (783 s) | creek: wet now 86%, at the driest 67%, trench 0.271m, dams 33333333333333, raised 19, feed 33, bumpy 0.027/0.001, downstream-knowers 24
+  year-1 day 150: 20 creekfolk (840 s) | creek: wet now 62%, at the driest 54%, trench 0.349m, dams 3333333333333!, raised 12, feed 32, bumpy 0.015/0.001, downstream-knowers 20
+  year-2 day 140: 28 creekfolk (884 s) | creek: wet now 80%, at the driest 71%, trench 0.239m, dams 33333333333333, raised 21, feed 33, bumpy 0.024/0.001, downstream-knowers 28
+  year-1 day 160: 28 creekfolk (918 s) | creek: wet now 80%, at the driest 56%, trench 0.333m, dams 3333333333333!, raised 14, feed 33, bumpy 0.018/0.001, downstream-knowers 28
+  year-2 day 150: 30 creekfolk (988 s) | creek: wet now 81%, at the driest 80%, trench 0.222m, dams 33333333333333, raised 22, feed 33, bumpy 0.019/0.001, downstream-knowers 28
+  year-1 day 170: 25 creekfolk (1018 s) | creek: wet now 81%, at the driest 57%, trench 0.301m, dams 3333333333333!, raised 16, feed 32, bumpy 0.015/0.001, downstream-knowers 25
+  year-2 day 160: 30 creekfolk (1098 s) | creek: wet now 91%, at the driest 82%, trench 0.195m, dams 33333333333333, raised 25, feed 34, bumpy 0.021/0.001, downstream-knowers 29
+  year-1 day 180: 31 creekfolk (1123 s) | creek: wet now 69%, at the driest 65%, trench 0.294m, dams 3333333333333!, raised 17, feed 33, bumpy 0.014/0.001, downstream-knowers 30
+  year-2 day 170: 27 creekfolk (1208 s) | creek: wet now 90%, at the driest 83%, trench 0.168m, dams 33333333333333, raised 25, feed 33, bumpy 0.013/0.001, downstream-knowers 27
+  year-1 day 190: 27 creekfolk (1227 s) | creek: wet now 72%, at the driest 71%, trench 0.264m, dams 3333333333333!, raised 17, feed 33, bumpy 0.011/0.001, downstream-knowers 27
+  year-2 day 180: 23 creekfolk (1309 s) | creek: wet now 85%, at the driest 84%, trench 0.162m, dams 33333333333333, raised 26, feed 33, bumpy 0.015/0.002, downstream-knowers 23
+  year-1 day 200: 32 creekfolk (1321 s) | creek: wet now 85%, at the driest 70%, trench 0.257m, dams 3333333333333!, raised 18, feed 33, bumpy 0.011/0.001, downstream-knowers 32
+  year-2 day 190: 25 creekfolk (1413 s) | creek: wet now 84%, at the driest 83%, trench 0.159m, dams 33333333333333, raised 27, feed 33, bumpy 0.015/0.002, downstream-knowers 24
+  year-1 day 210: 27 creekfolk (1435 s) | creek: wet now 86%, at the driest 74%, trench 0.249m, dams 3333333333333!, raised 20, feed 33, bumpy 0.01/0.001, downstream-knowers 26
+  year-2 day 200: 22 creekfolk (1502 s) | creek: wet now 91%, at the driest 85%, trench 0.151m, dams 33333333333333, raised 29, feed 33, bumpy 0.012/0.002, downstream-knowers 22
+  year-2 day 210: 23 creekfolk (1599 s) | creek: wet now 91%, at the driest 84%, trench 0.148m, dams 33333333333333, raised 32, feed 33, bumpy 0.009/0.002, downstream-knowers 23
 
-2 valleys, 210 days each, in 1635 s wall time
+2 valleys, 210 days each, in 1599 s wall time
 
-year-1: 30d:21 60d:25 90d:23 120d:27 180d:31 | births 193, passings 140, downstream 33, generations 18, errors 0, first passing day 14.63, full by day -, sim 1572 s (11540x), save 1763 KB
-year-2: 30d:23 60d:25 90d:19 120d:26 180d:29 | births 189, passings 145, downstream 21, generations 17, errors 0, first passing day 14.42, full by day -, sim 1635 s (11097x), save 1788 KB
-  year-1 minds: 39 stories, 36 myths (first day 130.3), 16 places, skills lost 0 / relearned 0, visits 26, gifts 200, believers 23, giver "loush", customs seasons,thanks
-  year-2 minds: 40 stories, 31 myths (first day 127.0), 18 places, skills lost 0 / relearned 0, visits 16, gifts 200, believers 28, giver "ruu", customs seasons,thanks
+year-1: 30d:24 60d:16 90d:21 120d:19 180d:28 | births 166, passings 138, downstream 10, generations 19, errors 0, first passing day 14.63, full by day 203, sim 1435 s (12647x), save 1652 KB
+year-2: 30d:18 60d:23 90d:22 120d:27 180d:27 | births 185, passings 146, downstream 23, generations 19, errors 0, first passing day 14.42, full by day -, sim 1599 s (11348x), save 1540 KB
+  year-1 minds: 40 stories, 34 myths (first day 110.5), 18 places, skills lost 0 / relearned 0, visits 7, gifts 200, believers 24, giver "breebroum", customs seasons,thanks
+  year-2 minds: 40 stories, 31 myths (first day 126.5), 20 places, skills lost 0 / relearned 0, visits 15, gifts 200, believers 20, giver "tre", customs seasons,thanks
 
 Targets:
-  PASS  No valley ever drops to zero.  [12,12]
+  PASS  No valley ever drops to zero.  [11,11]
   PASS  No simulation errors.  [0,0]
   PASS  The first passing happens after day 12.  [14.63,14.42]
-  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [182,168]
-  PASS  Someone leaves downstream once the valley is full.  [33,21]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [203,112]
+  PASS  Someone leaves downstream once the valley is full.  [10,23]

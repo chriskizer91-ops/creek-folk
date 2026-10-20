@@ -102,7 +102,11 @@ Phase 1 view edits; later edits were made directly.
 - **Storms are floods** (`creekStorm`): Creek Care's hydraulics; gravel and mud settle
   and never scour (`bedMin`); mud settles in ponds and on the floor when floods go
   over the bank; where floods spill, `creekSpread` wears side channels (`creek.chan`)
-  across the floor, which is the Stage 0 wetland.
+  across the floor, which is the Stage 0 wetland. Each flood's deposits are shared with
+  neighbouring nodes (`creekShareDeposit`, never across a dam), and water behind a hump
+  of gravel stands as slack water, so pools fill and humps don't. Without this the bed
+  grows a sawtooth that never washes out; `creekBumpiness()` measures it (printed by the
+  creek lab and the year runner; healthy is under about 0.06 m for the bed, ~0 for the floor).
 - **Dams** (structures of kind `dam`, up to 14) are crests on nodes (`creek.dams`). The
   drop rule: a dam holds at most `CREEK.dropMax` above the water below it; higher, the
   water digs under and the pond barely fills (`leaks`). Creekfolk notice; an elder can

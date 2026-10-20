@@ -410,7 +410,14 @@ var BUILD_VERSION = "3a", DEV_BUILD = false;
         let n = this.noise,
           d = Math.abs(x - this.axisX(z)),
           fhw = this.floorHW(z),
-          micro = 0.12 * (2 * n.fbm(x * 0.21 + 7, z * 0.21 + 3, 2) - 1) + 0.04 * (2 * n.get(x * 0.7, z * 0.7 + 11) - 1),
+          // the floor's relief: long shallow swales down the valley (old channel scars),
+          // smaller hummocks, and a little roughness; about +-0.17 m, so a pond held a
+          // hand above the floor spreads along the hollows instead of straight across
+          micro =
+            0.02 +
+            0.38 * (2 * n.fbm(x * 0.11 + 7, z * 0.035 + 3, 3) - 1) +
+            0.07 * (2 * n.fbm(x * 0.25 + 1, z * 0.25 + 5, 2) - 1) +
+            0.025 * (2 * n.get(x * 0.7, z * 0.7 + 11) - 1),
           rise = 0.75 * smoothstep(fhw - 1, fhw + 4, d) + 0.014 * Math.max(0, d - fhw - 4) + 0.5 * (n.fbm(x * 0.06 + 20, z * 0.06, 3) - 0.5) * smoothstep(fhw, fhw + 6, d),
           terr = this.fp0(z) + rise,
           wF = 1 - smoothstep(fhw - 1.5, fhw + 2.5, d),
@@ -8173,9 +8180,14 @@ function creekSlopes(cr) {
     raw = ns.map((n, i) => (i < N - 1 ? (eb[i] - eb[i + 1]) / CREEK.ds : (eb[i - 1] - eb[i]) / CREEK.ds));
   for (let i = 0; i < N; i++) {
     let s = 0,
-      c = 0;
-    for (let j = Math.max(0, i - 2); j <= Math.min(N - 1, i + 2); j++) (s += raw[j]), c++;
-    let wide = Math.max(s / c, 3e-4);
+      c = 0,
+      a = Math.max(0, i - 2),
+      b = Math.min(N - 1, i + 2);
+    for (let j = a; j <= b; j++) (s += raw[j]), c++;
+    // the reach's slope, but never much less than the valley floor's own (smooth)
+    // slope: a bumpy bed must not make its own humps look flat, or they keep growing
+    let fpS = (ns[a].fp - ns[b].fp) / ((b - a) * CREEK.ds),
+      wide = Math.max(s / c, 0.5 * fpS, 3e-4);
     ns[i]._S = clamp(raw[i], 0.3 * wide, 2.5 * wide);
     ns[i]._Sw = wide;
   }
@@ -8453,21 +8465,33 @@ function creekFloodWork(w, T, seed) {
     full = creekPondLevels(cr),
     spills = [];
   creekSlopes(cr);
-  // A. flow, depth and the force on the bed
+  // A. flow, depth and the force on the bed. Water can't stand lower than the water just
+  // below it, so a pool behind a hump of gravel (or a dam's pond) is slack water: pools
+  // fill and humps don't, which keeps the bed from growing into a sawtooth.
+  let hyd = new Array(N),
+    surf = new Float64Array(N);
+  for (let i = N - 1; i >= 0; i--) {
+    let n = ns[i],
+      Q = k * Math.pow(n.A, 0.8),
+      S = Math.max(n._S, 1e-4),
+      h = creekHydraulics(n, Q, S);
+    hyd[i] = h;
+    surf[i] = Math.max(n.bed + h.y, full[i], i < N - 1 && !(cr._damAt && cr._damAt[i]) ? surf[i + 1] : -1e9);
+  }
   for (let i = 0; i < N; i++) {
     let n = ns[i],
       Q = k * Math.pow(n.A, 0.8),
       S = Math.max(n._S, 1e-4),
-      h = creekHydraulics(n, Q, S),
+      h = hyd[i],
       y = h.y,
       tau = h.tau,
       ws = n.bed + y;
-    if (full[i] > n.bed + y) {
-      // the pond is deeper than the flow needs: slack water
-      let yp = full[i] - n.bed,
+    if (surf[i] > n.bed + y + 1e-4) {
+      // the water is deeper than the flow needs: slack water
+      let yp = surf[i] - n.bed,
         Se = S * Math.pow(y / yp, 10 / 3);
       tau = P.rho * P.g * Math.min(h.R * (yp / y), yp) * Se;
-      ws = full[i];
+      ws = surf[i];
     }
     n._tau = tau;
     n._ws = ws;
@@ -8513,6 +8537,13 @@ function creekFloodWork(w, T, seed) {
     floorDep[i] = fdep * durS;
     qfUp = Math.max(0, qfIn - dep - fdep);
   }
+  // A flood lays gravel and mud down as a sheet over a stretch of creek, not on one
+  // node: left on one node, a deposit starves the node above it of slope, that node
+  // fills too, and since deposits never wash out again the bed grows into a sawtooth.
+  // So each node's deposit is shared with its neighbours (never across a dam), and the
+  // mud left on the floor spreads further, along the valley.
+  creekShareDeposit(cr, deposit, 3, true);
+  creekShareDeposit(cr, floorDep, 6, false);
   // D. the bed and the floor rise
   let rose = 0;
   for (let i = 0; i < N; i++) {
@@ -8545,6 +8576,52 @@ function creekFloodWork(w, T, seed) {
   creekDerive(w);
   creekRefresh(w);
   creekNotes(w);
+}
+
+// Share each node's positive deposit (m3) with its neighbours within R nodes, weighted
+// by closeness (a triangle). With byDam, a deposit never crosses a dam: the break is
+// between a dam's node and the node below it. Volume is kept; scour (negative) stays put.
+function creekShareDeposit(cr, dep, R, byDam) {
+  let N = dep.length,
+    at = cr._damAt,
+    seg = new Int32Array(N),
+    out = new Float64Array(N);
+  for (let i = 1; i < N; i++) seg[i] = seg[i - 1] + (byDam && at && at[i - 1] ? 1 : 0);
+  for (let i = 0; i < N; i++) {
+    let v = dep[i];
+    if (v <= 0) {
+      out[i] += v;
+      continue;
+    }
+    let lo = Math.max(0, i - R),
+      hi = Math.min(N - 1, i + R),
+      sw = 0;
+    for (let j = lo; j <= hi; j++) if (seg[j] === seg[i]) sw += R + 1 - Math.abs(j - i);
+    for (let j = lo; j <= hi; j++) if (seg[j] === seg[i]) out[j] += (v * (R + 1 - Math.abs(j - i))) / sw;
+  }
+  dep.set(out);
+}
+
+// How bumpy the creek is from node to node inside the valley: the mean size of the
+// second difference of the bed (leaving out the steps at dams) and of the floor (m).
+// A healthy creek has pools, riffles and steps at dams, but no sawtooth.
+function creekBumpiness(w) {
+  let cr = w.creek,
+    ns = cr.nodes,
+    at = cr._damAt || [],
+    rb = 0,
+    cb = 0,
+    rf = 0,
+    cf = 0;
+  for (let i = 1; i < ns.length - 1; i++) {
+    if (ns[i - 1].z < 0 || ns[i + 1].z > VL) continue;
+    rf += Math.abs(ns[i + 1].fp - 2 * ns[i].fp + ns[i - 1].fp);
+    cf++;
+    if (at[i] || at[i - 1]) continue;
+    rb += Math.abs(ns[i + 1].bed - 2 * ns[i].bed + ns[i - 1].bed);
+    cb++;
+  }
+  return { bed: +(rb / Math.max(1, cb)).toFixed(3), floor: +(rf / Math.max(1, cf)).toFixed(3) };
 }
 
 // ---- Stage 0: water spreading over the valley floor ------------------------
@@ -8710,8 +8787,7 @@ function creekHydro(w, init = false) {
       if (depth < CREEK.root) dg -= CREEK.et * warm * cloudy * (1 - depth / CREEK.root) * dtD;
       let fill = clamp((n.bed - (cr.init[i] ? cr.init[i][0] : n.bed)) / 0.6, 0, 1); // mud in the bed seals it
       if (n.g > n.bed - 1) dg -= CREEK.deep * (1 - 0.85 * fill) * (1 - 0.7 * n.veg * fill) * dtD;
-      n.g = clamp(n.g + dg, n.bed - 1.6, n.fp + 0.02);
-      if (wetPond && d.pl > n.fp) n.g = Math.max(n.g, d.pl);
+      n.g = clamp(n.g + dg, n.bed - 1.6, n.fp);
     }
     // the water surface for drawing: the pond, the flood, or the flow
     let wl = wetPond ? d.pl : q > 2e-5 ? n.bed + creekLowDepth(n, q, S) : Math.min(n.bed - 0.05, n.g);
@@ -8784,19 +8860,31 @@ function creekCellWater(w, dtD, s) {
     nWet = 0,
     nGreen = 0,
     nf = 0;
+  let pf = creekPondFloor(w, c);
   let decay = new Float32Array(32);
   for (let j = 0; j < 32; j++) decay[j] = 1 - Math.exp(-j / 2 / lam); // d in half-metre steps
+  // the creek's level and the water table are blended between the two nodes either
+  // side of each row of cells, so the floor's water changes smoothly down the valley
+  let rowLv = 0,
+    rowG = 0;
   for (let k = 0; k < CELLS; k++) {
-    let i = c.node[k],
-      n = ns[i],
-      d = c.d[k],
-      lv = n.wl,
-      pn = pondNow[i];
-    if (pn > lv) lv = pn;
-    let g = n.g,
+    if (k % VW === 0) {
+      let fz = ((k / VW) + 0.5 - CREEK.z0) / CREEK.ds,
+        i0 = Math.min(ns.length - 2, Math.floor(fz)),
+        tz = fz - i0,
+        a = ns[i0],
+        b = ns[i0 + 1],
+        la = pondNow[i0] > a.wl ? pondNow[i0] : a.wl,
+        lb = pondNow[i0 + 1] > b.wl ? pondNow[i0 + 1] : b.wl;
+      rowLv = la + (lb - la) * tz;
+      rowG = a.g + (b.g - a.g) * tz;
+    }
+    let d = c.d[k],
+      lv = rowLv,
+      g = rowG,
       f = d >= 15.5 ? 1 : decay[Math.floor(d * 2)],
       table = lv + (g - lv) * f;
-    if (pn > n.fp) table = Math.max(table, pn - 0.02 * d);
+    if (pf[k] > table) table = pf[k];
     wt[k] = table;
     let dw = c.h[k] - table,
       gr = Math.max(soil, dw < 0.55 ? 1 : dw < CREEK.root ? 1 - (dw - 0.55) / (CREEK.root - 0.55) : 0),
@@ -8818,6 +8906,63 @@ function creekCellWater(w, dtD, s) {
     cr.wetNow = +(nWet / Math.max(1, nf)).toFixed(4);
     cr.greenNow = +(nGreen / Math.max(1, nf)).toFixed(4);
   }
+}
+
+// Where a pond stands higher than the valley floor, its water spreads out over every
+// cell it can reach that lies lower than its surface: across hollows and into side
+// channels, so its shape follows the ground (and a pond can branch like a wetland).
+// Returns the pond level reaching each cell, or -1e9.
+function creekPondFloor(w, c) {
+  let cr = w.creek,
+    ns = cr.nodes,
+    T = w.terrain,
+    pf = creekPondFloor.a && creekPondFloor.a.length === CELLS ? creekPondFloor.a : (creekPondFloor.a = new Float32Array(CELLS)),
+    seen = creekPondFloor.s || (creekPondFloor.s = new Int32Array(CELLS)),
+    queue = creekPondFloor.q || (creekPondFloor.q = new Int32Array(CELLS)),
+    owner = cr._pondOwner;
+  pf.fill(-1e9);
+  if (!owner) return pf;
+  let mark = (creekPondFloor.m || 0) + 1;
+  for (let id in cr.dams) {
+    let D = cr.dams[id];
+    if (D.drowned) continue;
+    // the pond's nodes that stand under water higher than the floor beside them
+    let qn = 0,
+      zLo = 1e9,
+      zHi = -1e9;
+    mark++;
+    for (let i = D.i; i >= 0 && owner[i] === D.id; i--) {
+      let n = ns[i];
+      if (D.pl <= n.bed) continue;
+      zLo = Math.min(zLo, n.z - 1);
+      zHi = Math.max(zHi, n.z + 1);
+      if (D.pl < n.fp - 0.15) continue;
+      let cz = Math.floor(n.z),
+        cx = Math.floor(T.creekX(n.z));
+      if (cz < 0 || cz >= VL || cx < 0 || cx >= VW) continue;
+      let k = cz * VW + cx;
+      if (seen[k] !== mark) (seen[k] = mark), (queue[qn++] = k);
+    }
+    if (!qn) continue;
+    // spread over connected cells lower than the pond's surface (a little way past its ends)
+    for (let h = 0; h < qn; h++) {
+      let k = queue[h];
+      if (D.pl > pf[k]) pf[k] = D.pl;
+      let x = k % VW,
+        z = (k / VW) | 0;
+      for (let j = 0; j < 4; j++) {
+        let nx = j === 0 ? x + 1 : j === 1 ? x - 1 : x,
+          nz = j === 2 ? z + 1 : j === 3 ? z - 1 : z;
+        if (nx < 0 || nz < 0 || nx >= VW || nz >= VL || nz < zLo - 4 || nz > zHi + 1) continue;
+        let m = nz * VW + nx;
+        if (seen[m] === mark || !c.floor[m] || c.h[m] >= D.pl) continue;
+        seen[m] = mark;
+        queue[qn++] = m;
+      }
+    }
+  }
+  creekPondFloor.m = mark;
+  return pf;
 }
 
 // Seasonal bookkeeping: the driest point of each valley year, plants, stages.
@@ -8944,10 +9089,10 @@ function creekDriest(w) {
 // Plain words for a share of the floor: a short word ("a quarter"), or how much of
 // the floor (subject of a sentence: "About a quarter of the valley floor").
 function creekShareWords(f) {
-  return f <= 0.004 ? "none" : f < 0.04 ? "a pool or two" : f < 0.15 ? "a little" : f < 0.3 ? "a quarter" : f < 0.42 ? "a third" : f < 0.6 ? "half" : f < 0.85 ? "most" : f < 0.97 ? "nearly all" : "all";
+  return f <= 0.004 ? "none" : f < 0.04 ? "a pool or two" : f < 0.15 ? "a little" : f < 0.3 ? "a quarter" : f < 0.42 ? "a third" : f < 0.6 ? "half" : f < 0.7 ? "two thirds" : f < 0.8 ? "three quarters" : f < 0.9 ? "most" : f < 0.97 ? "nearly all" : "all";
 }
 function creekShareOfFloor(f) {
-  return f <= 0.004 ? "none of the valley floor" : f < 0.04 ? "only a pool or two" : f < 0.15 ? "a little of the valley floor" : f < 0.3 ? "about a quarter of the valley floor" : f < 0.42 ? "about a third of the valley floor" : f < 0.6 ? "about half the valley floor" : f < 0.85 ? "most of the valley floor" : f < 0.97 ? "nearly all the valley floor" : "all of the valley floor";
+  return f <= 0.004 ? "none of the valley floor" : f < 0.04 ? "only a pool or two" : f < 0.15 ? "a little of the valley floor" : f < 0.3 ? "about a quarter of the valley floor" : f < 0.42 ? "about a third of the valley floor" : f < 0.6 ? "about half the valley floor" : f < 0.7 ? "about two thirds of the valley floor" : f < 0.8 ? "about three quarters of the valley floor" : f < 0.9 ? "most of the valley floor" : f < 0.97 ? "nearly all the valley floor" : "all of the valley floor";
 }
 
 // Stage of the creek at z (for the dev overlay and the panel).
@@ -10866,6 +11011,7 @@ var CreekSim = {
   creekRaiseDam,
   creekPondLevels,
   creekCells,
+  creekBumpiness,
   devTrigger,
 };
 
