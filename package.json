@@ -1,0 +1,19 @@
+{
+  "name": "creekfolk",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/generator": "^7.25.6",
+    "@babel/parser": "^7.25.6",
+    "@babel/traverse": "^7.25.6",
+    "esbuild": "^0.23.1",
+    "playwright": "^1.56.0"
+  }
+}
