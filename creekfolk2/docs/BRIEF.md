@@ -32,7 +32,7 @@ The author will give you these. If any are missing, ask for them before you star
    - `core.js`: noise, canvas painting, lofted meshes, tapered tubes.
    - `tools/shots.py`, `sheet.py` and `perf.py`: scripted screenshots, contact sheets, drawing cost.
 
-   Leave out the lifelike king (`body3.js`, `wear.js`, `card*.js`), the finds and the poems; they belong to that game and its people. Don't use the names Richard Sale, Tom Sale or the Philosopher King in Creekfolk 2.
+   Leave out the lifelike king (`body3.js`, `wear.js`, `card*.js`), the finds and the poems; they belong to that game and its people. Don't use the names of that game's people, or the Philosopher King, in Creekfolk 2.
 3. **Creek Care:** `creek-care-source.zip`. Creekfolk 3A already ported its river model (`src/river-core.js`; also in Creekfolk's `ref/`), so this is reference only. It's useful for what 3A left out: bends migrating and oxbows (`P._migrate`, `P._cutoffs`), calibration (`tools/river-calibrate.js`), and its own tests.
 
 **Joining the two codebases (watch this):**
