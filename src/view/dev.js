@@ -238,7 +238,7 @@ ${DEV_BUILD ? `<h5>Snapshots (taken before every jump)</h5>${this.snaps.length ?
 <h5>Make it happen</h5>
 <div class="row">${Object.keys(GIFT_KINDS).map((k) => `<button data-gift="${k}">gift: ${k}</button>`).join("")}</div>
 <div class="row"><button data-trigger="answer">the creek answers now</button><button data-trigger="spring">find the spring</button><button data-trigger="beyond">one believes in you</button><button data-trigger="believe">everyone believes</button></div>
-<div class="row"><button data-trigger="storm">storm</button><button data-trigger="flood">big flood</button><button data-trigger="birth">birth</button><button data-trigger="passing">passing</button><button data-trigger="visitor">visitor</button><button disabled title="Phase 3C">beavers</button><button disabled title="Phase 3C">the Returning</button></div>
+<div class="row"><button data-trigger="storm">storm</button><button data-trigger="flood">big flood</button><button data-trigger="birth">birth</button><button data-trigger="passing">passing</button><button data-trigger="visitor">visitor</button><button data-trigger="beavers">beavers</button><button data-trigger="skycal">sky stones</button><button data-trigger="returning">the Returning</button></div>
 <h5>Overlays</h5>
 <div class="row">${[["", "none"], ["wet", "wetness"], ["wear", "worn paths"], ["stage", "creek stage"], ["feed", "land capacity"]].map(([k, l]) => `<button data-overlay="${k}">${l}</button>`).join("")}</div>
 ${devCreekHTML(w)}

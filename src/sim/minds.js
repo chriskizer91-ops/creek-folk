@@ -126,6 +126,17 @@ function storyText(w, s, v) {
       return `The ${v.what} was finished${v.n ? ` after ${daysWord(v.n)}` : ""}${why}${big ? (big >= 2 ? ", and the creek ran gold that evening" : ", and everyone slept on its steps") : ""}.`;
     case "spring":
       return `${v.who} walked up past the head of the valley and found the spring where the creek begins${why}${big ? (big >= 2 ? ", and drank from it, and came back a head taller" : ", and the water was warm as milk") : ""}.`;
+    // 3C
+    case "beavers":
+      return `The beavers came up the creek and made their lodge in ${v.where || "the biggest pond"}${why}${big ? (big >= 2 ? ", and the water rose a whole hand that first night" : ", and slapped the water to say they had come") : ""}.`;
+    case "skycal":
+      return `${v.who ? v.who + " and the others" : "The elders"} set the sky stones to find midwinter${why}${big ? (big >= 2 ? ", and the sun came up exactly where they had said" : ", after watching every sunrise for a year") : ""}.`;
+    case "returning":
+      return `On the first Returning the sun came up through the crown and the fish swam home to the spring${why}${big ? (big >= 2 ? ", and the whole creek glowed from end to end" : ", and nobody slept that night") : ""}.`;
+    case "fishrun":
+      return `On midwinter night fish that glowed like coals swam up the creek, past every pond, all the way to the spring${why}${big ? (big >= 2 ? ", and the water shone for a week after" : ", and the frogs went quiet to watch") : ""}.`;
+    case "returnee":
+      return `${v.who} came home from downstream and stayed${why}${big ? (big >= 2 ? ", with news of a whole valley healing" : ", and knew everyone's name") : ""}.`;
   }
   return "Something happened, long ago.";
 }
@@ -155,7 +166,7 @@ function retell(w, teller, listener, s, v) {
     ops = [];
   if (nv.n != null) ops.push("n");
   if (nv.who != null && s.kind !== "founding") ops.push("who", "who");
-  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring"].includes(s.kind)) ops.push("why");
+  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring", "beavers", "skycal", "returning", "fishrun"].includes(s.kind)) ops.push("why");
   ops.push("big", "big");
   if (s.x != null) ops.push("where");
   let op = rng.pick(ops);
@@ -284,6 +295,11 @@ function shortAbout(w, s) {
     lost: "what was forgotten",
     temple: "how the great work began",
     "temple-wait": "the time the creek rested",
+    beavers: "the coming of the beavers",
+    skycal: "the sky stones",
+    returning: "the first Returning",
+    returnee: "the one who came home",
+    fishrun: "the night of the glowing fish",
     "temple-done": "the great work's finishing",
     spring: "who found the spring",
   }[s.kind] || "the old days";

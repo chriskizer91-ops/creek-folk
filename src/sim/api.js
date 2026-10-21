@@ -53,4 +53,13 @@ var CreekSim = {
   paceOfRate,
   STRUCTURES,
   devTrigger,
+  // Phase 3C (lead's pieces)
+  BEAVER,
+  beaversArrive,
+  SKYCAL,
+  skycalDaysToMidwinter,
+  RETURNING,
+  returningNext,
+  returningWindow,
+  daysToMidwinter,
 };

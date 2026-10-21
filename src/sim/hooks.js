@@ -119,5 +119,9 @@ function devTrigger(w, what) {
     becomeBeyond(w, c, null);
     return `${c.name} believes in you`;
   }
+  if (typeof devTrigger3C === "function") {
+    let r = devTrigger3C(w, what); // 3C: beavers, the sky calendar, the Returning (returning.js)
+    if (r) return r;
+  }
   return "unknown";
 }

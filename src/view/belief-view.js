@@ -198,6 +198,10 @@ function waveFor(cv, p, clock) {
   p.lie = 0;
 }
 
+// 3C: later view files add drawing here. Each entry is a class: new X(world, scene, group),
+// x.update(clock, night, rain, dl, camera, focus), x.dispose().
+var VIEW_EXTRAS = [];
+
 // ---------------------------------------------------------------------------
 // Animals, flowers, offerings and the sky.
 // ---------------------------------------------------------------------------
@@ -282,8 +286,10 @@ var BeliefView = class {
     this.flakes.frustumCulled = false;
     this.flakes.visible = false;
     this.group.add(this.flakes);
+    this.extras = VIEW_EXTRAS.map((X) => new X(world, scene, this.group)); // 3C
   }
   dispose() {
+    for (let x of this.extras || []) x.dispose && x.dispose();
     this.group.traverse((o) => {
       o.geometry && o.geometry.dispose();
     });
@@ -314,6 +320,7 @@ var BeliefView = class {
         setTimeout(() => window.__creek && window.__creek.hud && window.__creek.hud.toast(`${b.name} looked up at the sky and waved.`), 900);
       }
     }
+    for (let x of this.extras || []) x.update(clock, night, rain, dl, camera, focus); // 3C
     this.updateFlowers(w, f, season);
     this.updateGoats(w, f, clock);
     this.updateBees(w, f, clock, night, season);

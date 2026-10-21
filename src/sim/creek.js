@@ -440,14 +440,16 @@ function creekSafeToRaise(w, s, add) {
 }
 
 // A silted-up dam built up a hand higher (the tending chore). Returns true if it rose.
-function creekRaiseDam(w, s, who) {
+// 3C: the beavers call it with no `who` and { above, quiet }: they build higher, and
+// they log their own lines.
+function creekRaiseDam(w, s, who, opt = {}) {
   let cr = w.creek,
     d = cr && cr.dams[s.id];
   s.raise = 0;
   s.siltNoted = 0;
   if (!d) return false;
   let n = cr.nodes[d.i],
-    top = n.fp + CREEK.raiseAbove;
+    top = n.fp + (opt.above ?? CREEK.raiseAbove);
   if (d.crest >= top - 0.01) return false;
   // someone who knows the water must stand at its foot won't build it up into a leak.
   // If no dam below holds water against it, they lay a stone apron below it first, so
@@ -474,7 +476,7 @@ function creekRaiseDam(w, s, who) {
   s.raised = d.raised;
   s.cond = 1;
   w.stats.raises = (w.stats.raises || 0) + 1;
-  logEvent(
+  if (!opt.quiet) logEvent(
     w,
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?

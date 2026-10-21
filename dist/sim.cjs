@@ -1,5 +1,5 @@
 "use strict";
-var BUILD_VERSION = "3b", DEV_BUILD = false;
+var BUILD_VERSION = "3c", DEV_BUILD = false;
 // ==== src/sim/core.js ====
   function hashSeed(i) {
     let t = String(i),
@@ -731,6 +731,7 @@ var BUILD_VERSION = "3b", DEV_BUILD = false;
   }
   var CONCEPT_LABELS = {
     giver: "the one who sends gifts", // MINDS
+    beaver: "the beavers", // 3C
     spring: "spring",
     summer: "summer",
     autumn: "autumn",
@@ -1882,7 +1883,9 @@ var BUILD_VERSION = "3b", DEV_BUILD = false;
         lookout: "branch",
         dam: "branch",
         temple: "stone", // BELIEF
-        ancestors: "stone"
+        ancestors: "stone",
+        skycal: "stone", // 3C
+        path: "stone"
       }[i.kind] || "branch");
 
   }
@@ -6182,6 +6185,7 @@ var BUILD_VERSION = "3b", DEV_BUILD = false;
       s.building ||
       !(s.level > 0) ||
       (s.cond ?? 1) >= 0.6 ||
+      s.beaver || // 3C: a beaver is seeing to it
       s.owner && s.owner !== t.id && relation(t, s.owner).warmth < 0.45 ||
       i.creatures.some(
         (h) =>
@@ -7377,7 +7381,7 @@ var BUILD_VERSION = "3b", DEV_BUILD = false;
         a.level >= 3 ?
         0.8 :
         1.15 :
-        a.kind === "temple" || a.kind === "ancestors" ? 0.25 : // BELIEF: the great projects are kept well
+        a.kind === "temple" || a.kind === "ancestors" || a.kind === "skycal" || a.kind === "path" ? 0.25 : // BELIEF, 3C: the great projects are kept well
         1;
         if (
         a.cond = Math.max(
@@ -7438,6 +7442,7 @@ var BUILD_VERSION = "3b", DEV_BUILD = false;
       growDesires(i, a, r, o), a.workFatigue = Math.max(0, a.workFatigue - 0.002);
     }
     faunaMinute(i); // BELIEF: goats wander and graze (fauna.js)
+    beaverTick(i); // 3C: the beavers swim, chew and tend the dams (beavers.js)
     if (i.tick % 10 === 5 && socialTick(i), i.tick % 1440 === 7)
     for (let a of i.creatures)
     for (let l in a.seen) i.byId[l] || delete a.seen[l];
@@ -8324,14 +8329,16 @@ function creekSafeToRaise(w, s, add) {
 }
 
 // A silted-up dam built up a hand higher (the tending chore). Returns true if it rose.
-function creekRaiseDam(w, s, who) {
+// 3C: the beavers call it with no `who` and { above, quiet }: they build higher, and
+// they log their own lines.
+function creekRaiseDam(w, s, who, opt = {}) {
   let cr = w.creek,
     d = cr && cr.dams[s.id];
   s.raise = 0;
   s.siltNoted = 0;
   if (!d) return false;
   let n = cr.nodes[d.i],
-    top = n.fp + CREEK.raiseAbove;
+    top = n.fp + (opt.above ?? CREEK.raiseAbove);
   if (d.crest >= top - 0.01) return false;
   // someone who knows the water must stand at its foot won't build it up into a leak.
   // If no dam below holds water against it, they lay a stone apron below it first, so
@@ -8358,7 +8365,7 @@ function creekRaiseDam(w, s, who) {
   s.raised = d.raised;
   s.cond = 1;
   w.stats.raises = (w.stats.raises || 0) + 1;
-  logEvent(
+  if (!opt.quiet) logEvent(
     w,
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
@@ -9300,6 +9307,7 @@ function lifeTick(w) {
   mindsTick(w); // stories, myths, visitors (minds.js)
   giftTick(w); // gifts that stopped, found objects (gift.js)
   templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
+  lifeTick3C(w); // 3C: beavers, the sky calendar, the Returning (returning.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -10097,6 +10105,17 @@ function storyText(w, s, v) {
       return `The ${v.what} was finished${v.n ? ` after ${daysWord(v.n)}` : ""}${why}${big ? (big >= 2 ? ", and the creek ran gold that evening" : ", and everyone slept on its steps") : ""}.`;
     case "spring":
       return `${v.who} walked up past the head of the valley and found the spring where the creek begins${why}${big ? (big >= 2 ? ", and drank from it, and came back a head taller" : ", and the water was warm as milk") : ""}.`;
+    // 3C
+    case "beavers":
+      return `The beavers came up the creek and made their lodge in ${v.where || "the biggest pond"}${why}${big ? (big >= 2 ? ", and the water rose a whole hand that first night" : ", and slapped the water to say they had come") : ""}.`;
+    case "skycal":
+      return `${v.who ? v.who + " and the others" : "The elders"} set the sky stones to find midwinter${why}${big ? (big >= 2 ? ", and the sun came up exactly where they had said" : ", after watching every sunrise for a year") : ""}.`;
+    case "returning":
+      return `On the first Returning the sun came up through the crown and the fish swam home to the spring${why}${big ? (big >= 2 ? ", and the whole creek glowed from end to end" : ", and nobody slept that night") : ""}.`;
+    case "fishrun":
+      return `On midwinter night fish that glowed like coals swam up the creek, past every pond, all the way to the spring${why}${big ? (big >= 2 ? ", and the water shone for a week after" : ", and the frogs went quiet to watch") : ""}.`;
+    case "returnee":
+      return `${v.who} came home from downstream and stayed${why}${big ? (big >= 2 ? ", with news of a whole valley healing" : ", and knew everyone's name") : ""}.`;
   }
   return "Something happened, long ago.";
 }
@@ -10126,7 +10145,7 @@ function retell(w, teller, listener, s, v) {
     ops = [];
   if (nv.n != null) ops.push("n");
   if (nv.who != null && s.kind !== "founding") ops.push("who", "who");
-  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring"].includes(s.kind)) ops.push("why");
+  if (["founding", "storm", "gift", "frogs", "discovery", "built", "temple", "temple-done", "spring", "beavers", "skycal", "returning", "fishrun"].includes(s.kind)) ops.push("why");
   ops.push("big", "big");
   if (s.x != null) ops.push("where");
   let op = rng.pick(ops);
@@ -10255,6 +10274,11 @@ function shortAbout(w, s) {
     lost: "what was forgotten",
     temple: "how the great work began",
     "temple-wait": "the time the creek rested",
+    beavers: "the coming of the beavers",
+    skycal: "the sky stones",
+    returning: "the first Returning",
+    returnee: "the one who came home",
+    fishrun: "the night of the glowing fish",
     "temple-done": "the great work's finishing",
     spring: "who found the spring",
   }[s.kind] || "the old days";
@@ -11711,6 +11735,7 @@ function beliefOptions(w, c) {
     let s = starsOption(w, c);
     if (s) out.push(["stars", s]);
   }
+  if (typeof lifeOptions3C === "function") for (let o of lifeOptions3C(w, c)) out.push(o); // 3C (returning.js)
   return out;
 }
 
@@ -12109,6 +12134,7 @@ function greatTick(w, g, pace) {
 
 // Called by the core (stageDone) when a part of a great project is finished.
 function greatPartDone(w, s, level, stage) {
+  if (s.kind !== "temple" && s.kind !== "ancestors") return typeof partDone3C === "function" && partDone3C(w, s, level, stage); // 3C: the sky stones, the procession path
   let g = s.kind === "temple" ? w.temple : w.ancestors,
     st = STRUCTURES[s.kind].levels[level].stages[stage];
   if (!g) return;
@@ -12328,6 +12354,982 @@ ACTIONS.journey = {
   },
 };
 
+// ==== src/sim/looks.js ====
+// Phase 3C: looks you can trace through families (fur colours, coat patterns, things to
+// wear, the treasure a believer found). Owner: helper "looks". See docs/phase3c-plan.md.
+
+// ==== src/sim/homes.js ====
+// Phase 3C: homes (the door in the owner's colour, decorations from what they love, more
+// home levels) and gardens. Owner: helper "homes". See docs/phase3c-plan.md.
+
+// ==== src/sim/grove.js ====
+// Phase 3C: the memorial grove (tree kinds, growth all year, nurse logs) and goats with
+// kids and wool. Owner: helper "grove". See docs/phase3c-plan.md.
+
+// ==== src/sim/beavers.js ====
+// Phase 3C: the beavers.
+//
+// When the valley floor is about as wet as it gets (around month 6), a pair of beavers comes
+// up the creek and builds a lodge in the biggest pond. The creekfolk have been doing beaver
+// work all along; now the beavers take over much of the dam-tending (mending worn dams,
+// building silted ones up), and they hold the water a little higher than the creekfolk did.
+// They have kits in spring, up to six beavers. They are not creekfolk: `world.beavers`.
+//
+// Movement is a few cheap legs per world tick along the creek (the view interpolates them).
+
+var BEAVER = {
+  earliestDay: 120, // real days: not before month 5 ...
+  driest: 0.55, // ... and only once this much of the floor stays wet at the driest point
+  latestDay: 210, // they come by month 7 whatever the creek
+  max: 6, // beavers in the valley at most
+  above: 0.25, // m above the valley floor the beavers will build a dam (the creekfolk stop at 0.1)
+  raiseGap: 2 * 86400, // a dam is built up by beavers at most this often ...
+  raiseEvery: 3 * 3600, // ... and the beavers build one up at most this often (all dams)
+  speed: 0.4, // m/s swimming
+  smallDams: 5, // little stick dams on the side channels
+  oldDays: 60, // real days a beaver lives, about
+};
+
+function beaversOf(w) {
+  return w.beavers || null;
+}
+
+// Where the creek runs at z (the centre line), and a point beside it.
+function beaverCreekPoint(w, i, side = 0) {
+  let n = w.creek.nodes[clamp(i, 0, w.creek.nodes.length - 1)];
+  return { x: +(n.x + side).toFixed(2), z: +clamp(n.z, 0.5, VL - 0.5).toFixed(2) };
+}
+
+// The biggest pond that holds: the dam with the deepest water standing in its pond (over
+// the few nodes above it); a silted valley still has one somewhere.
+function beaverBestPond(w) {
+  let cr = w.creek,
+    full = cr._pondFull,
+    best = null,
+    bd = -1e9;
+  for (let id in cr.dams) {
+    let d = cr.dams[id],
+      s = w.byId[id];
+    if (!s || !d.hold) continue;
+    let n = cr.nodes[d.i];
+    if (n.z < 6 || n.z > VL - 6) continue;
+    let depth = -1;
+    for (let j = Math.max(0, d.i - 6); j <= d.i; j++) if (full && full[j] > -1e8) depth = Math.max(depth, full[j] - cr.nodes[j].bed);
+    depth -= Math.abs(n.z - VL * 0.45) / 400; // a little preference for the middle of the valley
+    if (depth > bd) (bd = depth), (best = d);
+  }
+  return best;
+}
+
+// Every life tick: do the beavers come?
+function beaverArrivalCheck(w) {
+  if (w.beavers || !w.creek) return;
+  let day = w.t / 86400;
+  if (day < BEAVER.earliestDay) return;
+  let dr = creekDriest(w),
+    ready = (dr && dr.wet >= BEAVER.driest) || day >= BEAVER.latestDay;
+  if (!ready) return;
+  beaversArrive(w);
+}
+
+function beaversArrive(w, dev = false) {
+  if (w.beavers) return null;
+  let d = beaverBestPond(w);
+  if (!d) return null; // no pond to live in yet: they'll come when there is one
+  let cr = w.creek,
+    li = Math.max(0, d.i - 2),
+    n = cr.nodes[li],
+    side = w.rng.chance(0.5) ? -1 : 1,
+    off = side * (n.wb / 2 + 0.6),
+    lodge = { i: li, x: +(n.x + off).toFixed(2), z: +n.z.toFixed(2), sid: d.id, size: 0.2, side },
+    B = (w.beavers = { arrived: Math.round(w.t), lodge, list: [], next: 1, small: [], raised: 0, mended: 0, kitsYear: -1, noticed: 0 });
+  for (let k = 0; k < 2; k++) beaverAdd(w, B, "adult", { i: Math.min(cr.nodes.length - 1, li + 6 + k), side: 0 });
+  let pond = (w.placeNames || []).find((p) => p.kind === "pool" && dist2d(p.x, p.z, lodge.x, lodge.z) < 14);
+  logEvent(w, 3, `Two beavers came up the creek in the night and looked the ponds over. By morning they had begun a lodge of sticks in ${pond ? pond.name : "the biggest pond"}.`, [], lodge, "beavers");
+  let near = w.creatures.filter((c) => !c.visitor && !c.asleep && dist2d(c.x, c.z, lodge.x, lodge.z) < 25);
+  newStory(w, "beavers", { where: pond ? pond.name : null }, lodge, 2, near);
+  for (let c of near) {
+    remember(w, c, "nature", "Beavers have come to live in our ponds! They work the water the way we do.", 0.8);
+    wordFor(w, c, "beaver");
+  }
+  namePlace(w, "the Beaver Lodge", lodge, "lodge", 3, near[0] || null);
+  w.stats.beaversDay = +(w.t / 86400).toFixed(2);
+  return B;
+}
+
+function beaverAdd(w, B, age, at) {
+  let p = beaverCreekPoint(w, at.i, at.side || 0),
+    b = { id: B.next++, born: Math.round(w.t), age, i: at.i, x: p.x, z: p.z, px: p.x, pz: p.z, pt: Math.round(w.t), at: Math.round(w.t), task: "swim", ti: B.lodge.i, until: 0, sid: null };
+  B.list.push(b);
+  return b;
+}
+
+// Every world tick (60 s).
+function beaverTick(w) {
+  let B = w.beavers;
+  if (!B || !B.list.length) return;
+  let night = isNight(w.t),
+    cr = w.creek;
+  // the lodge grows as sticks come in
+  for (let b of B.list) {
+    if (w.t < b.until) continue;
+    if (b.task === "swim") {
+      // one leg along the creek toward the target node
+      let step = Math.max(1, Math.round((BEAVER.speed * 60) / CREEK.ds)),
+        ni = b.i < b.ti ? Math.min(b.ti, b.i + step) : Math.max(b.ti, b.i - step);
+      beaverMove(w, b, ni, b.ti === B.lodge.i ? B.lodge.side * 0.5 : 0, 60);
+      if (ni === b.ti) beaverArrive(w, B, b);
+      continue;
+    }
+    if (b.task === "work") {
+      beaverWorkDone(w, B, b);
+      continue;
+    }
+    // resting in the lodge, chewing, playing: time to choose again
+    beaverChoose(w, B, b, night);
+  }
+}
+
+function beaverMove(w, b, ni, side, dur) {
+  let p = beaverCreekPoint(w, ni, side);
+  b.px = b.x;
+  b.pz = b.z;
+  b.pt = Math.round(w.t);
+  b.x = p.x;
+  b.z = p.z;
+  b.i = ni;
+  b.at = Math.round(w.t + dur);
+}
+
+function beaverArrive(w, B, b) {
+  let night = isNight(w.t);
+  if (b.job === "dam") {
+    b.task = "work";
+    b.until = Math.round(w.t + w.rng.range(400, 1000));
+  } else if (b.job === "home") {
+    b.task = "home";
+    b.until = Math.round(w.t + (night ? w.rng.range(240, 600) : w.rng.range(900, 2400)));
+    B.lodge.size = +Math.min(1, B.lodge.size + (b.carry ? 0.04 : 0.005)).toFixed(3);
+    b.carry = 0;
+  } else if (b.job === "chew") {
+    b.task = "chew";
+    b.until = Math.round(w.t + w.rng.range(300, 700));
+    b.carry = 1;
+  } else if (b.job === "small") {
+    b.task = "work";
+    b.until = Math.round(w.t + w.rng.range(400, 900));
+  } else {
+    b.task = "play";
+    b.until = Math.round(w.t + w.rng.range(200, 700));
+  }
+}
+
+// What a beaver does next. Busy at dusk, at night and at dawn; mostly in the lodge by day.
+function beaverChoose(w, B, b, night) {
+  let dusk = beaverDuskish(w),
+    festival = w.returning && w.returning.active && w.t >= w.returning.active.dusk, // the beavers are out on the night of the Returning
+    active = night || dusk || festival || w.rng.chance(0.2);
+  if (b.age === "kit") active = active && w.rng.chance(0.6);
+  if (!active) return beaverGo(w, b, B.lodge.i, "home");
+  if (b.age !== "kit") {
+    let s = beaverDamJob(w, B, b);
+    if (s) {
+      s.beaver = b.id;
+      b.sid = s.id;
+      return beaverGo(w, b, beaverDamNode(w, s), "dam");
+    }
+    if (b.carry) {
+      // sticks go to the lodge, or now and then across a side channel
+      let site = B.small.length < BEAVER.smallDams && w.rng.chance(0.25) ? beaverSmallSite(w, B) : null;
+      if (site) {
+        b.smallSite = site;
+        return beaverGo(w, b, site.i, "small");
+      }
+      return beaverGo(w, b, B.lodge.i, "home");
+    }
+    if (w.rng.chance(0.45)) return beaverGo(w, b, clamp(B.lodge.i + w.rng.int(-10, 10), 0, w.creek.nodes.length - 1), "chew");
+  }
+  beaverGo(w, b, clamp(B.lodge.i + w.rng.int(-5, 5), 0, w.creek.nodes.length - 1), "play");
+}
+
+function beaverDamNode(w, s) {
+  let d = w.creek.dams[s.id];
+  return d ? Math.min(w.creek.nodes.length - 1, d.i + 1) : creekNodeIndex(s.z);
+}
+
+// The edges of the night, a little either side of dusk and dawn.
+function beaverDuskish(w) {
+  let L = w.cycle ? w.cycle.len : VALLEY_DAY;
+  return isNight(w.t + 0.06 * L) !== isNight(w.t - 0.06 * L);
+}
+
+function beaverGo(w, b, ti, job) {
+  b.ti = ti;
+  b.job = job;
+  if (ti === b.i) {
+    beaverArrive(w, w.beavers, b);
+    if (b.task === "home") b.x = w.beavers.lodge.x, b.z = w.beavers.lodge.z, b.px = b.x, b.pz = b.z, b.pt = Math.round(w.t), b.at = Math.round(w.t);
+    return;
+  }
+  b.task = "swim";
+  b.until = 0;
+}
+
+// A dam a beaver could work on: one that's worn, one asking to be built up, or one the
+// beavers will build higher than the creekfolk did. Never one a creekfolk is mending.
+function beaverDamJob(w, B, b) {
+  let cr = w.creek,
+    best = null,
+    bs = 0;
+  for (let s of w.structures) {
+    if (s.kind !== "dam" || !(s.level > 0) || s.building) continue;
+    if (s.beaver && s.beaver !== b.id && B.list.some((o) => o.id === s.beaver && o.sid === s.id)) continue;
+    if (w.creatures.some((c) => c.plan && c.plan.repair === s.id)) continue;
+    let d = cr.dams[s.id];
+    if (!d) continue;
+    let n = cr.nodes[d.i],
+      score = 0,
+      canRaise = w.t - (s.beaverRaised || -1e9) > BEAVER.raiseGap && w.t - (B.lastRaise || -1e9) > BEAVER.raiseEvery;
+    if (s.raise) score = canRaise && creekSafeToRaise(w, s, CREEK.raiseStep) ? 3 : 0; // unsafe or too soon: the creekfolk see to it
+    else if ((s.cond ?? 1) < 0.75) score = 2 + (0.75 - s.cond);
+    else if (canRaise && d.crest < n.fp + BEAVER.above - 0.02 && creekSafeToRaise(w, s, CREEK.raiseStep) && s.pond > 0.6) score = 1;
+    if (!score) continue;
+    score /= 1 + Math.abs(d.i - b.i) / 40;
+    if (score > bs) (bs = score), (best = s);
+  }
+  return best;
+}
+
+function beaverWorkDone(w, B, b) {
+  if (b.job === "small") {
+    let site = b.smallSite;
+    if (site && B.small.length < BEAVER.smallDams) {
+      B.small.push({ x: site.x, z: site.z, t: Math.round(w.t) });
+      if (B.small.length === 1) logEvent(w, 2, "The beavers dammed one of the little side channels across the floor. The water spread out behind their sticks.", [], site, "beavers");
+    }
+    b.carry = 0;
+    b.smallSite = null;
+    return beaverGo(w, b, B.lodge.i, "home");
+  }
+  let s = b.sid && w.byId[b.sid];
+  b.sid = null;
+  if (s && s.kind === "dam" && s.beaver === b.id) {
+    s.beaver = 0;
+    let cr = w.creek,
+      d = cr.dams[s.id],
+      n = d && cr.nodes[d.i];
+    if ((s.cond ?? 1) < 0.95) {
+      s.cond = 1;
+      s.wornNoted = !1;
+      B.mended++;
+    }
+    let up = false;
+    let canRaise = w.t - (s.beaverRaised || -1e9) > BEAVER.raiseGap && w.t - (B.lastRaise || -1e9) > BEAVER.raiseEvery;
+    if (d && canRaise && (s.raise || d.crest < n.fp + BEAVER.above - 0.02) && creekSafeToRaise(w, s, CREEK.raiseStep)) up = creekRaiseDam(w, s, null, { above: BEAVER.above, quiet: true });
+    if (up) {
+      s.beaverRaised = B.lastRaise = Math.round(w.t);
+      B.raised++;
+      if (B.raised === 1) logEvent(w, 2, `The beavers built the ${builtLevelDef(s).label} up higher in the night. In the morning its pond was wider than the creekfolk had ever made it.`, [], s, "beavers");
+    }
+    beaverNotice(w, B);
+  }
+  beaverGo(w, b, B.lodge.i, "home");
+}
+
+// A spot on a side channel near the lodge for a little stick dam ({ x, z, i } or null).
+function beaverSmallSite(w, B) {
+  let cr = w.creek;
+  if (!cr.chan) return null;
+  for (let k = 0; k < 40; k++) {
+    let x = B.lodge.x + w.rng.range(-18, 18),
+      z = B.lodge.z + w.rng.range(-28, 28);
+    if (x < 1 || z < 1 || x > VW - 1 || z > VL - 1) continue;
+    let vi = Math.round(z) * (VW + 1) + Math.round(x);
+    if (!(cr.chan[vi] >= 0.2)) continue;
+    if (B.small.some((s) => dist2d(s.x, s.z, x, z) < 6)) continue;
+    return { x: +x.toFixed(2), z: +z.toFixed(2), i: creekNodeIndex(z) };
+  }
+  return null;
+}
+
+// The creekfolk notice how much the beavers do.
+function beaverNotice(w, B) {
+  if (B.noticed || B.mended + B.raised < 6) return;
+  B.noticed = Math.round(w.t);
+  let c = w.creatures.filter((c) => !c.visitor && c.stage !== "child" && c.know && c.know.dams).sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+  if (!c) return;
+  logEvent(w, 2, `${c.name} says the beavers mend the dams better than anyone. There's more time now ${w.temple ? "for the temple" : "for other work"}.`, [c.id], c, "beavers");
+  remember(w, c, "nature", "The beavers do the dam work now, at night, while we sleep.", 0.6);
+}
+
+// Every life tick: kits in spring, the old ones go, the lodge stays theirs.
+function beaverLifeTick(w) {
+  beaverArrivalCheck(w);
+  let B = w.beavers;
+  if (!B) return;
+  let s = seasonAt(w),
+    yr = s.year;
+  for (let b of B.list) if (b.age === "kit" && w.t - b.born > 8 * 86400) b.age = "adult";
+  if (s.name === "spring" && B.kitsYear !== yr && B.list.filter((b) => b.age === "adult").length >= 2) {
+    B.kitsYear = yr;
+    let n = Math.min(BEAVER.max - B.list.length, w.rng.int(1, 2));
+    for (let k = 0; k < n; k++) beaverAdd(w, B, "kit", { i: B.lodge.i, side: B.lodge.side * 0.5 });
+    if (n > 0 && !B.kitsNoted) {
+      B.kitsNoted = Math.round(w.t);
+      logEvent(w, 2, `There are beaver kits in the lodge: ${n === 1 ? "one small dark head" : "two small dark heads"} in the water at dusk.`, [], B.lodge, "beavers");
+    }
+  }
+  // an old beaver goes off down the creek one night (and a young pair keeps the lodge)
+  let old = B.list.filter((b) => b.age === "adult" && w.t - b.born > BEAVER.oldDays * 86400);
+  if (old.length && B.list.length >= 3 && w.rng.chance(LIFE.tick / (4 * 86400))) {
+    let b = old[0];
+    B.list.splice(B.list.indexOf(b), 1);
+    for (let st of w.structures) if (st.beaver === b.id) st.beaver = 0;
+  }
+  // the lodge moves if its pond is gone (a dam was rebuilt elsewhere)
+  if (!w.creek.dams[B.lodge.sid]) {
+    let d = beaverBestPond(w);
+    if (d) B.lodge.sid = d.id;
+  }
+}
+
+// Creekfolk go and watch the beavers at dusk (curious ones, children most).
+function beaverWatchOption(w, c) {
+  let B = w.beavers;
+  if (!B || c.visitor || !beaverDuskish(w) || c.needs.energy < 0.3) return null;
+  let p = w.terrain.randomPoint(w.rng, { near: { x: B.lodge.x - B.lodge.side * 4, z: B.lodge.z, r: 3 }, minEdge: 1.5 });
+  if (!p) return null;
+  let score = (0.25 + 0.6 * c.temp.curiosity + (c.stage === "child" ? 0.35 : 0)) * clamp((0.95 - c.needs.fun) / 0.9, 0.15, 1);
+  return { score, plan: { goal: "beavers", steps: [{ do: "walk", x: p.x, z: p.z, near: 0.6 }, { do: "watchbeavers", dur: w.rng.range(180, 420), lx: B.lodge.x, lz: B.lodge.z }] } };
+}
+
+ACTIONS.watchbeavers = {
+  start(w, c, step) {
+    return makeAct(w, c, "watch", step.dur || 240, { lookX: step.lx, lookZ: step.lz });
+  },
+  end(w, c) {
+    c.needs.fun = clamp(c.needs.fun + 0.22, 0, 1);
+    feel(c, w, "joy", 0.25);
+    wordFor(w, c, "beaver");
+    if (!(c.counts.beavers > 0)) remember(w, c, "nature", c.stage === "child" ? "I watched the beavers slap the water with their tails! Splash!" : "We sat by the pond at dusk and watched the beavers at work.", 0.6);
+    c.counts.beavers = (c.counts.beavers || 0) + 1;
+    return true;
+  },
+};
+
+// ==== src/sim/skycal.js ====
+// Phase 3C: the sky calendar that finds their midwinter.
+//
+// After their first midwinter, someone who has been watching the sunrise notices that the
+// sun comes up further along the hills each morning, stops, and turns back. They want to
+// mark it. The village sets up the sky stones on the terrace: a sighting stone and a fan of
+// markers to the east, the tallest where the midwinter sun comes up. Once it stands they
+// can say how long it is until midwinter, and they meet there at dawn on midwinter morning.
+// Target: usually finished before their second midwinter (about real day 15).
+
+var SKYCAL = {
+  startAfter: 0.4, // valley days after the first midwinter morning
+  radius: 2.6,
+};
+
+var skycalPart = (name, mats, labor, o = {}) => stageDef(name, mats, labor, o);
+STRUCTURES.skycal = {
+  label: "sky stones",
+  concept: "skycal",
+  radius: 2.6,
+  great: "skycal",
+  levels: [
+    {
+      name: "sky stones",
+      label: "sky stones",
+      // the markers are set on the mornings the sun comes up behind them (doy: day of
+      // their year), so the stones go up as the year turns: done by about real day 13
+      stages: [
+        skycalPart("sighting stone", { stone: 3 }, 400, { heavy: !0 }),
+        skycalPart("midwinter stone", { stone: 4 }, 600, { heavy: !0 }),
+        skycalPart("spring marker", { stone: 2 }, 300, { heavy: !0, doy: 24 }),
+        skycalPart("midsummer marker", { stone: 2 }, 300, { heavy: !0, doy: 72 }),
+        skycalPart("autumn marker", { stone: 2 }, 300, { heavy: !0, doy: 120 }),
+        skycalPart("ring of pebbles", { stone: 3 }, 300),
+      ],
+    },
+  ],
+};
+var SKYCAL_TEXT = { name: "sky stones", the: "the sky stones" };
+
+function skycalOf(w) {
+  return w.skycal || null;
+}
+
+// Every life tick (from lifeTick3C).
+function skycalTick(w) {
+  let K = w.skycal;
+  if (!K) {
+    // their first midwinter morning has passed
+    let days = valleyDays(w);
+    if (days < MIDWINTER_DOY + 0.22 + SKYCAL.startAfter) return;
+    skycalStart(w);
+    return;
+  }
+  if (K.done) return;
+  let s = w.byId[K.sid];
+  if (!s) return;
+  if (s.building && s.building.locked) {
+    // the next stone, as soon as the last is set; a marker waits for its sunrise
+    let st = STRUCTURES.skycal.levels[0].stages[s.building.stage],
+      doy = seasonAt(w).doy,
+      off = st && st.doy != null ? (((doy - st.doy) % YEAR_DAYS) + YEAR_DAYS) % YEAR_DAYS : 0;
+    if (!st || st.doy == null || off < 6) {
+      s.building.locked = !1;
+      if (st && st.doy != null) logEvent(w, 2, `This morning the sun came up in a new place over the hills, and the creekfolk set the ${st.name} where it rose.`, [], s, "skycal");
+    }
+  }
+  if (!s.building && s.level >= STRUCTURES.skycal.levels.length) skycalDone(w, K, s);
+}
+
+function skycalStart(w) {
+  let alive = w.creatures.filter((c) => !c.visitor && c.stage !== "child");
+  if (!alive.length) return;
+  let by = alive.slice().sort((a, b) => b.temp.curiosity + (b.stage === "elder" ? 0.3 : 0) - (a.temp.curiosity + (a.stage === "elder" ? 0.3 : 0)))[0],
+    at = skycalSite(w);
+  if (!at) return;
+  let s = register(w, {
+    id: w.nextId++,
+    kind: "skycal",
+    x: +at.x.toFixed(2),
+    z: +at.z.toFixed(2),
+    rot: +SUNRISE_DIR.toFixed(3),
+    owner: null,
+    founder: by.id,
+    level: 0,
+    t: Math.round(w.t),
+    building: { level: 0, stage: 0, delivered: {}, labor: 0, cureLeft: 0, cureUntil: null, started: w.t, by: by.id, locked: !1 },
+    contrib: {},
+    spare: {},
+  });
+  w.structures.push(s);
+  w.skycal = { sid: s.id, by: by.id, started: Math.round(w.t), done: null, gatherings: 0 };
+  logEvent(w, 3, `${by.name} has been watching where the sun comes up over the hills. All year it came up further along every morning, then stopped at midwinter and turned back. ${by.name} wants to mark the place with stones, so they'll always know when midwinter is coming.`, [by.id], s, "skycal");
+  remember(w, by, "idea", "The sun comes up in a different place every morning, and turns back at midwinter. We could mark it with stones.", 0.8);
+}
+
+// Open ground on the terrace near the village, with nothing standing to the east.
+function skycalSite(w) {
+  let T = w.terrain,
+    near = villageCentre(w);
+  for (let i = 0; i < 400; i++) {
+    let p = T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: 8 + i / 8 }, offFloor: true, minEdge: 3 });
+    if (!p || !siteFor(w, p.x, p.z, i < 250 ? SKYCAL.radius + 1 : SKYCAL.radius, "skycal")) continue;
+    return p;
+  }
+  return null;
+}
+
+function skycalDone(w, K, s) {
+  K.done = Math.round(w.t);
+  let by = w.byId[K.by];
+  logEvent(w, 3, `From the sighting stone, the midwinter sun will come up right over the tallest of the sky stones. Now they can always tell how long it is until midwinter.`, by ? [by.id] : [], s, "skycal");
+  newStory(w, "skycal", { who: by ? by.name : null }, s, 2, w.creatures.filter((c) => !c.visitor && dist2d(c.x, c.z, s.x, s.z) < 30));
+  if (!(w.placeNames || []).some((p) => p.kind === "skycal")) namePlace(w, "the Sky Stones", s, "skycal", 3, by || null);
+}
+
+// The parts of the sky stones that are done (for the view).
+function skycalParts(w) {
+  let K = w.skycal,
+    s = K && w.byId[K.sid];
+  if (!s) return 0;
+  if (!s.building) return s.level >= 1 ? STRUCTURES.skycal.levels[0].stages.length : 0;
+  return s.building.stage;
+}
+
+// Valley days until midwinter morning, if they can tell (the sky stones stand).
+function skycalDaysToMidwinter(w) {
+  return w.skycal && w.skycal.done ? daysToMidwinter(w) : null;
+}
+
+// Midwinter morning: they meet at the sky stones at dawn (when there's no Returning).
+function skycalOption(w, c) {
+  let K = w.skycal;
+  if (!K || !K.done || c.visitor) return null;
+  let d = daysToMidwinter(w);
+  // from a little before dawn to a little after, on midwinter morning
+  if (!(d > YEAR_DAYS - 0.12 || d < 0.08)) return null;
+  if (typeof returningActive === "function" && returningActive(w)) return null; // the Returning has its own dawn
+  let s = w.byId[K.sid];
+  if (!s) return null;
+  let a = w.rng.range(0, 6.28),
+    r = w.rng.range(1.6, 3),
+    x = s.x - Math.cos(SUNRISE_DIR) * 1.2 + Math.cos(a) * r * 0.5,
+    z = s.z - Math.sin(SUNRISE_DIR) * 1.2 + Math.sin(a) * r * 0.5;
+  if (!w.terrain.walkable(x, z)) (x = s.x - 2), (z = s.z);
+  return { score: 1.6 + 0.3 * c.temp.curiosity, plan: { goal: "midwinter", steps: [{ do: "walk", x, z, near: 0.6 }, { do: "watchsunrise", dur: w.rng.range(150, 300), lx: s.x + Math.cos(SUNRISE_DIR) * 30, lz: s.z + Math.sin(SUNRISE_DIR) * 30 }] } };
+}
+
+ACTIONS.watchsunrise = {
+  start(w, c, step) {
+    if (step.n) c.counts.returnWalk = step.n; // the Returning's walk, done for this year
+    return makeAct(w, c, "watch", step.dur || 200, { lookX: step.lx, lookZ: step.lz });
+  },
+  end(w, c) {
+    c.needs.fun = clamp(c.needs.fun + 0.15, 0, 1);
+    c.needs.social = clamp(c.needs.social + 0.15, 0, 1);
+    feel(c, w, "joy", 0.3);
+    let K = w.skycal;
+    if (K && K.done && w.t - (K.lastGather || -1e9) > 3 * VALLEY_DAY) {
+      K.lastGather = Math.round(w.t);
+      K.gatherings = (K.gatherings || 0) + 1;
+      if (!w.returning || !w.returning.count) logEvent(w, 2, "On midwinter morning the creekfolk met at the sky stones to watch the sun come up over the tallest marker.", [c.id], c, "skycal");
+    }
+    if (!(c.counts.midwinter > 0)) remember(w, c, "nature", "At midwinter the sun came up right over the tallest of the sky stones, just as they said it would.", 0.6);
+    c.counts.midwinter = (c.counts.midwinter || 0) + 1;
+    return true;
+  },
+};
+
+// ==== src/sim/returning.js ====
+// Phase 3C: the procession path and the Returning, every midwinter, forever.
+//
+// When the temple is finished, the creekfolk spend three valley years laying a procession
+// path from the temple, past the First Pool, up the creek to the head of the valley where
+// the walk to the Spring begins: one stretch a season. The first Returning comes on the
+// first midwinter after the path is done (month 12 for an every-other-day giver).
+//
+// On midwinter morning they meet on the temple steps: the sunrise lines up through the
+// crown and the water on its steps turns gold (the view). By day they walk the path to the
+// Spring and back. That night a run of softly glowing fish swims up the healed creek all
+// the way to the spring; the village lines the channels with lanterns; the beavers and the
+// fireflies are out; the one who believes in you looks up at the camera (the view).
+// Each Returning adds a lantern on the pyramid for each creekfolk who passed since the
+// last one, a new carving, and a new verse to their song.
+//
+// A valley with no finished temple still gets the fish run at midwinter once its creek has
+// healed, without the sunrise through the crown or the festival.
+//
+// This file also gathers the 3C hooks: lifeTick3C, lifeOptions3C, devTrigger3C, partDone3C.
+
+var RETURNING = {
+  pathParts: 12, // stretches of the procession path, one a season
+  partGap: 2 * 86400, // real days between stretches (a season)
+  healed: 0.7, // driest share for the fish run in a valley with no temple
+  verses: 12, // verses of their song kept word for word (the count goes on)
+  pathStep: 2.4, // m between path stones
+};
+
+var pathPart = (name, mats, labor, o = {}) => stageDef(name, mats, labor, o);
+STRUCTURES.path = {
+  label: "procession path",
+  concept: "path",
+  radius: 0.8,
+  great: "path",
+  levels: [
+    {
+      name: "procession path",
+      label: "procession path",
+      stages: [
+        pathPart("steps down from the temple", { stone: 4 }, 500, { heavy: !0 }),
+        pathPart("stones across the meadow", { stone: 4 }, 500),
+        pathPart("lantern posts by the temple", { branch: 3, stone: 1 }, 400),
+        pathPart("the way down to the First Pool", { stone: 4 }, 500),
+        pathPart("stepping stones at the First Pool", { stone: 5 }, 600, { heavy: !0 }),
+        pathPart("lantern posts at the First Pool", { branch: 3, stone: 1 }, 400),
+        pathPart("the bank path upstream", { stone: 4 }, 500),
+        pathPart("stones through the reeds", { stone: 4 }, 500),
+        pathPart("lantern posts along the creek", { branch: 3, stone: 1 }, 400),
+        pathPart("the climb to the head of the valley", { stone: 5 }, 600, { heavy: !0 }),
+        pathPart("the gate stones", { stone: 4 }, 600, { heavy: !0 }),
+        pathPart("the last lantern", { branch: 2, clay: 1 }, 400),
+      ],
+    },
+  ],
+};
+
+function returningOf(w) {
+  return w.returning || (w.returning = { path: null, pathSid: null, pathStarted: null, pathDone: null, parts: 0, lastPart: null, count: 0, fishRuns: 0, lastYear: 0, active: null, lanterns: 0, passingsAt: null, verses: [], verseCount: 0, first: null, last: null });
+}
+
+// ---------------------------------------------------------------------------
+// The 3C hooks
+// ---------------------------------------------------------------------------
+
+// Every life tick (600 s), from lifeTick in life.js.
+function lifeTick3C(w) {
+  beaverLifeTick(w);
+  skycalTick(w);
+  returningTick(w);
+}
+
+// Things creekfolk may choose to do (gift.js beliefOptions).
+function lifeOptions3C(w, c) {
+  let out = [],
+    r = returningOption(w, c);
+  if (r) out.push(["returning", r]);
+  let s = skycalOption(w, c);
+  if (s) out.push(["midwinter", s]);
+  let b = beaverWatchOption(w, c);
+  if (b) out.push(["beavers", b]);
+  return out;
+}
+
+// A part of the sky stones or the path is done (temple.js greatPartDone).
+function partDone3C(w, s, level, stage) {
+  if (s.kind === "path") {
+    let R = returningOf(w);
+    R.parts = stage + 1;
+    R.lastPart = Math.round(w.t);
+    let st = STRUCTURES.path.levels[0].stages[stage];
+    logEvent(w, 1, `They finished a stretch of the procession path: ${st.name}.`, [], s, "returning");
+  }
+}
+
+function devTrigger3C(w, what) {
+  if (what === "beavers") {
+    if (w.beavers) return "the beavers are already here";
+    return beaversArrive(w, true) ? "the beavers came" : "no pond for a lodge yet";
+  }
+  if (what === "skycal") {
+    if (w.skycal) return w.skycal.done ? "the sky stones already stand" : "the sky stones are being built";
+    skycalStart(w);
+    return w.skycal ? "someone wants to mark the sunrise with stones" : "no place for the sky stones";
+  }
+  if (what === "returning") {
+    let R = returningOf(w);
+    if (!w.temple || w.temple.state !== "done") {
+      // no temple: the fish run, tonight
+      returningBegin(w, true, true);
+      return "the fish run (no finished temple)";
+    }
+    returningPathFinish(w);
+    returningBegin(w, false, true);
+    return "the Returning, now";
+  }
+  if (what === "path") {
+    if (!w.temple || w.temple.state !== "done") return "no finished temple";
+    returningPathFinish(w);
+    return "the procession path is laid";
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The procession path
+// ---------------------------------------------------------------------------
+
+// Points along the path: temple, the First Pool's bank, up the creek to the head of the valley.
+function returningRoute(w) {
+  let T = w.terrain,
+    t = w.temple && w.byId[w.temple.sid],
+    pts = [];
+  if (!t) return pts;
+  let pool = (w.placeNames || []).find((p) => p.kind === "pool"),
+    gate = springGate(w),
+    way = [{ x: t.x, z: t.z }];
+  if (pool) {
+    let i = creekNodeIndex(pool.z),
+      n = w.creek.nodes[i],
+      side = t.x < n.x ? -1 : 1;
+    way.push({ x: n.x + side * (n.wb / 2 + 1.6), z: n.z });
+  }
+  // up the bank on the temple's side to the head of the valley
+  let side = t.x < T.creekX(t.z) ? -1 : 1;
+  for (let z = (pool ? pool.z : t.z) - 12; z > gate.z + 4; z -= 12) way.push({ x: T.creekX(z) + side * 5, z });
+  way.push({ x: gate.x, z: gate.z });
+  // sample every few metres, keeping to walkable ground where it can
+  for (let k = 0; k < way.length - 1; k++) {
+    let a = way[k],
+      b = way[k + 1],
+      d = dist2d(a.x, a.z, b.x, b.z),
+      n = Math.max(1, Math.round(d / RETURNING.pathStep));
+    for (let j = 0; j < n; j++) {
+      let f = j / n,
+        x = a.x + (b.x - a.x) * f,
+        z = a.z + (b.z - a.z) * f;
+      if (k === 0 && dist2d(x, z, t.x, t.z) < 6) continue; // the temple's own steps
+      pts.push({ x: +x.toFixed(2), z: +z.toFixed(2) });
+    }
+  }
+  pts.push({ x: +gate.x.toFixed(2), z: +gate.z.toFixed(2) });
+  if (pts.length > 90) pts = pts.filter((p, i) => i % Math.ceil(pts.length / 90) === 0 || i === pts.length - 1);
+  return pts;
+}
+
+function returningPathFinish(w) {
+  let R = returningOf(w);
+  if (R.pathDone) return;
+  returningPathStart(w);
+  let s = w.byId[R.pathSid];
+  if (s) {
+    s.level = 1;
+    s.building = null;
+    R.parts = RETURNING.pathParts;
+  }
+  R.pathDone = Math.round(w.t);
+}
+
+function returningPathStart(w) {
+  let R = returningOf(w);
+  if (R.pathSid) return;
+  let pts = returningRoute(w);
+  if (pts.length < 2) return;
+  R.path = pts;
+  let at = pts[Math.min(pts.length - 1, 2)],
+    s = register(w, {
+      id: w.nextId++,
+      kind: "path",
+      x: at.x,
+      z: at.z,
+      rot: 0,
+      owner: null,
+      founder: null,
+      level: 0,
+      t: Math.round(w.t),
+      building: { level: 0, stage: 0, delivered: {}, labor: 0, cureLeft: 0, cureUntil: null, started: w.t, by: null, locked: !1 },
+      contrib: {},
+      spare: {},
+    });
+  w.structures.push(s);
+  R.pathSid = s.id;
+  R.pathStarted = Math.round(w.t);
+  R.lastPart = Math.round(w.t);
+  logEvent(w, 3, "With the temple finished, the creekfolk have begun a path for a procession: from the temple, past the First Pool, up the creek to where the way to the Spring begins. They say it will take three years, a stretch each season.", [], s, "returning");
+}
+
+// ---------------------------------------------------------------------------
+// Midwinter: the Returning
+// ---------------------------------------------------------------------------
+
+// When this year's midwinter morning is (seconds), and the festival's span.
+function returningWindow(w, t = w.t) {
+  let d = daysToMidwinter(w, t),
+    dawn = t + d * VALLEY_DAY;
+  // within a valley day after midwinter morning, it's still this one
+  if (d > YEAR_DAYS - 1.05) dawn = t - (YEAR_DAYS - d) * VALLEY_DAY;
+  return { dawn: Math.round(dawn), start: Math.round(dawn - 0.12 * VALLEY_DAY), end: Math.round(dawn + 1.0 * VALLEY_DAY) };
+}
+
+function returningActive(w) {
+  return !!(w.returning && w.returning.active && !w.returning.active.fishOnly);
+}
+
+// Seconds until the next Returning begins (null if there won't be one yet).
+function returningNext(w) {
+  let R = w.returning;
+  if (!R) return null;
+  let canFestival = R.pathDone || (R.pathSid && R.parts >= RETURNING.pathParts - 1);
+  if (!canFestival) return null;
+  let win = returningWindow(w);
+  if (w.t < win.start) return win.start - w.t;
+  return win.start + YEAR_DAYS * VALLEY_DAY - w.t;
+}
+
+function returningTick(w) {
+  let R = w.returning;
+  // the path begins when the temple is done
+  if (w.temple && w.temple.state === "done") {
+    R = returningOf(w);
+    if (!R.pathSid) returningPathStart(w);
+    let s = R.pathSid && w.byId[R.pathSid];
+    if (s && s.building && s.building.locked && w.t - (R.lastPart || 0) >= RETURNING.partGap) s.building.locked = !1;
+    if (s && !s.building && s.level >= 1 && !R.pathDone) {
+      R.pathDone = Math.round(w.t);
+      logEvent(w, 3, "The procession path is finished, from the temple steps to the head of the valley, with lanterns along the way. At midwinter, they say, the creek's children come home.", [], s, "returning");
+    }
+  }
+  // midwinter
+  let win = returningWindow(w),
+    yr = seasonAt(w, win.dawn).year;
+  R = w.returning;
+  if (R && R.active) {
+    if (w.t >= R.active.end) returningEnd(w);
+    else returningPhase(w);
+    return;
+  }
+  if (w.t < win.start || w.t >= win.end) return;
+  if (R && R.lastYear === yr) return;
+  if (R && R.pathDone) returningBegin(w, false);
+  else if (!(w.temple && w.temple.state === "done")) {
+    let dr = creekDriest(w);
+    if (dr && dr.wet >= RETURNING.healed) returningBegin(w, true);
+  }
+}
+
+function returningBegin(w, fishOnly, dev = false) {
+  let R = returningOf(w),
+    win = returningWindow(w);
+  if (dev) win = { dawn: Math.round(w.t + 0.12 * VALLEY_DAY), start: Math.round(w.t), end: Math.round(w.t + 1.12 * VALLEY_DAY) };
+  let dusk = win.dawn;
+  while (!isNight(dusk) && dusk < win.end) dusk += 60;
+  R.active = { fishOnly: !!fishOnly, start: win.start, dawn: win.dawn, dusk, end: win.end, phase: "dawn", n: fishOnly ? R.fishRuns + 1 : R.count + 1 };
+  R.lastYear = seasonAt(w, win.dawn).year;
+  if (fishOnly) return;
+  R.count++;
+  if (!R.first) R.first = Math.round(w.t);
+  R.last = Math.round(w.t);
+  let first = R.count === 1,
+    t = w.temple && w.byId[w.temple.sid];
+  logEvent(w, 3, first ? "It is midwinter morning, and the whole village is on the temple steps in the dark, waiting. This is the first Returning." : `It is midwinter, and the creekfolk are on the temple steps before dawn for the Returning${R.count > 2 ? ", as they are every year" : ""}.`, [], t || null, "returning");
+}
+
+// Things that happen as the festival goes on (one log line each).
+function returningPhase(w) {
+  let R = w.returning,
+    A = R.active,
+    t = w.temple && w.byId[w.temple.sid];
+  if (A.fishOnly) {
+    if (A.phase !== "night" && w.t >= A.dusk) {
+      A.phase = "night";
+      R.fishRuns++;
+      logEvent(w, R.fishRuns === 1 ? 3 : 2, R.fishRuns === 1 ? "On midwinter night, fish that glowed softly like coals swam up the creek, past every pond, all the way to the spring. Nobody had ever seen it before." : "On midwinter night the glowing fish swam up the creek to the spring again.", [], null, "returning");
+      if (R.fishRuns === 1) newStory(w, "fishrun", {}, null, 2, w.creatures.filter((c) => !c.visitor && !c.asleep));
+    }
+    return;
+  }
+  if (A.phase === "dawn" && w.t >= A.dawn + 0.05 * VALLEY_DAY) {
+    A.phase = "day";
+    logEvent(w, 3, "The sun came up through the crown, and the water running down the temple steps turned to gold. Nobody said anything for a long time.", [], t || null, "returning");
+  } else if (A.phase === "day" && w.t >= A.dawn + 0.15 * VALLEY_DAY && !A.walked) {
+    A.walked = 1;
+    logEvent(w, 2, "The procession set out from the temple: down past the First Pool and up the creek to the head of the valley, and on to the Spring.", [], t || null, "returning");
+  } else if (A.phase === "day" && w.t >= A.dusk) {
+    A.phase = "night";
+    let first = R.count === 1;
+    logEvent(w, 3, `That night the fish came: a run of softly glowing fish swimming up the healed creek, all the way to the spring. The creekfolk lined the channels with lanterns. ${w.beavers ? "The beavers were out, and the fireflies too." : "The fireflies were out too."}`, [], null, "returning");
+    if (first) newStory(w, "returning", {}, t || null, 3, w.creatures.filter((c) => !c.visitor));
+  }
+}
+
+function returningEnd(w) {
+  let R = w.returning,
+    A = R.active;
+  R.active = null;
+  if (A.fishOnly) return;
+  // what this Returning adds
+  let passed = R.passingsAt == null ? 0 : Math.max(0, (w.stats.passings || 0) - R.passingsAt);
+  if (R.passingsAt == null) {
+    // the first: everyone who passed since the temple was finished
+    let since = w.temple && w.temple.done ? w.temple.done : 0;
+    passed = Object.values(w.lineage || {}).filter((r) => r.died && r.died >= since).length;
+  }
+  R.passingsAt = w.stats.passings || 0;
+  R.lanterns += passed;
+  let t = w.temple && w.byId[w.temple.sid];
+  if (t && w.temple) carveStory(w, t, w.temple);
+  let verse = returningVerse(w, R);
+  if (verse) {
+    R.verses.push({ n: R.count, text: verse, t: Math.round(w.t) });
+    R.verseCount++;
+    if (R.verses.length > RETURNING.verses) R.verses.shift();
+  }
+  logEvent(w, 3, `The Returning is over.${passed ? ` They hung ${passed === 1 ? "a new lantern" : numberWord(passed) + " new lanterns"} on the pyramid, ${passed === 1 ? "for the one" : "one for each creekfolk"} who passed since the last.` : ""}${verse ? ` Their song has a new verse: ${verse}` : ""}`, [], t || null, "returning");
+}
+
+// A new verse: the story most of them tell from this year, or those who passed.
+function returningVerse(w, R) {
+  let since = R.last ? R.last - YEAR_DAYS * VALLEY_DAY : 0,
+    tell = {};
+  for (let c of w.creatures) if (!c.visitor) for (let k in c.lore || {}) tell[k] = (tell[k] || 0) + 1;
+  let best = null;
+  for (let k in tell) {
+    let s = w.stories[k];
+    if (!s || s.t < since || s.kind === "returning" || s.kind === "fishrun") continue;
+    let sc = tell[k] * (s.weight || 1);
+    if (!best || sc > best.sc) best = { s, sc };
+  }
+  if (best) return `"${cap(shortAbout(w, best.s))}."`;
+  let names = Object.values(w.lineage || {}).filter((r) => r.died && r.died >= since).slice(-3).map((r) => r.name);
+  return names.length ? `"For ${names.join(" and ")}."` : null;
+}
+
+function cap(s) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
+// What creekfolk do during the Returning.
+function returningOption(w, c) {
+  let R = w.returning,
+    A = R && R.active;
+  if (!A || c.visitor) return null;
+  if (c.needs.energy < 0.12 || c.needs.food < 0.1) return null;
+  let t = w.temple && w.byId[w.temple.sid];
+  if (A.fishOnly) {
+    if (w.t < A.dusk || c.needs.energy < 0.3) return null;
+    let p = returningBank(w, c);
+    return p && { score: 0.9 + 0.5 * c.temp.curiosity, plan: { goal: "fish", steps: [{ do: "walk", x: p.x, z: p.z, near: 0.6 }, { do: "watchfish", dur: w.rng.range(240, 600), lx: p.lx, lz: p.lz }] } };
+  }
+  if (!t) return null;
+  // dawn: on the temple steps, facing the sunrise through the crown
+  if (w.t < A.dawn + 0.12 * VALLEY_DAY) {
+    let a = w.rng.range(-0.9, 0.9),
+      r = w.rng.range(5.5, 8.5),
+      x = t.x - Math.cos(SUNRISE_DIR + a) * r,
+      z = t.z - Math.sin(SUNRISE_DIR + a) * r;
+    if (!w.terrain.walkable(x, z)) (x = t.x - Math.cos(SUNRISE_DIR) * 6), (z = t.z - Math.sin(SUNRISE_DIR) * 6);
+    return { score: 2.6, plan: { goal: "returning", steps: [{ do: "walk", x, z, near: 0.8 }, { do: "watchsunrise", dur: w.rng.range(120, 260), lx: t.x + Math.cos(SUNRISE_DIR) * 30, lz: t.z + Math.sin(SUNRISE_DIR) * 30 }] } };
+  }
+  // by day: the procession up the path (the old and the small turn back at the First Pool)
+  if (w.t < A.dusk - 0.06 * VALLEY_DAY) {
+    if (c.counts.returnWalk === A.n) return null; // already walked it this year
+    let pts = R.path || [];
+    if (pts.length < 2) return null;
+    let far = c.stage === "adult",
+      end = far ? pts.length - 1 : Math.min(pts.length - 1, Math.round(pts.length * 0.35)),
+      steps = [];
+    for (let k = 0; k <= end; k += Math.max(1, Math.floor(end / 6))) steps.push({ do: "walk", x: pts[k].x, z: pts[k].z, near: 1.2 });
+    steps.push({ do: "walk", x: pts[end].x, z: pts[end].z, near: 0.8 });
+    steps.push({ do: far ? "pilgrim" : "watchsunrise", dur: far ? 0.12 * VALLEY_DAY : w.rng.range(120, 240), lx: pts[end].x, lz: pts[end].z - 10, n: A.n });
+    return { score: 2.4, plan: { goal: "returning", steps } };
+  }
+  // night: a lantern by the water, then the fish
+  let p = returningBank(w, c);
+  if (!p) return null;
+  return { score: 2.5, plan: { goal: "returning", steps: [{ do: "walk", x: p.x, z: p.z, near: 0.6 }, { do: "watchfish", dur: w.rng.range(300, 700), lx: p.lx, lz: p.lz, lantern: 1 }] } };
+}
+
+// A place on the bank to set a lantern and watch the water.
+function returningBank(w, c) {
+  let cr = w.creek,
+    T = w.terrain;
+  for (let k = 0; k < 20; k++) {
+    let i = w.rng.int(Math.max(0, creekNodeIndex(c.z) - 15), Math.min(cr.nodes.length - 1, creekNodeIndex(c.z) + 15)),
+      n = cr.nodes[i];
+    if (n.z < 1 || n.z > VL - 1) continue;
+    let side = w.rng.chance(0.5) ? -1 : 1,
+      x = n.x + side * (n.wb / 2 + w.rng.range(0.8, 2.2));
+    if (!T.walkable(x, n.z)) continue;
+    return { x, z: n.z, lx: n.x, lz: n.z };
+  }
+  return null;
+}
+
+ACTIONS.pilgrim = {
+  start(w, c, step) {
+    c.counts.returnWalk = step.n;
+    let at = springAt(w);
+    return makeAct(w, c, "away", step.dur || 0.12 * getDayLength(), { lookX: at.x, lookZ: at.z });
+  },
+  end(w, c) {
+    c.needs.food = Math.max(c.needs.food, 0.4);
+    c.needs.social = clamp(c.needs.social + 0.2, 0, 1);
+    feel(c, w, "joy", 0.35);
+    if (!(c.counts.pilgrim > 0)) remember(w, c, "returning", "We walked the path all the way to the Spring at midwinter, singing.", 0.75);
+    c.counts.pilgrim = (c.counts.pilgrim || 0) + 1;
+    return true;
+  },
+};
+
+ACTIONS.watchfish = {
+  start(w, c, step) {
+    return makeAct(w, c, "watch", step.dur || 300, { lookX: step.lx, lookZ: step.lz });
+  },
+  end(w, c) {
+    c.needs.fun = clamp(c.needs.fun + 0.3, 0, 1);
+    c.needs.social = clamp(c.needs.social + 0.1, 0, 1);
+    feel(c, w, "joy", 0.45);
+    if (!(c.counts.fishrun > 0)) remember(w, c, "returning", "The fish came up the creek glowing, all of them, all the way to the spring. I set my lantern on the bank and watched them go by.", 0.85);
+    c.counts.fishrun = (c.counts.fishrun || 0) + 1;
+    return true;
+  },
+};
+
 // ==== src/sim/hooks.js ====
 // ==========================================================================
 // Connecting the calendar and lives to the original world.
@@ -12450,6 +13452,10 @@ function devTrigger(w, what) {
     becomeBeyond(w, c, null);
     return `${c.name} believes in you`;
   }
+  if (typeof devTrigger3C === "function") {
+    let r = devTrigger3C(w, what); // 3C: beavers, the sky calendar, the Returning (returning.js)
+    if (r) return r;
+  }
   return "unknown";
 }
 
@@ -12509,6 +13515,15 @@ var CreekSim = {
   paceOfRate,
   STRUCTURES,
   devTrigger,
+  // Phase 3C (lead's pieces)
+  BEAVER,
+  beaversArrive,
+  SKYCAL,
+  skycalDaysToMidwinter,
+  RETURNING,
+  returningNext,
+  returningWindow,
+  daysToMidwinter,
 };
 
 module.exports = CreekSim;

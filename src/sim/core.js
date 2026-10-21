@@ -728,6 +728,7 @@
   }
   var CONCEPT_LABELS = {
     giver: "the one who sends gifts", // MINDS
+    beaver: "the beavers", // 3C
     spring: "spring",
     summer: "summer",
     autumn: "autumn",
@@ -1879,7 +1880,9 @@
         lookout: "branch",
         dam: "branch",
         temple: "stone", // BELIEF
-        ancestors: "stone"
+        ancestors: "stone",
+        skycal: "stone", // 3C
+        path: "stone"
       }[i.kind] || "branch");
 
   }
@@ -6179,6 +6182,7 @@
       s.building ||
       !(s.level > 0) ||
       (s.cond ?? 1) >= 0.6 ||
+      s.beaver || // 3C: a beaver is seeing to it
       s.owner && s.owner !== t.id && relation(t, s.owner).warmth < 0.45 ||
       i.creatures.some(
         (h) =>
@@ -7374,7 +7378,7 @@
         a.level >= 3 ?
         0.8 :
         1.15 :
-        a.kind === "temple" || a.kind === "ancestors" ? 0.25 : // BELIEF: the great projects are kept well
+        a.kind === "temple" || a.kind === "ancestors" || a.kind === "skycal" || a.kind === "path" ? 0.25 : // BELIEF, 3C: the great projects are kept well
         1;
         if (
         a.cond = Math.max(
@@ -7435,6 +7439,7 @@
       growDesires(i, a, r, o), a.workFatigue = Math.max(0, a.workFatigue - 0.002);
     }
     faunaMinute(i); // BELIEF: goats wander and graze (fauna.js)
+    beaverTick(i); // 3C: the beavers swim, chew and tend the dams (beavers.js)
     if (i.tick % 10 === 5 && socialTick(i), i.tick % 1440 === 7)
     for (let a of i.creatures)
     for (let l in a.seen) i.byId[l] || delete a.seen[l];

@@ -132,6 +132,7 @@ function lifeTick(w) {
   mindsTick(w); // stories, myths, visitors (minds.js)
   giftTick(w); // gifts that stopped, found objects (gift.js)
   templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
+  lifeTick3C(w); // 3C: beavers, the sky calendar, the Returning (returning.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);

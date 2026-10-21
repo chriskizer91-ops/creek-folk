@@ -806,6 +806,7 @@ function beliefOptions(w, c) {
     let s = starsOption(w, c);
     if (s) out.push(["stars", s]);
   }
+  if (typeof lifeOptions3C === "function") for (let o of lifeOptions3C(w, c)) out.push(o); // 3C (returning.js)
   return out;
 }
 
