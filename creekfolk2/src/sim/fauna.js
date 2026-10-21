@@ -203,6 +203,7 @@ function faunaMinute(w) {
   let T = w.terrain,
     night = isNight(w.t);
   for (let g of f.goats) {
+    if (goatFollow(w, f, g)) continue; // 3C: a kid trots after its mother (grove.js)
     if (w.t < g.tn) continue;
     let r = night ? 1.5 : 5.5,
       tx = f.pasture.x + w.rng.range(-r, r),

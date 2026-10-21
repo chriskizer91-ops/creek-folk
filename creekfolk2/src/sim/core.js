@@ -728,6 +728,7 @@
   }
   var CONCEPT_LABELS = {
     giver: "the one who sends gifts", // MINDS
+    beaver: "the beavers", // 3C
     spring: "spring",
     summer: "summer",
     autumn: "autumn",
@@ -1879,7 +1880,9 @@
         lookout: "branch",
         dam: "branch",
         temple: "stone", // BELIEF
-        ancestors: "stone"
+        ancestors: "stone",
+        skycal: "stone", // 3C
+        path: "stone"
       }[i.kind] || "branch");
 
   }
@@ -1888,7 +1891,8 @@
     return !(
     !s ||
     s.know && n && !n.know[s.know] ||
-    s.needsTiles && workshopLevel(i) < 4);
+    s.needsTiles && workshopLevel(i) < 4 ||
+    s.ready && !s.ready(i, t, n)); // 3C: a level can say when it may be begun (homes.js)
 
   }
   function waitingFor(i, t, e, n) {
@@ -5037,7 +5041,7 @@
     if (s.multi) {
       let d = i.structures.filter((u) => u.kind === n);
       if (d.length >= s.multi || d.some((u) => u.building)) return !1;
-    } else if (!s.personal && i.structures.some((d) => d.kind === n)) return !1;
+    } else if (!s.personal && i.structures.some((d) => d.kind === n) && !(n === "garden" && homeGardenRoom(i))) return !1; // 3C: more than one garden (homes.js)
     if (
     s.personal &&
     i.structures.some((d) => d.kind === n && d.owner === t.id) ||
@@ -6179,6 +6183,7 @@
       s.building ||
       !(s.level > 0) ||
       (s.cond ?? 1) >= 0.6 ||
+      s.beaver || // 3C: a beaver is seeing to it
       s.owner && s.owner !== t.id && relation(t, s.owner).warmth < 0.45 ||
       i.creatures.some(
         (h) =>
@@ -6352,7 +6357,7 @@
         canBuildLevel(i, p, p.level, t))
 
         h =
-        (0.55 + 0.25 * p.level) * (
+        (0.55 + 0.25 * Math.min(p.level, 5)) * ( // 3C: the porch and the hearth are wanted like the room before them (homes.js)
         1.25 - 0.5 * t.interests.building + 0.2 * t.temp.patience),
         u = p,
         l.interest && (h = 1.1 + 0.3 * p.level),
@@ -6393,7 +6398,7 @@
       let f = 0.35 + (c - h) * 1.2 * o;
       (!e || f > e.score) && (e = { kind: a, score: f, upgrade: u, target: d });
     }
-    return e;
+    return homeFoundOption(i, t, e); // 3C: the fourth bed, a second and third garden (homes.js)
   }
   function projectReason(i, t, e, n, s) {
     let r = STRUCTURES[e];
@@ -6673,7 +6678,7 @@
     return l;
   }
   function gardenOption(i, t) {
-    let e = findStructure(i, "garden", (a) => a.level > 0 && a.beds);
+    let e = homeGardenFor(i, t); // 3C: the garden that needs them most (homes.js)
     if (!e || !t.know.planting) return null;
     let n = t.interests.growing,
       s = STRUCTURES.garden.radius,
@@ -7373,7 +7378,7 @@
         a.level >= 3 ?
         0.8 :
         1.15 :
-        a.kind === "temple" || a.kind === "ancestors" ? 0.25 : // BELIEF: the great projects are kept well
+        a.kind === "temple" || a.kind === "ancestors" || a.kind === "skycal" || a.kind === "path" ? 0.25 : // BELIEF, 3C: the great projects are kept well
         1;
         if (
         a.cond = Math.max(
@@ -7422,6 +7427,7 @@
         }
       }
     }
+    i.tick % 10 === 3 && homesTick(i); // 3C: decorations by the door (homes.js)
     if (updateHydro(i), i.tick % 10 === 0) {
       let a = i.wear;
       for (let l = 0; l < a.length; l++)
@@ -7434,6 +7440,7 @@
       growDesires(i, a, r, o), a.workFatigue = Math.max(0, a.workFatigue - 0.002);
     }
     faunaMinute(i); // BELIEF: goats wander and graze (fauna.js)
+    beaverTick(i); // 3C: the beavers swim, chew and tend the dams (beavers.js)
     if (i.tick % 10 === 5 && socialTick(i), i.tick % 1440 === 7)
     for (let a of i.creatures)
     for (let l in a.seen) i.byId[l] || delete a.seen[l];

@@ -348,6 +348,7 @@ function greatTick(w, g, pace) {
 
 // Called by the core (stageDone) when a part of a great project is finished.
 function greatPartDone(w, s, level, stage) {
+  if (s.kind !== "temple" && s.kind !== "ancestors") return typeof partDone3C === "function" && partDone3C(w, s, level, stage); // 3C: the sky stones, the procession path
   let g = s.kind === "temple" ? w.temple : w.ancestors,
     st = STRUCTURES[s.kind].levels[level].stages[stage];
   if (!g) return;
