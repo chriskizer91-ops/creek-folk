@@ -154,5 +154,13 @@ All of the above comes over. In Phase 1:
 - **Belief sleeps for now.** There are no gifts, no temple, no Hall of the Ancestors and
   no journey to the spring. Phase 3 brings treasures carried down by floods.
 
-Every change to Creekfolk 1's own files is listed in `MERGE.md`, so Creekfolk 1's 3C can be
-merged in.
+- **Creekfolk 1's 3C is merged in**: inherited looks (fur colours, coat markings, what they
+  wear for what they love), homes with porches, hearths and things by the door, the memorial
+  grove, the beavers (who come after about day 120, as in Creekfolk 1), the sky stones, and the
+  glowing fish run at midwinter once the creek has healed. The Returning festival and the
+  procession path need a temple, so they never happen here.
+- **The founders came down the creek** from the old valley; the valley's first line and the
+  story they tell of their arrival say so.
+
+Every change to Creekfolk 1's own files is listed in `MERGE.md`, so anything later from
+Creekfolk 1 can be merged in the same way.

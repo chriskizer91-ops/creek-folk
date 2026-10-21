@@ -45,7 +45,7 @@ var Hud = class {
     if (!vw.cycle) return;
     let w = { cycle: vw.cycle, calStart: vw.calStart, tzMin: vw.tzMin, t },
       txt = `${dateText(w, t)} · ${timeOfDayName(t)}`;
-    if (txt !== this._clock) $("clock").textContent = this._clock = txt;
+    if (txt !== this._clock) ($("clock").textContent = this._clock = txt), ($("clock").hidden = false);
     if (this.toastT && performance.now() > this.toastT) $("toast").classList.remove("on"), (this.toastT = 0), this.lastLine && this.showLine(this.lastLine);
     if (this.lastLine && performance.now() - (this._agoAt || 0) > 15000) this.showLine(this.lastLine), (this._agoAt = performance.now());
   }

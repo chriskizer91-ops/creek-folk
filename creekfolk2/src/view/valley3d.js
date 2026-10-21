@@ -450,7 +450,7 @@ var CF2Valley = (function () {
       }
       // the bluff's face, and any ground as steep: limestone in layers
       var bl = T.bluffAt(x, z);
-      if ((bl > 0.03 && slope > 0.55) || (!inside && slope > 1.5)) {
+      if ((bl > 0.03 && slope > 0.55) || (!inside && slope > 1.9)) {
         if (slope < 0.9) return TI.limeD;
         // in layers where the cells are fine enough to show them; plain rock from farther off
         return CELL > 0.6 || Math.floor(h * 1.45 + 0.15 * Math.sin(x * 0.5 + z * 0.23)) % 3 !== 1 ? TI.lime : TI.limeD;
@@ -489,7 +489,7 @@ var CF2Valley = (function () {
       var wet = samp(g.wet, x, z) + 0.07 * blobN(x * 2.2, z * 2.2) + 0.04 * fineN(x, z);
       if (wet > 0.55) return fineN(x * 1.4 + 3, z * 1.4) < -0.4 ? TI.mud : TI.grassD;
       if (wet > 0.25) return TI.marsh;
-      if (slope > 1.1) return T.valleyR(x, z) > 0.88 ? (slope > 1.4 ? TI.limeD : TI.grassD) : TI.clay;
+      if (slope > 1.1) return T.valleyR(x, z) > 0.88 ? (slope > 1.9 ? TI.limeD : TI.grassD) : TI.clay;
       if (wd > 0.5) return fineN(x * 0.7, z * 0.7) > 0.35 ? TI.moss : TI.grassD;
       return grassBy(samp(g.green, x, z), x, z);
     }
