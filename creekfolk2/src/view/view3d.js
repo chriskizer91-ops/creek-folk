@@ -317,7 +317,7 @@ var View3D = class {
         }
         if (f.sprite) f.sprite.visible = false;
         f.model.root.visible = true;
-        Folk3D.pose(f.model, c, { x: p.x, y, z: p.z, face: f.face, walking: moved > 0.002, dt, t });
+        Folk3D.pose(f.model, c, { x: p.x, y, z: p.z, face: f.face, walking: moved > 0.002, dt, t, clock: this.time });
         continue;
       }
       if (f.model) f.model.root.visible = false;

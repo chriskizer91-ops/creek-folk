@@ -72,9 +72,15 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/view/words.js`, `sheets.js` | Plain words about creekfolk (from Creekfolk 1's interface); the village and mind sheets. |
 | `src/view/hud.js` | The interface: clock chip, log line, catching up, the clock's questions, settings, backups, sheets. |
 | `src/view/dev.js` | The developer menu. |
-| `src/view/mapview.js` | The valley from above on a 2D canvas (stands in until the 3D view; also the fallback without WebGL). |
+| `src/view/mapview.js` | The valley from above on a 2D canvas: the fallback without WebGL2. |
+| `src/view/look-glue.js` | How the view uses the ported renderer: colour management off, sRGB output, light intensities times pi (`CF2_LIGHT`). |
+| `src/view/sprites.js` | Creekfolk as pixel sprites for the middle of the zoom (What the Map Forgot's letter grids): Creekfolk 1's 24 furs (`CF2_FUR`), coats, faces, pale paws, the dyes (`CF2_DYE`) and what they wear (`CF2_WEAR`), and each family line's cloth pattern (`clothOf`, view only). Also `familyColour` (dots, the map). |
+| `src/view/valley3d.js` | The valley in 3D (`CF2Valley.create(vw)`), What the Water Brings' way: 32 m tiles (a far version always, near ones at full detail streamed round the view), ground typed from the simulation's grids read smoothly, the creek's ribbon, standing water as a smooth sheet, the branches carved from their own lines, trees and plants, the bluff's rock, homes and every other structure level by level (and while being built), dams, 3C's things (doors, porches, hearths, decorations, the grove and its nurse logs, sky stones, the lodge). `W.height`, `W.water`, `W.paint`. |
+| `src/view/beasts3d.js` | The simulation's animals: the beavers swimming, the glowing fish run. |
+| `src/view/folk3d.js` | Creekfolk close up, built like the Sheet king on the shared rig: their looks, the family's cloth (a pattern shader), what they wear, what they carry, and what they are doing laid over the rig's walk, sit and idle clips. |
+| `src/view/view3d.js` | The 3D view: renderer, orthographic camera, input, the zoom (dots, sprites, close-up creekfolk), the light through the day and the weather (What the Water Brings' tables), the cut-out round a followed creekfolk. |
 | `src/view/app.js`, `boot.js` | The worker connection and the drawing loop; start-up. |
-| `src/look/` | What the Water Brings' renderer ported to three.js r186 (see `docs/R186-PORT.md`). |
+| `src/look/` | What the Water Brings' renderer ported to three.js r186 (see `docs/R186-PORT.md`). Creekfolk 2 adds one thing, marked `// CF2:`: `PKPixel3D.create(.., { lut: true })` snaps colours with a table built once on the GPU instead of searching the palette per pixel. |
 | `ref/` | The author's other games, kept whole as reference. Never edit; never build from. |
 
 ## The valley
@@ -120,6 +126,23 @@ minutes behind: the worker replays the gap in 250 ms slices and reports progress
   build is refused: "This valley was made in Creekfolk 1, ..." or "... an earlier version of
   Creekfolk 2 ...". Export and import of a backup file are in Settings.
 
+## The look
+
+- **Three layers of zoom** (`view.hv`, metres of view top to bottom, 1.6 to 300): from the air
+  (over 70 m) each creekfolk is a dot in its family's colour; in between, a sprite; close in (16 m
+  and under), a full creekfolk. The ground has a far version of every tile always and near tiles
+  at full detail within about 40 m of the view; tiles rebuild when what they show changes (their
+  keys: the creek's and the water's versions, the season, the overlay, and what stands on them).
+- **The palette.** The pixel pass snaps every colour to one palette, built in `View3D.onSync` from
+  `CF2Valley.palette()`, `spritePalette()` and `folkPalette()`. A new colour anywhere has to be in
+  one of those (a paint in `CF2Valley.PAINT` at load time is enough), or it comes out as its
+  nearest neighbour. Alpha tags matter: soft things (`{ soft: true }`) get no ink outline, glowing
+  ones (`{ glow: true }`) shine at night.
+- **Looking at it.** `tools/shots.mjs` takes screenshots of a saved valley from named views;
+  `tools/sprite-sheet.mjs` and `tools/folk-sheet.mjs` lay out the creekfolk art. Headless Chromium
+  draws with SwiftShader (slow, and the machine may be shared): take the shots you need, then look
+  at every one.
+
 ## Tests
 
 ```
@@ -128,6 +151,9 @@ node tools/month.cjs --seeds 2 --days 30 --save 15,30            # whole months 
 node tools/map.cjs <seed> <days> runs/map.png                    # the simulated valley from above, as a picture
 node tools/build.mjs && node tools/browser-test.mjs              # the rules, in headless Chromium (no network allowed)
 ```
+
+Screenshots: `node tools/shots.mjs <save.json | new> <out dir> [views.json | -] [w h]`; contact sheets:
+`node tools/sprite-sheet.mjs runs/sprites.png`, `node tools/folk-sheet.mjs runs/folk.png`.
 
 Results go to `runs/` (not committed).
 

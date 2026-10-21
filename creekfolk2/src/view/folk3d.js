@@ -248,22 +248,120 @@ var Folk3D = (function () {
       J.Slot_Hand_R.add(stick);
     }
     if (PKToon2 && PKToon2.merge) PKToon2.merge(k, null);
+    // eyelids, added after the merge so they can be shown alone: shut while they sleep
+    var lids = [-1, 1].map(function (s) {
+      var ey = (look.eye || 1) * 0.07 * u,
+        l = at(mesh(ell(ey * 1.3, ey * 1.3, ey * 0.75, 8), fur), s * 0.17 * u, 0.52 * u, 0.44 * u);
+      l.visible = false;
+      H.add(l);
+      return l;
+    });
     var root = new THREE.Group();
     root.add(k.root);
     var sc = (look.size || 1) * (child ? 0.62 : 1);
     k.root.scale.setScalar(sc);
     if (child) H.scale.setScalar(1.18);
     k.play("idle", 0);
-    return { root: root, rig: k, anim: "idle" };
+    return { root: root, rig: k, anim: "idle", lids: lids };
   }
+  // What they hold while carrying (c.carry.k): sticks, a bundle of reeds, a stone, a lump of
+  // mud or clay, seeds or berries in a little basket, a tile.
+  function carried(k) {
+    var g = new THREE.Group(),
+      add = (geo, mat, x, y, z, rx, ry, rz) => g.add(at(mesh(geo, mat), x, y, z, rx, ry, rz));
+    if (k === "branch" || k === "log")
+      for (var q = 0; q < 3; q++) add(new THREE.CylinderGeometry(0.018, 0.024, 0.62, 5), M(EXTRA.stick, "stick"), (q - 1) * 0.04, 0, 0, Math.PI / 2, 0.3 + q * 0.12, 0);
+    else if (k === "reeds") for (var r2 = 0; r2 < 5; r2++) add(new THREE.CylinderGeometry(0.01, 0.012, 0.55, 4), M(CF2_WEAR.lily, "wear_lily"), (r2 - 2) * 0.025, 0.05, 0, 0.2, 0, 1.35);
+    else if (k === "stone" || k === "tiles" || k === "tile") add(new THREE.DodecahedronGeometry(0.09, 0), M(["#6a6a64", "#908e86", "#b2b0a6"], "carryStone"), 0, 0, 0);
+    else if (k === "mud" || k === "clay") add(ell(0.09, 0.07, 0.08, 8), M(["#5a3e28", "#7a5a3a", "#9a7a52"], "carryMud"), 0, 0, 0);
+    else {
+      add(new THREE.CylinderGeometry(0.08, 0.06, 0.07, 8), M(CF2_WEAR.straw, "wear_straw"), 0, 0, 0);
+      for (var b2 = 0; b2 < 4; b2++) add(ell(0.022, 0.022, 0.022, 5), M(k === "seeds" ? CF2_WEAR.heart : CF2_WEAR.bloom, k === "seeds" ? "wear_heart" : "wear_bloom"), Math.cos(b2 * 1.6) * 0.035, 0.045, Math.sin(b2 * 1.6) * 0.035);
+    }
+    return g;
+  }
+  // The clips the rig has (walk, sit, idle) carry most of it; what they are doing is laid over
+  // them, joint by joint: sleeping curled on the ground, working bent over with an arm swinging,
+  // talking with their hands, playing in hops, eating, grooming, carrying in both arms.
+  var _qa = new THREE.Quaternion(),
+    _ea = new THREE.Euler();
+  function turn(j, x, y, z) {
+    if (!j) return;
+    _ea.set(x || 0, y || 0, z || 0);
+    j.quaternion.multiply(_qa.setFromEuler(_ea));
+  }
+  var WORK = { labor: 1, craft: 1, dig: 1, sow: 1, harvest: 1, pick: 1, heavyj: 1, mark: 1, repair: 1, gather: 1, deposit: 0.5, stash: 0.5, take: 0.5 };
   function pose(m, c, p) {
     m.root.position.set(p.x, p.y, p.z);
-    m.root.rotation.y = p.face;
+    m.root.rotation.set(0, p.face, 0);
     var a = c.act || {},
-      want = p.walking ? "walk" : a.type === "sleep" || a.type === "nap" || a.type === "sit" || a.type === "chat" || a.type === "watch" || a.type === "huddle" ? "sit" : "idle";
+      ty = a.type,
+      asleep = c.asleep || ty === "sleep" || ty === "nap",
+      seated = ty === "sit" || ty === "chat" || ty === "watch" || ty === "huddle" || ty === "groom" || ty === "eat",
+      want = p.walking ? "walk" : asleep || seated ? "sit" : "idle";
     if (want !== m.anim) (m.anim = want), m.rig.play(want, 0.25);
     if (m.rig.actions.walk) m.rig.actions.walk.timeScale = 1.6;
     m.rig.mixer.update(p.dt);
+    var J = m.rig.joints,
+      t = (p.clock || 0) + (c.id % 17) * 0.37,
+      carry = c.carry && c.carry.k;
+    // the thing they carry
+    if (carry !== m.carryK) {
+      if (m.carryG) m.root.remove(m.carryG);
+      m.carryG = carry ? carried(carry) : null;
+      m.carryK = carry;
+      if (m.carryG) m.root.add(m.carryG);
+    }
+    if (m.carryG) {
+      var sc = m.rig.root.scale.x;
+      m.carryG.position.set(0, 0.8 * sc, 0.24 * sc);
+      turn(J.UpperArm_L, -0.9, 0, -0.25);
+      turn(J.UpperArm_R, -0.9, 0, 0.25);
+      turn(J.Forearm_L, -0.6, 0, 0);
+      turn(J.Forearm_R, -0.6, 0, 0);
+    }
+    if (asleep) {
+      // curled up on their side, eyes shut
+      m.root.rotation.set(0, p.face, Math.PI / 2 * 0.92);
+      m.root.position.y += 0.2 * m.rig.root.scale.x;
+      turn(J.Spine, 0.5, 0, 0);
+      turn(J.Neck, 0.3, 0, 0);
+      turn(J.Thigh_L, -1.0, 0, 0);
+      turn(J.Thigh_R, -1.0, 0, 0);
+      turn(J.Spine, 0.02 * Math.sin(t * 0.9), 0, 0); // breathing
+    } else if (WORK[ty] && !p.walking) {
+      // bent to the work, one arm swinging (a stone, a stick, a handful of mud)
+      var sw = Math.sin(t * 5.5) * WORK[ty];
+      turn(J.Spine, 0.45 * WORK[ty], 0, 0);
+      turn(J.Neck, -0.2, 0, 0);
+      turn(J.UpperArm_R, -1.1 - 0.5 * sw, 0, 0.1);
+      turn(J.Forearm_R, -0.4 + 0.3 * sw, 0, 0);
+      turn(J.UpperArm_L, -0.6, 0, -0.1);
+    } else if (ty === "chat" || ty === "call") {
+      // talking with their hands, a nod now and then
+      turn(J.Head, 0.08 * Math.sin(t * 1.7), 0.25 * Math.sin(t * 0.5), 0);
+      turn(J.UpperArm_R, -0.5 - 0.35 * Math.max(0, Math.sin(t * 2.3)), 0, 0.2);
+      turn(J.Forearm_R, -0.7 - 0.3 * Math.sin(t * 4.1), 0, 0);
+      if (ty === "call") turn(J.UpperArm_L, -1.6, 0, -0.3), turn(J.Head, -0.35, 0, 0);
+    } else if (ty === "play" && !p.walking) {
+      // hopping about, arms up
+      var hop = Math.abs(Math.sin(t * 4.2));
+      m.root.position.y += 0.22 * hop * m.rig.root.scale.x;
+      turn(J.UpperArm_L, -2.2 * hop, 0, -0.3);
+      turn(J.UpperArm_R, -2.2 * hop, 0, 0.3);
+    } else if (ty === "eat") {
+      turn(J.UpperArm_R, -1.3 - 0.2 * Math.sin(t * 3), 0, 0.2);
+      turn(J.Forearm_R, -1.2, 0, 0);
+      turn(J.Head, 0.06 * Math.sin(t * 6), 0, 0);
+    } else if (ty === "groom" || ty === "huddle") {
+      turn(J.UpperArm_L, -1.2, 0, -0.5);
+      turn(J.Forearm_L, -0.4 + 0.25 * Math.sin(t * 3), 0, 0);
+      turn(J.Spine, 0.15, ty === "huddle" ? 0.3 : 0, 0);
+    } else if (ty === "watch" || ty === "look") {
+      turn(J.Head, -0.25, 0.4 * Math.sin(t * 0.3), 0);
+    }
+    // eyes shut in sleep
+    for (var e of m.lids || []) e.visible = !!asleep;
   }
   // every colour a close-up creekfolk can have
   function palette() {

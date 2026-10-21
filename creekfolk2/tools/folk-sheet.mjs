@@ -41,9 +41,10 @@ await p.evaluate(() => {
   const models = [];
   for (let k = 0; k < 16; k++) {
     const look = { fur: (k * 5 + 3) % 24, pat: pats[k % 5], pale: k % 2, face: faces[k % 3], socks: k % 4 === 0 ? 1 : 0, dye: k % 8, belly: k % 3 === 0 ? 0.8 : 0.4, ear: 1, tail: k % 3 },
-      c = { id: k + 1, stage: k === 14 ? 'child' : k === 15 ? 'elder' : 'adult', look, wear: wears[k % 8], line: [k + 1, k + 2] },
+      acts = ['idle', 'labor', 'chat', 'sleep', 'play', 'eat', 'groom', 'call', 'idle', 'idle', 'watch', 'labor', 'idle', 'sit', 'play', 'idle'],
+      c = { id: k + 1, stage: k === 14 ? 'child' : k === 15 ? 'elder' : 'adult', look, wear: wears[k % 8], line: [k + 1, k + 2], act: { type: acts[k] }, carry: k === 8 ? { k: 'branch' } : k === 9 ? { k: 'stone' } : k === 12 ? { k: 'reeds' } : null },
       m = A.Folk3D.build(c, null);
-    A.Folk3D.pose(m, c, { x: (k % 8) * 1.1 - 3.85, y: 0, z: k < 8 ? -0.9 : 0.9, face: k % 2 ? 0.5 : -0.3, walking: false, dt: 0.01 });
+    A.Folk3D.pose(m, c, { x: (k % 8) * 1.1 - 3.85, y: 0, z: k < 8 ? -1.5 : 0.9, face: k % 2 ? 0.5 : -0.3, walking: false, dt: 0.01, clock: 0.6 });
     scene.add(m.root);
     models.push(m);
   }

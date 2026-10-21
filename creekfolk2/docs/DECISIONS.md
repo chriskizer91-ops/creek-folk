@@ -81,7 +81,9 @@ building starts._
      inherited looks;
    - close up: full What the Water Brings detail, creekfolk built like the Sheet king
      (simple solids on the shared rig, starting from its stubbier "Little king" variant).
-10. **Cloth patterns are redrawn for the pixel look.** `cloth.js` paints fine, photo-like
+10. **Cloth patterns are redrawn for the pixel look.** (Done: each family line weaves one of
+    seven patterns, in the colour each creekfolk wears from Creekfolk 1's 3C looks, with undyed
+    yarn through it; on sprites and close up.) `cloth.js` paints fine, photo-like
     knit and tweed for the lifelike king; the pixel pass snaps them to the palette, and a
     creekfolk is a few dozen pixels tall, so they wouldn't read. Creekfolk 2 keeps the
     families of cloth (stripes, gingham checks, cable as chevrons, herringbone as zigzags,
@@ -90,8 +92,9 @@ building starts._
     enemies as pencil lines that redraw several times a second. Creekfolk 2 uses that
     for things that exist only in memory: myths, the old valley in stories, those who
     have passed.
-12. **Known traps in the three.js r128 to r186 port** (found by reading both versions, not
-    yet tried):
+12. **Known traps in the three.js r128 to r186 port** (found by reading both versions; all
+    five were real, and the port fixes them: `docs/R186-PORT.md` has the before-and-after
+    screenshots, 22 of 28 views identical to the pixel):
     - the palette-ramp shading silently stops working (the shader line `toon.js` replaces
       is now `#include <opaque_fragment>`);
     - the alpha tags the pixel pass reads get forced to 1;

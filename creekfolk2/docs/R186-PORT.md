@@ -428,3 +428,14 @@ node tools/wtwb186/standalone.mjs     # the modules on their own; prints the thr
 `shots.mjs --only a,b` takes only some views (in a fresh page, so the state they start
 from differs from a full run; compare only with a run made the same way, using `--set`).
 `out/` is ignored by git. SwiftShader renders for looks only; it says nothing about speed.
+
+## Added for Creekfolk 2 after the port
+
+- **The palette look-up table** (`pixel3d.js`, marked `// CF2:`). `PKPixel3D.create(renderer,
+  { lut: true })` builds, once per palette on the GPU, a 512 x 512 table of the nearest palette
+  colour for every 64 x 64 x 64 step of red, green and blue, using the pass's own search, and
+  the pass then reads that instead of searching every colour for every pixel (it searches up to
+  four times a pixel; with about 400 colours that was the pass's whole cost). Without `lut` the
+  pass is exactly as ported, so this comparison still holds. With it, a colour that sits within
+  one step of another palette colour can come out as that one; on the screenshots compared so
+  far nothing visible changed, and a Creekfolk 2 screenshot run took about a third of the time.
