@@ -1961,8 +1961,8 @@ var CF2Valley = (function () {
       // the posts, a metre tall, hammered into the bed
       for (var q = 0; q < nPost; q++) {
         var u = (q / (nPost - 1)) * 2 - 1,
-          px = cx + Math.cos(ang) * u * hw,
-          pz = z - Math.sin(ang) * u * hw,
+          px = cx + Math.sin(ang) * u * hw, // across the creek (the weave's line)
+          pz = z + Math.cos(ang) * u * hw,
           gy = Math.max(bed, height(px, pz)),
           top = Math.max(crest + 0.25, gy + 0.6);
         B.add("post|f", bake(cyl(0.05, 0.06, top - gy + 0.3, far ? 4 : 6), px, (top + gy - 0.3) / 2, pz, (R() - 0.5) * 0.08, 0, (R() - 0.5) * 0.08));
@@ -1974,6 +1974,22 @@ var CF2Valley = (function () {
       B.add("weave|f", bake(box(span, Math.max(0.15, crest - bed), 0.16), cx, wy, z, 0, ang - Math.PI / 2, 0));
       if (lv >= 2 || stage >= 3) B.add("mud|f", bake(box(span * 0.98, Math.max(0.12, crest - bed - 0.04), 0.5), cx - Math.sin(ang - Math.PI / 2) * 0.3, wy - 0.02, z - 0.3, 0, ang - Math.PI / 2, 0));
       if (s.apron || (cd && cd.apron) || lv >= 2) for (q = 0; q < (far ? 2 : 6); q++) B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.16, 0), cx + (R() - 0.5) * span * 0.8, bed + 0.05, z + 0.5 + R() * 0.5, R() * 3, R() * 3, 0));
+      // its wings: where the pond stands over the floor, the dam carries on across the floor as
+      // a low bank of mud and sticks, as far as the water would go round it (the simulation
+      // holds the pond's water on the floor up to just below the dam: creek.js creekPondFloor)
+      if (cd && cd.pl > n.fp - 0.15) {
+        var wz = z + 1.4;
+        for (var sd2 = -1; sd2 <= 1; sd2 += 2)
+          for (var u2 = hw + 0.5; u2 < 45; u2 += 1) {
+            var wx = cx + sd2 * u2 * Math.sin(ang),
+              wzz = wz + sd2 * u2 * Math.cos(ang),
+              wg = height(wx, wzz);
+            if (wg > cd.pl + 0.03 || wx < 1 || wx > VW - 1) break;
+            var bh = cd.pl - wg + 0.14;
+            B.add("mud|f", bake(box(1.05, bh, 0.55), wx, wg + bh / 2 - 0.04, wzz, 0, ang - Math.PI / 2, 0));
+            if (!far && (Math.round(u2) % 2 === 0)) B.add("wood|f", bake(cyl(0.035, 0.04, 1.1, 4), wx, wg + bh - 0.02, wzz + 0.12, 0, ang - Math.PI / 2, Math.PI / 2 + (R() - 0.5) * 0.3));
+          }
+      }
       if (lv >= 3 && !far)
         for (q = 0; q < 5; q++) {
           var a = R() * 6.28,
@@ -1996,7 +2012,7 @@ var CF2Valley = (function () {
       for (var s of vw.list("structures").values())
         if (tileOf(s.x, s.z) === Tl && s.kind === "home")
           parts.push("h" + s.id + ":" + s.owner + ":" + (vw.creature(s.owner) ? furIndex(vw.creature(s.owner).look || {}) : "") + ":" + (s.deco && s.deco.list ? s.deco.list.filter((d) => d.at <= vw.t).length + (s.deco.old ? "o" : "") : ""));
-      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.patches || "") + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
+      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.patches || "") + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) + "/" + (vw.dams[s.id].pl || 0).toFixed(1) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
       return parts.join("|");
     }
     var LB = null, // the batch the lights of the tile being built go into (near tiles only)
