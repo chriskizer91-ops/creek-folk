@@ -230,7 +230,7 @@ var View3D = class {
       st = wx.state === "storm" ? 1 : wx.state === "rain" ? 0.55 : wx.state === "cloudy" ? 0.25 : 0;
     this.st = (this.st ?? st) + (st - (this.st ?? st)) * 0.02;
     st = this.st;
-    let L = cf2Look(hour, st),
+    let L = cf2Look(hour, st, this.vw.cycle ? seasonAt(this.vw.w).doy : null),
       px = this.px,
       V = this.view;
     px.setGrade2(L.shade, L.light, L.lift);
@@ -409,7 +409,10 @@ function cf2Table(Tb, h, idx) {
     }
   return idx.map((j) => Tb[0][j]);
 }
-function cf2Look(h, st) {
+// doy: the day of the valley's year (seasonAt). The sun rises due east at the equinoxes, far
+// round to the south-east at midwinter (where the sky stones look: SUNRISE_DIR) and to the
+// north-east at midsummer, and stands higher at noon in summer.
+function cf2Look(h, st, doy) {
   let g = cf2Table(CF2_GRADES, h, [1])[0],
     hh = ((h % 24) + 24) % 24,
     n = hh < 5 ? 1 : hh < 7 ? 1 - (hh - 5) / 2 : hh < 18.5 ? 0 : hh < 21 ? (hh - 18.5) / 2.5 : 1;
@@ -437,13 +440,19 @@ function cf2Look(h, st) {
     hemi: 0.3 + 0.15 * day,
     sunG: 0.96 - low * 0.12 * day,
     sunB: 0.91 - low * 0.25 * day,
-    sunAz: Math.PI / 2 - Math.PI * f,
-    sunEl: (isDay ? 0.38 : 0.6) + (isDay ? 0.6 : 0.3) * Math.sin(Math.PI * f),
+    sunAz: isDay ? (Math.PI / 2 - CF2_SUN_SWING * yearSwing(doy)) * (1 - 2 * f) : Math.PI / 2 - Math.PI * f,
+    sunEl: (isDay ? 0.38 : 0.6) + (isDay ? 0.6 * (1 - 0.35 * yearSwing(doy)) : 0.3) * Math.sin(Math.PI * f),
     skyTop: top,
     skyHor: hor,
     sat,
     stars: Math.max(0, n * 1.2 - 0.2) * (1 - st),
   };
+}
+
+// how far the sunrise has swung toward midwinter: 1 at midwinter, -1 at midsummer
+var CF2_SUN_SWING = Math.PI / 2 - Math.atan2(Math.cos(SUNRISE_DIR), Math.sin(SUNRISE_DIR)); // from due east round to the midwinter sunrise
+function yearSwing(doy) {
+  return doy == null ? 0 : Math.cos((2 * Math.PI * (doy - MIDWINTER_DOY)) / YEAR_DAYS);
 }
 
 // ---- dots: every creekfolk, from the air ------------------------------------------

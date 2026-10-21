@@ -32,6 +32,15 @@ function villageLand(w) {
   h += ` Right now ${esc(now)} ${now.startsWith("only") ? "hold" : "is"} water or marsh.</p>`;
   h += `<p>${healed > 0.8 ? "Almost the whole creek has healed: it has filled its old trench and spread back over its floor." : healed > 0.3 ? "In long stretches the creek has filled its old trench and reaches its floor again." : filling > 0.3 ? "Behind the dams the creek is filling its trench back up with gravel and mud." : "The creek is cut down into a trench below its old floor, so floods can’t spread out and the floor dries."}</p>`;
   if (dams.length) h += `<p class="mute">${dams.length} dam${dams.length > 1 ? "s" : ""} across the creek${held < dams.length ? `, ${dams.length - held === 1 ? "one" : dams.length - held} of them not holding (the water below is too far down)` : ""}.${w.stats.raises ? ` As ponds silted up, dams have been built up ${w.stats.raises === 1 ? "once" : w.stats.raises + " times"}.` : ""}</p>`;
+  // what has come to live with them (3C)
+  let bv = w.beavers,
+    groveN = w.res.filter((r) => r.kind === "grove").length,
+    logs = (w.grove && w.grove.logs && w.grove.logs.length) || 0;
+  if (bv || groveN) {
+    h += `<h3>The valley's life</h3>`;
+    if (groveN) h += `<p>${groveN === 1 ? "One tree stands" : `${groveN} trees stand`} in the grove, one for each creekfolk who passed on${logs ? `; ${logs === 1 ? "an old one has" : `${logs} old ones have`} fallen and lie mossing over` : ""}.</p>`;
+    if (bv) h += `<p>${bv.list.length === 1 ? "A beaver lives" : `${bv.list.length} beavers live`} in the lodge in the pond, tending the dams${bv.small && bv.small.length ? `, and they've built ${bv.small.length === 1 ? "a little dam" : bv.small.length + " little dams"} across the floor` : ""}.</p>`;
+  }
   if (B) {
     let dry = { dry: "The Dry Fork is dry, a bed of pale stones.", pools: "The Dry Fork stands in pools after the rain.", running: "The Dry Fork is running, loud, off the bluff." }[B.dry.state];
     h += `<h3>The branches</h3><p>The spring under the west terrace runs clear and cold, as it always does. ${dry}</p>`;
@@ -66,6 +75,11 @@ function mindSheet(w, c) {
     known = knownForLines(c),
     h = `<h2>${esc(c.name)}</h2><p class="k">${esc(lifeLine(w, c))}</p>`;
   h += `<p><b>${esc(activityText(c, w))}.</b> ${esc(moodWord(c))}${known.length ? `; known for ${esc(known.join(" and "))}` : ""}.</p>`;
+  // how they look (Creekfolk 1's 3C), and what they wear for what they love
+  if (c.look) {
+    let worn = looksWorn(w, c);
+    h += `<p class="mute">${esc(looksText(w, c).replace(/^./, (x) => x.toUpperCase()))}${worn ? `; wears ${esc(LOOKS_WEAR_NAMES[worn])}` : ""}.</p>`;
+  }
   if (c.carry) h += `<p class="mute">Carrying ${c.carry.n > 1 ? c.carry.n + " " : ""}${esc(MATERIAL_LABELS[c.carry.k] || c.carry.k)}.</p>`;
   let home = c.home != null ? w.byId[c.home] : null;
   h += `<p class="mute">${home ? "Home: " + esc(structName(w, home).replace(c.name + "'s ", "their ")) : "No home yet"} · ${esc(waterWords(c))}</p>`;
