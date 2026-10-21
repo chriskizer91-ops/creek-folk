@@ -31,9 +31,11 @@ var CF2_VALLEY = {
   hillK: 70, // how steeply the hills rise past the rim
   fpTop: 2.6, // m: the valley floor's level where the creek comes in ...
   fpSlope: 0.0072, // ... and how fast it falls along the valley
-  cutAbove: 0.6, // m: how far the creek has cut below its floor above the ledge ...
-  cutBelow: 1.12, // ... and below it
-  ledgeDrop: 0.42, // m: the fall over the ledge
+  // how far the creek has cut below its floor: below the ledge less than in Phase 1, so a
+  // month of floods can fill it (DECISIONS.md 1; Phase 1 had 0.6, 1.12 and 0.42)
+  cutAbove: 0.6, // m: above the ledge ...
+  cutBelow: 0.8, // ... and below it
+  ledgeDrop: 0.25, // m: the fall over the ledge
 };
 
 Terrain = class {

@@ -6182,7 +6182,7 @@
       if (
       s.building ||
       !(s.level > 0) ||
-      (s.cond ?? 1) >= 0.6 ||
+      (s.cond ?? 1) >= (s.raise && (typeof cf2LowWater !== "function" || cf2LowWater(i)) ? 0.95 : 0.6) || // CF2: a silted dam waiting to be built up is seen to (at low water) until it is (Creekfolk 1: only below 0.6, so the raise could wait for good)
       s.beaver || // 3C: a beaver is seeing to it
       s.owner && s.owner !== t.id && relation(t, s.owner).warmth < 0.45 ||
       i.creatures.some(
@@ -6431,7 +6431,7 @@
       sort((h, d) => h.level - d.level || d.z - h.z)[0];
       c =
       o.length < r.multi &&
-      o.every((h) => (h.level >= 2 || !safe(h)) && a(h, 30)) &&
+      o.every((h) => (h.level >= 2 || !safe(h)) && a(h, typeof CF2_CREEK === "object" ? CF2_CREEK.damRest : 30)) && // CF2: hours between dams (cf2-creek.js)
       !(t.noSite && t.noSite[e] && i.t - t.noSite[e] < 6 * 3600);
       return l && (l.level < 2 || !c) ?
       { thr: 0.8 + 0.22 * l.level, upgrade: l } :
@@ -6636,7 +6636,7 @@
       c = -1e9;
     for (let h = 14; h <= VL - 14; h += 1) {
       let d = n.creekX(h);
-      if (n.valleyR(d, h) > 0.8) continue;
+      if (n.valleyR(d, h) > (typeof CF2_CREEK === "object" ? CF2_CREEK.damRim : 0.8)) continue; // CF2: dams reach the valley's two ends
       let u = n.bankPoint(0, h, 0.4),
         f = n.bankPoint(1, h, 0.4);
       if (
@@ -6668,6 +6668,7 @@
         else if (h > lowest + 6) (T += 6), (why = "below the others, so the water can stand from the bottom up");
         else T -= 8;
       }
+      if (typeof cf2DamSite === "function") ({ T, why } = cf2DamSite(i, t, e, h, T, why, knows, standing, r)); // CF2: a whole valley's series of dams (cf2-creek.js)
       if (T > c) {
         c = T;
         let y = n.side(t.x, t.z),
