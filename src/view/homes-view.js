@@ -319,6 +319,10 @@ var HomesView = class {
     this.scene = scene;
     this.group = new Pe();
     scene.add(this.group);
+    // the land beyond the valley was there on day one too: then-and-now borrows it (thennow.js)
+    this.farGroup = new Pe();
+    this.farGroup.userData.thenToo = true;
+    scene.add(this.farGroup);
     this.markSig = "";
     this.markers = null;
     this.lastMark = -99;
@@ -338,6 +342,7 @@ var HomesView = class {
     for (let m of [this.markers, this.far, this.trees, this.lake, this.tail]) m && m.geometry.dispose();
     this.smoke && (this.smoke.geometry.dispose(), this.smoke.dispose());
     this.scene.remove(this.group);
+    this.scene.remove(this.farGroup);
   }
   update(clock, R) {
     let w = this.world;
@@ -426,7 +431,7 @@ var HomesView = class {
     m.receiveShadow = !1;
     m.frustumCulled = !1;
     this.far = m;
-    this.group.add(m);
+    this.farGroup.add(m);
     this.buildLake();
     this.refreshFar();
   }
@@ -597,7 +602,7 @@ var HomesView = class {
   }
   // woods on the near slopes beyond the rim, like the trees on the rim itself
   buildTrees() {
-    if (this.trees) this.group.remove(this.trees), this.trees.geometry.dispose(), (this.trees = null);
+    if (this.trees) this.farGroup.remove(this.trees), this.trees.geometry.dispose(), (this.trees = null);
     let T = this.world.terrain,
       e = [],
       s = 9001;
@@ -625,7 +630,7 @@ var HomesView = class {
     let m = new Et(g, he());
     m.frustumCulled = !1;
     this.trees = m;
-    this.group.add(m);
+    this.farGroup.add(m);
   }
   // the lake: still water at its level; the land around it decides its shore
   buildLake() {
@@ -664,7 +669,7 @@ var HomesView = class {
     let m = new Et(g, new Qe({ vertexColors: !0, flatShading: !0 }));
     m.frustumCulled = !1;
     this.lake = m;
-    this.group.add(m);
+    this.farGroup.add(m);
   }
   // the creek from the valley's mouth down to the lake, while it is running
   syncTail() {
@@ -679,7 +684,7 @@ var HomesView = class {
       key = run ? Math.round(wl0 * 50) + "" : "dry";
     if (key === this.tailKey) return;
     this.tailKey = key;
-    if (this.tail) this.group.remove(this.tail), this.tail.geometry.dispose(), (this.tail = null);
+    if (this.tail) this.farGroup.remove(this.tail), this.tail.geometry.dispose(), (this.tail = null);
     if (!run) return;
     let pos = [],
       idx = [],
@@ -702,7 +707,7 @@ var HomesView = class {
     let m = new Et(g, this.tailMat || (this.tailMat = new Qe({ color: 0x58a8cc })));
     m.frustumCulled = !1;
     this.tail = m;
-    this.group.add(m);
+    this.farGroup.add(m);
   }
 
   // -- smoke from the hearths' chimneys on cold days, in the evening and at night
