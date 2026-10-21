@@ -325,7 +325,7 @@ function checkMyths(w) {
       continue;
     }
     if (hs.length < 3) continue;
-    // The most common version among the living.
+    storyLegend(w, s, hs); // 3C
     let counts = new Map();
     for (let h of hs) {
       let key = JSON.stringify([h.v.who, h.v.n, h.v.where, h.v.why, h.v.big || 0]);
@@ -347,6 +347,33 @@ function checkMyths(w) {
     s.mythLogged = true;
     w.lastMythLog = w.t;
     logEvent(w, 3, `Most of the valley now believes that ${lower(storyText(w, s, top.v))} It wasn't quite like that: ${lower(storyText(w, s, s.truth))}`, [], s.x != null ? s : null, "myth");
+  }
+}
+
+// 3C: a story that has been told for a generation and more becomes a legend: it's kept in
+// the valley's old tales (in the version most of them told), even after it's forgotten.
+var LEGEND = { ageDays: 40, keep: 24 };
+function storyLegend(w, s, hs) {
+  if (s.legend || w.t - s.t < LEGEND.ageDays * 86400 || (s.weight || 1) < 2) return;
+  let alive = w.creatures.filter((c) => !c.visitor).length;
+  if (hs.length < alive / 3) return;
+  let counts = new Map();
+  for (let h of hs) {
+    let key = JSON.stringify([h.v.who, h.v.n, h.v.where, h.v.why, h.v.big || 0]);
+    let e = counts.get(key) || { n: 0, v: h.v };
+    e.n++;
+    counts.set(key, e);
+  }
+  let top = [...counts.values()].sort((a, b) => b.n - a.n)[0],
+    text = storyText(w, s, top.v);
+  s.legend = Math.round(w.t);
+  w.legends = w.legends || [];
+  w.legends.push({ id: s.id, kind: s.kind, text, t: Math.round(s.t), at: Math.round(w.t) });
+  if (w.legends.length > LEGEND.keep) w.legends.shift();
+  w.stats.legends = (w.stats.legends || 0) + 1;
+  if (w.t - (w.lastLegendLog || -1e9) > 2 * 86400) {
+    w.lastLegendLog = Math.round(w.t);
+    logEvent(w, 2, `The story of ${shortAbout(w, s)} is so old now that it has become a legend: "${text}"`, [], s.x != null ? s : null, "myth");
   }
 }
 
@@ -549,6 +576,10 @@ function proposalLog(w, by, label, kind, at, out) {
 // Visitors: someone who went downstream comes back for a little while, with news.
 // ---------------------------------------------------------------------------
 var DOWNSTREAM_NEWS = [
+  // 3C: the craft goes downstream with the leavers
+  "the next valley down is turning green: the ones who went down showed them how to build dams",
+  "downstream they build from the bottom of the creek up, the way we do, and their floods don't run so wild",
+  "there's a pond downstream with a beaver lodge in it, and the creekfolk there say our dams taught them",
   "the creek joins a river so wide you can't see the other side",
   "there is a still lake where the creek ends, full of sky",
   "other creekfolk live downstream, and they build their homes on stilts",
@@ -617,9 +648,42 @@ function endVisits(w) {
       leaveAgain(w, c);
       continue;
     }
+    if (w.t > c.visitor.until && !c.visitor.decided) {
+      c.visitor.decided = 1;
+      if (returneeStays(w, c)) continue; // 3C: home to stay
+    }
     if (w.t > c.visitor.until && (!c.plan || c.plan.goal !== "goback") && !c.asleep && canBeInterrupted(c))
       setPlan(w, c, { goal: "goback", steps: [{ do: "walk", x: c.visitor.x, z: c.visitor.z, near: 0.4, why: "leave" }, { do: "goback" }], i: 0 });
   }
+}
+
+// 3C: now and then someone who comes back to visit stays for good, if there's room and
+// someone here they love. Their mind starts fresh from here, but they keep their name,
+// family, looks and old friends, and the craft they took downstream.
+var RETURNEE = { chance: 0.15 };
+function returneeStays(w, c) {
+  let alive = w.creatures.filter((o) => !o.visitor);
+  if (alive.length >= valleyCapacity(w) - 1) return false;
+  if (!alive.some((o) => (c.rel[o.id] && c.rel[o.id].warmth > 0.4) || (c.parents || []).includes(o.id) || (o.parents || []).includes(c.id))) return false;
+  if (!w.rng.chance(RETURNEE.chance)) return false;
+  c.visitor = null;
+  c.plan = null;
+  c.mem = [];
+  c.know = Object.assign(c.know || {}, { mud: true, planting: true, clay: true, dams: true, downstream: true });
+  for (let k in c.needs) c.needs[k] = 0.7;
+  let d = (w.downstream || []).find((x) => x.id === c.id);
+  if (d) d.returned = Math.round(w.t);
+  let L = w.lineage && w.lineage[c.id];
+  if (L) L.returned = Math.round(w.t);
+  w.stats.returnees = (w.stats.returnees || 0) + 1;
+  logEvent(w, 3, `${c.name} has decided to stay. After everything downstream, they've come home.`, [c.id], c, "visit");
+  newStory(w, "returnee", { who: c.name }, c, 2, alive.filter((o) => dist2d(o.x, o.z, c.x, c.z) < 25));
+  for (let o of alive) {
+    let r = o.rel[c.id];
+    if (r && r.warmth > 0.3) remember(w, o, "visit", `${c.name} came home to stay!`, 0.85, { who: c.id });
+  }
+  remember(w, c, "visit", "I came home. The creek here is greener than I remember it.", 0.8);
+  return true;
 }
 
 function leaveAgain(w, c) {

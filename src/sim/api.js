@@ -62,4 +62,6 @@ var CreekSim = {
   returningNext,
   returningWindow,
   daysToMidwinter,
+  RETURNEE,
+  LEGEND,
 };

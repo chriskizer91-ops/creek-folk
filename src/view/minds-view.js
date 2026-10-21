@@ -154,7 +154,8 @@ function villageStoriesHTML(w) {
         return `<li${s.x != null ? ` data-loc="${s.x},${s.z},"` : ""}><span>${escapeHtml(storyText(w, s, top.v))}${myth ? `<br><small>What really happened: ${escapeHtml(storyText(w, s, s.truth))}</small>` : ""}</span><small>told by ${n} of ${alive}${versions > 1 ? ` · ${versions} versions` : ""}</small></li>`;
       })
       .join("") +
-    "</ul>"
+    "</ul>" +
+    (w.legends && w.legends.length ? `<h4>Legends</h4><p class="muted">The oldest stories, as the valley came to tell them.</p><ul class="list">${w.legends.slice().reverse().map((l) => `<li><span>${escapeHtml(l.text)}</span></li>`).join("")}</ul>` : "") // 3C
   );
 }
 

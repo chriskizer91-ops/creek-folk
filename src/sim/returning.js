@@ -163,6 +163,12 @@ function returningRoute(w) {
   return pts;
 }
 
+// The pool behind the very first dam, named for ever (minds.js names it when it fills).
+function returningPool(w) {
+  let p = (w.placeNames || []).find((p) => p.kind === "pool");
+  return p ? `${p.name}, the first pool they ever made` : "the first pool they ever made";
+}
+
 function returningPathFinish(w) {
   let R = returningOf(w);
   if (R.pathDone) return;
@@ -201,7 +207,7 @@ function returningPathStart(w) {
   R.pathSid = s.id;
   R.pathStarted = Math.round(w.t);
   R.lastPart = Math.round(w.t);
-  logEvent(w, 3, "With the temple finished, the creekfolk have begun a path for a procession: from the temple, past the First Pool, up the creek to where the way to the Spring begins. They say it will take three years, a stretch each season.", [], s, "returning");
+  logEvent(w, 3, `With the temple finished, the creekfolk have begun a path for a procession: from the temple, past ${returningPool(w)}, up the creek to where the way to the Spring begins. They say it will take three years, a stretch each season.`, [], s, "returning");
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +305,7 @@ function returningPhase(w) {
     logEvent(w, 3, "The sun came up through the crown, and the water running down the temple steps turned to gold. Nobody said anything for a long time.", [], t || null, "returning");
   } else if (A.phase === "day" && w.t >= A.dawn + 0.15 * VALLEY_DAY && !A.walked) {
     A.walked = 1;
-    logEvent(w, 2, "The procession set out from the temple: down past the First Pool and up the creek to the head of the valley, and on to the Spring.", [], t || null, "returning");
+    logEvent(w, 2, `The procession set out from the temple: down past ${returningPool(w)} and up the creek to the head of the valley, and on to the Spring.`, [], t || null, "returning");
   } else if (A.phase === "day" && w.t >= A.dusk) {
     A.phase = "night";
     let first = R.count === 1;
