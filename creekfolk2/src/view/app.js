@@ -23,6 +23,7 @@ var App = class {
     this.hud = new Hud(this);
     this.renderer = makeRenderer(this, document.getElementById("view"));
     this.renderer.onCreekTap = (z) => this.hud.openBank(z);
+    document.getElementById("bThen").hidden = !this.renderer.setThen; // then and now needs the 3D view
     this.dev = new DevMenu(this);
     this.post({ type: "boot", db: VALLEY_DB, dev: DEV_BUILD, offset: Clock.offset() });
     document.addEventListener("visibilitychange", () => {
