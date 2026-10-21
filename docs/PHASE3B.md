@@ -140,7 +140,16 @@ gives whatever the valley needs most (mostly warm days, snow, starry nights and 
 | About every four days | 1 | never | | | | |
 | No giver | 1 | never | | | | |
 
-[[SLOWPAUSE]]
+**When the giving changes** (one valley each, the same valley as every-other-day valley 1
+until the change):
+- **Every other day, then every four days from day 90:** a part every 8.3 days until then,
+  then every 14.7 to 17.4 days (half speed would be 16.5); 17 of 36 parts by day 200.
+- **Every other day, then nothing from day 100 to day 112:** on day 101.6, three days after
+  the last gift, they said the creek was resting and lit the lantern; on day 104.6 the
+  temple stopped ("We'll wait for a sign"); on day 112.0 the next gift came and the
+  builders took up their tools again. Nothing was lost: the part under way took 19.9 days
+  instead of 8.3, the next one 9.8 while the pace built back up, then 8.3 again. At day 160,
+  13 of the 25 told the story of the time the temple stood half-built.
 
 Against what you expected:
 - **Every other day, mid month 11** (day 315): day 314 in one valley; day 306 in the
@@ -177,7 +186,14 @@ anyone has started keeping watch. The one who believes in you passes the belief 
 pass or leave, so it moves through the village about every two to three weeks; there was
 never more than one at a time.
 
-[[AWAY]]
+**When you stop giving** (`tools/away-test.cjs`: a gift every other day for two months,
+then none; `runs/final/away.txt`). The creek was "resting" from day 61.5 and the lantern
+stayed lit. Believers: day 60, 20 of 22; day 76, 18 of 20; day 92, 24 of 28; day 96, 21
+of 26; day 100, 16 of 26; day 104, 13 of 24; day 108, 5 of 24; day 120, none. So most
+still believed five weeks after the last gift, about half at six to seven weeks, and none
+at nine weeks, when nearly everyone alive had been born after the last gift. The story of
+the waiting temple was told by 13 to 24 of them throughout. Before the fix (see the notes)
+belief fell below half within about ten days.
 
 **The rest of the valley** (the same runs): population at day 300 between 26 and 32;
 births 283-302, passings 233-249, gone downstream 33-37 in 330 days; no simulation errors;
@@ -190,33 +206,65 @@ at once on this two-core machine.
 **Determinism** (`tools/determinism.cjs`, 20 days, every gift given in turn): one replay,
 uneven slices and repeated save-and-reload give the identical state hash.
 
-[[BROWSER]]
+**In the browser** (headless Chromium, final minified build) [[BROWSERFINAL]]:
+`browser-test.mjs`: a new valley, a 3-day jump through the worker in 6.5 s, the same
+valley after a reload, no errors. `browser-dev.mjs`: the dev build keeps its own database
+(`creekfolk-3b-dev`); +1 day in 3.0 s; the snapshot before it restores; storm, birth, gift
+and overlay buttons work; pause holds the clock (0.01 s in 3 s); a Phase 2 save is refused
+with your wording; no errors. `browser-gifts.mjs` (new): all 17 gifts and every trigger in
+the dev menu, with the valley drawn between them, no errors.
+
+**Catch-up speed** (headless Chromium on this machine, minified build, the same code path
+as a real absence): every-other-day valley 1 at day 300 (30 creekfolk, the temple at 34 of
+36 parts): 30 days in **5.5 min** (7,800 times real time). 3A measured 3.8 to 4.6 min for
+30 creekfolk at day 150. [[AGE]] In a profile of the same valley (Node) no 3B code was
+among the top twenty functions; the time goes where it went in 3A, into creekfolk choosing
+what to do and finding their way round the village. **Phones: still not measured by me.**
 
 ## Honest notes
-- **Daily and twice-a-day givers finish sooner than you expected.** The pace table (1.2
-  and 1.4 times full speed) and the expected months (about month 10 and month 8.5) don't
-  quite agree: with every other day tuned to mid month 11, the table's multipliers put
-  daily nearer month 9 and twice a day nearer month 7.5 to 8 (see Measured). I followed the
-  table. If you'd rather have your months, the multipliers would be about 1.08 and 1.2, or
-  each part could carry more fixed building time; either is a one-line change
-  (`paceOfRate` or `TEMPLE.feelPerPart` plus cure times in `temple.js`).
+- **Daily givers finish about a month sooner than you expected.** With every other day
+  tuned to the middle of month 11, the pace table's 1.2 for daily lands in month 9 (day
+  261.6), not "about month 10". Twice a day (1.4) lands in the middle of month 8 (day
+  220.3), which matches "about month 8.5" if that meant halfway through month 8. I followed
+  the table. If you'd rather have month 10 for daily, its multiplier would be about 1.08
+  (one line, `paceOfRate` in `temple.js`).
+- **Dreams speed the temple up.** A dream shows them the next part, which then comes
+  sooner (up to about four days). A player who sends dreams will finish a little earlier
+  than the table says.
+- **A player who gives about every four days from the start never gets a temple**, even
+  though most of their village comes to believe (28 of 31 at day 330): the start rule needs
+  seven gifts in fourteen days. They get the Hall of the Ancestors instead, as the brief
+  says for valleys that never reach the threshold. Half speed applies to a temple already
+  begun when the giving slows. If you want slow givers to get a temple too, the start rule
+  would have to change.
 - **Building is fast once a part is unlocked.** Labour and materials take hours, not days,
-  even for the crown's great stones, because by then the village has little else to build.
-  The waits that matter are curing clay (most of a real day for a hall wall) and the dry
-  season for the crown. Labour and materials are never the bottleneck, as you asked; the
-  creek's answer sets the pace. If a part ever can't find a material for five days they
-  make do (it happened 0 times in the year runs unless noted under Measured).
+  because by then the village has little else to build. The waits that matter are curing
+  clay and the dry season for the crown's stones. Labour and materials were never the
+  bottleneck: no part was ever stuck long enough to "make do" in the final runs.
 - **A fix that touches every building.** Work already under way when a stage started
   curing used to finish it at once, so clay never really dried (an old bug from the
   original game). Now work done while something cures doesn't count. Mud huts, kilns and
-  the rest take a little longer to finish; the year runs below include it.
-- **Belief is not a dial you can watch move much.** Most of the village believes within
-  about two weeks of steady giving, and about one grown-up in seven stays a doubter. After
-  that the temple's pace depends only on the gifts, as the brief says ("the creekfolk can't
-  tell whether the game is open; they only see gifts arrive").
-- **Requests are mostly for rain and a warm day**, because those are what the valley
-  usually needs most. Materials are asked for when a build is short of them; living things
-  rarely, since they are never needed.
+  the rest take a little longer to finish; all the runs here include it.
+- **Belief while you're away needed a fix.** When the gifts stopped, belief used to fall
+  below half the village in about ten days: each new generation started with three
+  quarters of its parents' belief, and doubters talked the rest down. Now children start
+  with most of their family's belief, and while the creek rests belief fades very slowly
+  and doubters barely sway believers. Most still believe five weeks after the last gift.
+- **Late fixes, and which runs they touch.** After some of the year runs I found two more
+  things: bees sometimes couldn't be placed in a young valley ("That gift can't be given
+  just now"), and the memorial grove could grow into the temple's ground (86 trees inside
+  it by day 330 in two valleys) or over the Hall of the Ancestors. Both are fixed. I re-ran
+  the daily, twice-a-day, every-four-days and no-giver years on the final build; the
+  every-other-day, slowing and pausing runs are unchanged by these fixes (no gift failed in
+  them and their grove never came near the temple), so I didn't re-run them.
+- **Offerings pile up for a daily giver**: about 1,600 in a year, about five new ones each
+  visit, as for every other day. They're counted, not stored; the last forty are drawn.
+- **Requests follow what the valley needs most**, which is usually a warm day or rain;
+  materials when a build is short of them; living things rarely, since they're never
+  needed. I didn't count them by kind over a whole year.
+- **The one who believes in you changes every two or three weeks.** Creekfolk live about
+  thirty days and it comes to a grown-up, so it passes along often (9 to 11 holders in a
+  year). Never more than one at a time.
 - **What you see from above.** The game's camera looks down, so a starry night shows as
   stars reflected in every pond and pool (and in the sky only if you tilt the camera up),
   and the rainbow is drawn as an arc just beyond whatever you're looking at.
@@ -224,11 +272,13 @@ uneven slices and repeated save-and-reload give the identical state hash.
   fruits all look alike. Phase 4 is where they get their art.
 - **The wave happens when the page opens** or when you come back to the tab after a
   minute away. It can't know whether you are actually looking.
+- **Population still swings** (from 3A): between about 17 and 32, and the year runner's
+  "30 by month 6" target failed in some valleys. 3B didn't touch births or leaving.
 - **Not built yet (3C):** beavers (the crown doesn't wait for them), goats having kids,
   the Returning and the procession to the Spring, the sky calendar, then-and-now, the
   soundscape, and limits for very long running beyond what 3B keeps bounded (offerings
   are counted, not stored; the forty most recent are drawn; carvings keep the last sixty).
-- **Phones: still not measured by me.** See the catch-up numbers below for this machine.
+- **Phones: still not measured by me.** See the catch-up numbers above for this machine.
 
 ## What I'd do next
 - **3C: life and the ending.** Beavers arriving when the floor is wetland (and taking over
