@@ -17,7 +17,8 @@ const T = days * 86400,
   opts = { calStart: Date.parse("2026-10-20T15:00:00Z"), tzMin: 300 };
 // The player gives gifts at the same moments in every run.
 const GIFTS = [];
-for (let d = 0; d < days; d++) GIFTS.push([d * 86400 + 9.3 * 3600, ["rain", "seeds", "warm", "found"][d % 4]], [d * 86400 + 21.7 * 3600, ["found", "warm", "seeds", "rain"][d % 4]]);
+const KINDS = Object.keys(S.GIFT_KINDS); // every kind of gift, in turn (some land too soon and are refused)
+for (let d = 0; d < days; d++) GIFTS.push([d * 86400 + 9.3 * 3600, KINDS[(2 * d) % KINDS.length]], [d * 86400 + 21.7 * 3600, KINDS[(2 * d + 1) % KINDS.length]]);
 function runWithGifts(w, to) {
   for (const [t, k] of GIFTS) if (t > w.t && t <= to) { S.runUntil(w, t); S.giveGift(w, k); }
   S.runUntil(w, to);

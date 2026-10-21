@@ -1877,7 +1877,9 @@
         crossing: "branch",
         chimes: "reeds",
         lookout: "branch",
-        dam: "branch"
+        dam: "branch",
+        temple: "stone", // BELIEF
+        ancestors: "stone"
       }[i.kind] || "branch");
 
   }
@@ -2376,7 +2378,7 @@
   }
   function finishHeavy(i, t, e) {
     let n = i.byId[t.obj.id];
-    if (finishPlans(e), !n || !n.building) return !1;
+    if (finishPlans(e), !n || !n.building || n.building.locked || n.building.cureLeft > 0) return !1; // BELIEF: no work on a part waiting for the creek, or curing
     let s = t.t1 - t.t0;
     for (let h of e) {
       let d = workSpeed(h);
@@ -3813,7 +3815,7 @@
     labor: {
       start(i, t, e) {
         let n = i.byId[e.sid];
-        if (!n || !n.building || n.building.cureLeft > 0) return null;
+        if (!n || !n.building || n.building.cureLeft > 0 || n.building.locked) return null; // BELIEF
         let s = currentStage(n);
         if (!matsComplete(n)) return null;
         let r = stageLaborNeeded(n) - n.building.labor;
@@ -3838,7 +3840,7 @@
     heavy: {
       start(i, t, e) {
         let n = i.byId[e.sid];
-        if (!n || !n.building || n.building.cureLeft > 0 || !matsComplete(n)) return null;
+        if (!n || !n.building || n.building.cureLeft > 0 || n.building.locked || !matsComplete(n)) return null; // BELIEF
         let s = waitingFor(i, "heavy", n.id, t);
         return s.length ?
         startJoint(i, [...s, t], "heavyj", { t: "heavy", id: n.id }, t) :
@@ -4798,7 +4800,7 @@
   }
   function addLabor(i, t, e, n) {
     let s = i.byId[e.sid];
-    if (!s || !s.building || n <= 0) return !1;
+    if (!s || !s.building || n <= 0 || s.building.locked || s.building.cureLeft > 0) return !1; // BELIEF: a temple part waiting for the creek takes no work; nor does anything curing (work still under way would finish it before it had dried)
     let r = n * e.speed;
     return (
       s.building.labor += r,
@@ -4853,13 +4855,14 @@
       );
       return;
     }
-    if (
+    if (STRUCTURES[t.kind].great && greatPartDone(i, t, n.level, n.stage), // BELIEF: a part of a great project (temple.js)
     n.stage++,
     n.labor = 0,
     n.delivered = {},
     n.cured = !1,
     n.cureLeft = 0,
     n.cureUntil = null,
+    STRUCTURES[t.kind].great && (n.locked = !0),
     n.stage >= s.stages.length)
     {
       levelDone(i, t);
@@ -4871,6 +4874,7 @@
       l > 0 && (n.delivered[a] = l, t.spare[a] -= l);
     }
     (s.stages.length > 2 || stageLabor(r, tierScale(n.level)) > 1500) &&
+    !STRUCTURES[t.kind].great && // BELIEF: temple.js says it in its own words
     logEvent(
       i,
       1,
@@ -5420,6 +5424,7 @@
       let A = shareOption(i, t);
       A && u("share", A.score, A);
     }
+    for (let [x, g] of beliefOptions(i, t)) u(x, g.score, g); // BELIEF: watch, goats, the spring, stars, snow (gift.js)
     u("wander", 0.1), d.sort((x, g) => g.score - x.score);
     for (let x of d) {
       let g = planFor(i, t, x.goal, x.arg);
@@ -5473,7 +5478,7 @@
       case "rest":
         return planRest(i, t);
     }
-    return null;
+    return n && n.plan ? n.plan : null; // BELIEF: goals from gift.js and temple.js carry their own plan
   }
   var REGROW_RATES = {
     tree: 1 / 34,
@@ -5585,7 +5590,7 @@
     }
     let c = SOURCE_KIND[e];
     if (!c) return o;
-    for (let h of seenByKind(i, t)[c] || []) {
+    for (let h of Array.isArray(c) ? c.flatMap((k) => seenByKind(i, t)[k] || []) : seenByKind(i, t)[c] || []) { // BELIEF: timber has two sources
       let d = expectedAmount(i, t, h);
       if (d < 1) continue;
       let u = Math.min(a, Math.floor(d)),
@@ -6105,9 +6110,10 @@
     return !e.owner || e.owner === t.id ? !0 : relation(t, e.owner).warmth > 0.45;
   }
   function workStepFor(i, t, e, n = !1) {
-    if (!e.building || e.building.cureLeft > 0) return null;
+    if (!e.building || e.building.cureLeft > 0 || e.building.locked) return null; // BELIEF: a temple part waits for the creek's answer
     let s = currentStage(e);
     if (!s || s.wet && i.weather.rain > 1) return null;
+    if (s.dryseason && seasonAt(i).wetSeason) return null; // BELIEF: great stones move only in the dry season
     if (matsComplete(e))
     return n ?
     null :
@@ -6159,7 +6165,8 @@
       0.2 * clamp(relation(t, s.founder).warmth, 0, 1) +
       0.25 * (qValue(t, "work|" + s.kind) - 0.5),
       o.interest && (a += 0.3 * (t.interests[o.interest] || 0)),
-      o.likes && (a += 0.25 * (t.interests[o.likes] || 0))),
+      o.likes && (a += 0.25 * (t.interests[o.likes] || 0)),
+      o.great && (a += o.great === "temple" ? 0.55 * ((t.beliefs && t.beliefs.giver) || 0) : 0.3)), // BELIEF: the great projects
       r.type === "heavy" && (
       a *= 0.65 + 0.7 * Math.max(qValue(t, "heavy|duo"), qValue(t, "heavy|solo"))),
       a *= 1 / (1 + r.cost / 140),
@@ -6312,7 +6319,7 @@
     return !1;
   }
   function openProjects(i) {
-    return i.structures.filter((t) => t.building && !t.owner).length;
+    return i.structures.filter((t) => t.building && !t.owner && !STRUCTURES[t.kind].great).length; // BELIEF: the great projects don't take a slot
   }
   function foundOption(i, t) {
     let e = null,
@@ -6476,6 +6483,7 @@
       let a = STRUCTURES[o.kind].radius + n + 1.4;
       if ((o.x - t) ** 2 + (o.z - e) ** 2 < a * a) return !1;
     }
+    if (i.givingPlace && s !== "dam" && s !== "crossing" && (i.givingPlace.x - t) ** 2 + (i.givingPlace.z - e) ** 2 < (n + TEMPLE_ROOM) ** 2) return !1; // BELIEF: room for the temple
     for (let o of i.res) {
       if (o.kind === "sprout" || o.kind === "orchard" && o.stage <= 1)
       continue;
@@ -7209,6 +7217,7 @@
     n === "rain" ?
     s = o < WEATHER.storm * sw * sw ? "storm" : o < 0.75 ? "cloudy" : "rain" :
     s = "rain",
+    e.force && (s = e.force, e.force = null), // BELIEF: a gift can say what the weather turns to next
     r = {
       clear: t.range(2400, 6600) * (1.7 - 0.9 * sw),
       cloudy: t.range(900, 2700),
@@ -7365,6 +7374,7 @@
         a.level >= 3 ?
         0.8 :
         1.15 :
+        a.kind === "temple" || a.kind === "ancestors" ? 0.25 : // BELIEF: the great projects are kept well
         1;
         if (
         a.cond = Math.max(
@@ -7424,6 +7434,7 @@
       for (let l in a.desire) a.desire[l] = Math.min(2, a.desire[l] * 0.99965);
       growDesires(i, a, r, o), a.workFatigue = Math.max(0, a.workFatigue - 0.002);
     }
+    faunaMinute(i); // BELIEF: goats wander and graze (fauna.js)
     if (i.tick % 10 === 5 && socialTick(i), i.tick % 1440 === 7)
     for (let a of i.creatures)
     for (let l in a.seen) i.byId[l] || delete a.seen[l];
@@ -7596,7 +7607,7 @@
   function tendGarden(i, t, e) {
     let n = builtLevelDef(t);
     if (!t.beds) return;
-    let s = n && n.growth || 1,
+    let s = (n && n.growth || 1) * beeBoost(i, t.x, t.z), // BELIEF: bees (fauna.js)
       r = i.tick % 10 === 4 ? Math.max(wetNear(i, t.x, t.z, 1.5), seepAt(i, t.x, t.z)) : t.dampSoil || 0; // CREEK: seepage
     i.tick % 10 === 4 && (
     t.dampSoil = +r.toFixed(3),

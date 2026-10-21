@@ -1,0 +1,42 @@
+  year-2 day 30: 17 creekfolk (70 s) | creek: wet now 9%, at the driest 7%, trench 0.917m, dams 3333333332, raised 0, feed 26, bumpy 0.01/0, downstream-knowers 17 | believe 16/17, temple 2/36 waiting pace 1, offerings 28, asked 24 answered 6, spring found day 18.7
+  year-1 day 30: 14 creekfolk (88 s) | creek: wet now 11%, at the driest 9%, trench 1.015m, dams 33333333313, raised 0, feed 25, bumpy 0.005/0, downstream-knowers 14 | believe 13/14, temple 2/36 waiting pace 1, offerings 19, asked 21 answered 5, spring found day 23
+  year-1 day 60: 22 creekfolk (218 s) | creek: wet now 9%, at the driest 10%, trench 0.639m, dams 33333333333333!, raised 1, feed 25, bumpy 0.034/0.001, downstream-knowers 22 | believe 20/22, temple 6/36 waiting pace 1, offerings 75, asked 50 answered 16, spring found day 23
+  year-2 day 60: 25 creekfolk (237 s) | creek: wet now 10%, at the driest 10%, trench 0.694m, dams 33333333333331, raised 0, feed 27, bumpy 0.039/0, downstream-knowers 25 | believe 23/25, temple 6/36 waiting pace 1, offerings 101, asked 53 answered 18, spring found day 18.7
+  year-1 day 90: 17 creekfolk (358 s) | creek: wet now 32%, at the driest 10%, trench 0.523m, dams 33333333333333, raised 5, feed 25, bumpy 0.026/0.001, downstream-knowers 17 | believe 16/17, temple 10/36 waiting pace 1, offerings 133, asked 75 answered 23, spring found day 23
+  year-2 day 90: 21 creekfolk (424 s) | creek: wet now 36%, at the driest 18%, trench 0.494m, dams 33333333333333, raised 3, feed 27, bumpy 0.036/0.001, downstream-knowers 21 | believe 19/21, temple 10/36 waiting pace 1, offerings 176, asked 79 answered 25, spring found day 18.7
+  year-1 day 120: 22 creekfolk (530 s) | creek: wet now 71%, at the driest 27%, trench 0.435m, dams 33333333333333, raised 12, feed 28, bumpy 0.023/0.001, downstream-knowers 22 | believe 20/22, temple 13/36 waiting pace 1, offerings 202, asked 97 answered 29, spring found day 23
+  year-2 day 120: 20 creekfolk (634 s) | creek: wet now 78%, at the driest 45%, trench 0.399m, dams 33333333333333, raised 6, feed 31, bumpy 0.024/0.001, downstream-knowers 20 | believe 18/20, temple 13/36 waiting pace 1, offerings 252, asked 100 answered 30, spring found day 18.7
+  year-1 day 150: 26 creekfolk (757 s) | creek: wet now 60%, at the driest 55%, trench 0.355m, dams 33333333333333, raised 15, feed 32, bumpy 0.018/0.001, downstream-knowers 26 | believe 24/26, temple 17/36 waiting pace 1, offerings 287, asked 118 answered 32, spring found day 23
+  year-2 day 150: 27 creekfolk (874 s) | creek: wet now 64%, at the driest 64%, trench 0.32m, dams 33333333333333, raised 12, feed 34, bumpy 0.018/0.001, downstream-knowers 27 | believe 23/27, temple 17/36 waiting pace 1, offerings 323, asked 122 answered 33, spring found day 18.7
+  year-1 day 180: 20 creekfolk (978 s) | creek: wet now 71%, at the driest 67%, trench 0.301m, dams 33333333333333, raised 22, feed 33, bumpy 0.013/0.001, downstream-knowers 20 | believe 17/20, temple 20/36 waiting pace 1, offerings 351, asked 141 answered 38, spring found day 23
+  year-2 day 180: 31 creekfolk (1157 s) | creek: wet now 78%, at the driest 74%, trench 0.247m, dams 33333333333333, raised 14, feed 33, bumpy 0.017/0.001, downstream-knowers 31 | believe 27/31, temple 20/36 waiting pace 1, offerings 404, asked 144 answered 40, spring found day 18.7
+  year-1 day 210: 30 creekfolk (1268 s) | creek: wet now 81%, at the driest 69%, trench 0.281m, dams 33333333333333, raised 23, feed 33, bumpy 0.011/0.001, downstream-knowers 30 | believe 27/30, temple 24/36 waiting pace 1, offerings 446, asked 163 answered 43, spring found day 23, beyond: Quinble
+  year-2 day 210: 28 creekfolk (1484 s) | creek: wet now 87%, at the driest 82%, trench 0.195m, dams 33333333333333, raised 17, feed 33, bumpy 0.013/0.002, downstream-knowers 28 | believe 23/28, temple 24/36 waiting pace 1, offerings 505, asked 168 answered 44, spring found day 18.7, beyond: Nib
+  year-1 day 240: 30 creekfolk (1575 s) | creek: wet now 85%, at the driest 71%, trench 0.255m, dams 33333333333333, raised 25, feed 33, bumpy 0.009/0.001, downstream-knowers 30 | believe 27/30, temple 27/36 waiting pace 1, offerings 534, asked 186 answered 47, spring found day 23, beyond: Gilin
+  year-2 day 240: 28 creekfolk (1816 s) | creek: wet now 88%, at the driest 81%, trench 0.177m, dams 33333333333333, raised 20, feed 33, bumpy 0.009/0.002, downstream-knowers 28 | believe 25/28, temple 28/36 waiting pace 1, offerings 573, asked 190 answered 48, spring found day 18.7, beyond: Haplo
+  year-1 day 270: 30 creekfolk (1878 s) | creek: wet now 80%, at the driest 79%, trench 0.252m, dams 33333333333333, raised 29, feed 34, bumpy 0.011/0.002, downstream-knowers 26 | believe 28/30, temple 31/36 waiting pace 1, offerings 633, asked 207 answered 54, spring found day 23, beyond: Tibow
+  year-2 day 270: 27 creekfolk (2126 s) | creek: wet now 86%, at the driest 84%, trench 0.175m, dams 33333333333333, raised 24, feed 33, bumpy 0.009/0.002, downstream-knowers 27 | believe 25/27, temple 31/36 waiting pace 1, offerings 658, asked 211 answered 53, spring found day 18.7, beyond: Pellel
+  year-1 day 300: 30 creekfolk (2218 s) | creek: wet now 82%, at the driest 81%, trench 0.226m, dams 33333333333333, raised 30, feed 33, bumpy 0.007/0.002, downstream-knowers 30 | believe 27/30, temple 34/36 waiting pace 1, offerings 712, asked 231 answered 60, spring found day 23, beyond: Hapley
+  year-2 day 300: 26 creekfolk (2457 s) | creek: wet now 85%, at the driest 83%, trench 0.191m, dams 33333333333333, raised 31, feed 33, bumpy 0.008/0.002, downstream-knowers 26 | believe 24/26, temple 35/36 waiting pace 1, offerings 731, asked 234 answered 59, spring found day 18.7, beyond: Larkrin
+  year-1 day 330: 28 creekfolk (2562 s) | creek: wet now 84%, at the driest 81%, trench 0.233m, dams 33333333333333, raised 31, feed 33, bumpy 0.007/0.002, downstream-knowers 27 | believe 26/28, temple 36/36 done pace 1, offerings 802, asked 253 answered 66, spring found day 23, beyond: Dillmo
+  year-2 day 330: 26 creekfolk (2760 s) | creek: wet now 89%, at the driest 84%, trench 0.168m, dams 33333333333333, raised 34, feed 33, bumpy 0.007/0.002, downstream-knowers 26 | believe 24/26, temple 36/36 done pace 1, offerings 805, asked 256 answered 65, spring found day 18.7, beyond: Briet
+
+2 valleys, 330 days each, in 2761 s wall time
+
+year-1: 30d:16 60d:19 90d:17 120d:22 180d:24 240d:28 300d:28 | births 283, passings 233, downstream 33, generations 28, errors 0, first passing day 14.63, full by day 238, sim 2562 s (11128x), save 2101 KB
+year-2: 30d:20 60d:24 90d:21 120d:23 180d:31 240d:29 300d:26 | births 302, passings 249, downstream 37, generations 28, errors 0, first passing day 14.42, full by day -, sim 2760 s (10329x), save 1999 KB
+  year-1 minds: 46 stories, 37 myths (first day 16.3), 14 places, skills lost 0 / relearned 0, visits 27, gifts 165, believers 26, giver "souwou", customs seasons,thanks
+  year-2 minds: 44 stories, 36 myths (first day 22.5), 22 places, skills lost 0 / relearned 0, visits 29, gifts 165, believers 24, giver "lailain", customs seasons,thanks,passing
+  year-1 belief: first believer day 8.6, believe 26/28, asked 253 answered 66, offerings 802, spring heard 22.7 found 23, beyond Ivyley@199 Quinble@209<Ivyley Gilin@218<Quinble Pim@244<Gilin Oakin@254<Pim Tibow@260<Oakin Hapley@284<Tibow Ellsy@308<Hapley Dillmo@320<Ellsy
+  year-1 temple: started day 12.6, 36/36 parts, done; stages done 106.4, 207.6, 314; finished day 314 (month 10.5); made do 0
+  year-2 belief: first believer day 6.6, believe 24/26, asked 256 answered 65, offerings 805, spring heard 18.4 found 18.7, beyond Nib@199 Haplo@224<Nib Tamwyn@242<Haplo Pellel@264<Tamwyn Solow@274<Pellel Velwyn@282<Solow Ell@293<Velwyn Larkrin@297<Ell Solin@318<Larkrin Briet@328<Solin
+  year-2 temple: started day 12.6, 36/36 parts, done; stages done 106.3, 208.2, 306; finished day 306 (month 10.2); made do 0
+
+Targets:
+  PASS  No valley ever drops to zero.  [10,8]
+  PASS  No simulation errors.  [0,0]
+  PASS  The first passing happens after day 12.  [14.63,14.42]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [203,140]
+  PASS  Someone leaves downstream once the valley is full.  [33,37]
+  PASS  An every-other-day giver finishes the temple in month 11.  [314,306]
+  PASS  Most of the village believes the creek gives (with a giver).  [26/28,24/26]

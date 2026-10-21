@@ -176,7 +176,7 @@ var DevMenu = class {
       let r = giveGift(w, b.dataset.gift);
       this.note = r ? `Gave: ${b.dataset.gift}` : "That gift couldn't be given.";
     }
-    if (b.dataset.trigger && w && !this.app.catching) this.note = "Made it happen: " + devTrigger(w, b.dataset.trigger);
+    if (b.dataset.trigger && w && !this.app.catching) (this.note = "Made it happen: " + devTrigger(w, b.dataset.trigger)), b.dataset.trigger === "beyond" && (WAVE.pending = !0); // BELIEF: wave right away
     if (b.dataset.overlay != null) {
       let g = this.app.renderer.views && this.app.renderer.views.terrain;
       if (g) (g.overlay = b.dataset.overlay || null), (g.lastPaint = -99);
@@ -236,7 +236,8 @@ ${this.note ? `<div class="devwarn">${escapeHtml(this.note)}</div>` : ""}
 ${catching ? `<div class="devwarn">Keep the screen on until the catch-up is done: phones pause pages that are hidden.</div>` : ""}
 ${DEV_BUILD ? `<h5>Snapshots (taken before every jump)</h5>${this.snaps.length ? this.snaps.map((k) => `<div class="row"><button data-restore="${escapeHtml(k)}">restore</button><span class="muted">${escapeHtml(k)}</span></div>`).join("") : '<div class="muted">None yet.</div>'}` : ""}
 <h5>Make it happen</h5>
-<div class="row">${["rain", "seeds", "warm", "found"].map((k) => `<button data-gift="${k}">gift: ${k}</button>`).join("")}</div>
+<div class="row">${Object.keys(GIFT_KINDS).map((k) => `<button data-gift="${k}">gift: ${k}</button>`).join("")}</div>
+<div class="row"><button data-trigger="answer">the creek answers now</button><button data-trigger="spring">find the spring</button><button data-trigger="beyond">one believes in you</button><button data-trigger="believe">everyone believes</button></div>
 <div class="row"><button data-trigger="storm">storm</button><button data-trigger="flood">big flood</button><button data-trigger="birth">birth</button><button data-trigger="passing">passing</button><button data-trigger="visitor">visitor</button><button disabled title="Phase 3C">beavers</button><button disabled title="Phase 3C">the Returning</button></div>
 <h5>Overlays</h5>
 <div class="row">${[["", "none"], ["wet", "wetness"], ["wear", "worn paths"], ["stage", "creek stage"], ["feed", "land capacity"]].map(([k, l]) => `<button data-overlay="${k}">${l}</button>`).join("")}</div>

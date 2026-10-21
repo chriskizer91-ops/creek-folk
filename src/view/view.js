@@ -857,6 +857,16 @@
             })
           );
           break;
+        case "timber": // BELIEF: squared logs for the great work
+          i.push(
+            part(yt(0.09, 0.1, 1.1, 6), PALETTE.plank2, {
+              x: n + (a % 3 - 1) * 0.2,
+              y: o + 0.1 + Math.floor(a / 3) * 0.18,
+              z: s,
+              rz: Math.PI / 2
+            })
+          );
+          break;
         case "glowcap":
           i.push(part(Bn(0.07, 4, 3), PALETTE.glow, { x: h, y: 0.07, z: d }));
           break;
@@ -2240,6 +2250,9 @@
       case "tile":
         t = mergeParts([part(lt(0.28, 0.04, 0.18), PALETTE.tile)]);
         break;
+      case "timber": // BELIEF
+        t = mergeParts([part(yt(0.08, 0.09, 0.9, 6), PALETTE.plank2, { rz: Math.PI / 2 })]);
+        break;
       default:
         t = mergeParts([part(qt(0.09, 0), PALETTE.berry)]);
     }
@@ -2644,7 +2657,11 @@
         case "give":
           p.handFwd = 0.4, p.handY = 0.3;
           break;
+        case "stargaze": // BELIEF: lying out under the stars, eyes open
+          p.lie = 1, p.earPerk = 0.3;
+          break;
       }
+      waveFor(this, p, e); // BELIEF: the one who believes in you waves (belief-view.js)
       if (s.emo && r.t - s.emo.t < 120) {
         let I = s.emo.k;
         (I === "fright" || I === "sad" || I === "frustration") && (
@@ -3631,6 +3648,7 @@ void main(){
           structures: new StructureView(t, this.scene),
           wetland: new WaterView(t, this.scene),
           overlay: new OverlayView(this.scene),
+          belief: new BeliefView(t, this.scene), // BELIEF: animals, offerings, sky (belief-view.js)
           creatures: new Map()
         };
       }
@@ -3639,7 +3657,8 @@ void main(){
         t.terrain.dispose(),
         t.props.dispose(),
         t.structures.dispose(),
-        t.wetland.dispose();
+        t.wetland.dispose(),
+        t.belief && t.belief.dispose(); // BELIEF
         for (let e of t.creatures.values()) e.dispose();
         this.scene.remove(t.overlay.group), this.views = null;
       }
@@ -3751,7 +3770,8 @@ void main(){
         }),
         r.props.updateLights(a.night),
         r.structures.sync(),
-        r.structures.update(e, a.night, a.rain);
+        r.structures.update(e, a.night, a.rain),
+        r.belief && r.belief.update(e, a.night, a.rain, a.dl, this.camera, l); // BELIEF
         let c = new Set(),
           h = this.worldPerPixel(n.camDistance || 25);
         for (let u of s.creatures) {
@@ -5173,6 +5193,7 @@ void main(){
           n = this.curTab("v", "land"),
           s = "";
         if (n === "land") s += villageLandHTML(t); // CREEK
+        else if (n === "temple") s += villageTempleHTML(t); // BELIEF (belief-view.js)
         else if (n === "projects") {
           let r = t.structures.filter((a) => a.building);
           s += r.length ?
@@ -5252,6 +5273,7 @@ void main(){
           ) +
           this.tabs("v", [
           ["land", "Land"],
+          ["temple", "Temple"], // BELIEF
           ["projects", "Projects"],
           ["words", "Words"],
           ["customs", "Customs"],

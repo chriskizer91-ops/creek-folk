@@ -13,14 +13,14 @@ what is done.
 5. The plan for the part you are on, e.g. `docs/phase3a-plan.md`.
 
 ## Where things stand
-_Last updated: 2026-10-20, Phase 3A done and shown to the author; waiting for their go-ahead on 3B._
+_Last updated: 2026-10-21, Phase 3B done and shown to the author (`docs/PHASE3B.md`); 3C not started._
 
 | Part | State | Branch |
 |---|---|---|
 | Phase 1: foundation | done, shown to the author | `main` (`releases/creekfolk-phase1.html`) |
 | Phase 2: minds | done, shown to the author | `main` (`releases/creekfolk-phase2.html`) |
-| Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`) | `phase-3a` |
-| Phase 3B: belief and the temple | not started | |
+| Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`); merged | `main` |
+| Phase 3B: belief and the temple | done, shown to the author (`docs/PHASE3B.md`, plan and changes in `docs/phase3b-plan.md`); not merged until the author has seen it | `phase-3b` (`releases/creekfolk-phase3b.html`) |
 | Phase 3C: life and the ending | not started | |
 | Phase 4: visuals | not started | |
 | Phase 5: year tests (two years) | not started | |
@@ -46,6 +46,24 @@ disabled buttons for them), the sky calendar (no sky calendar exists yet;
 population swings between about 17 and 31 while the land feeds 33 (births and leaving;
 tune in 3C), phone catch-up not measured. After any change to `creek.js`, check
 `creekBumpiness()` in the creek lab: a growing bed or floor number means a sawtooth.
+
+Phase 3B pieces (details in `docs/phase3b-plan.md`, results in `docs/PHASE3B.md`):
+
+| Piece | State |
+|---|---|
+| The creek as the giver, doubters, the Giving Place | done (`gift.js`) |
+| Requests, keeping watch, offerings, notches, resting and the lantern, rhythm wording | done (`gift.js`); belief while away tested with `tools/away-test.cjs` |
+| 17 gifts in four groups; living things (`fauna.js`) | done; every gift tested in the browser (`tools/browser-gifts.mjs`) |
+| The temple: start rule, pace, 36 parts, timber, curing, dry season, carvings | done (`temple.js`); year runs for five rhythms plus slowing and pausing (`docs/runs-3b/`) |
+| Hall of the Ancestors for valleys with no giver | done (`temple.js`) |
+| The spring (news, the journey, water brought back) | done (`temple.js`) |
+| The one who believes in you, the wave | done (`gift.js`, `belief-view.js`) |
+| Drawing: the temple and hall by part, animals, flowers, offerings, lantern, snow, stars, rainbow; the Temple tab | done (`belief-view.js`); simple shapes, art is Phase 4 |
+
+Known gaps after 3B: daily givers finish in month 9 rather than "about month 10" (the pace
+table's 1.2; see the report); a player who only ever gives every four days gets the Hall of
+the Ancestors, never the temple (the start rule); beavers, goats breeding, the Returning,
+the sky calendar, then-and-now, the soundscape and two-year limits are 3C.
 
 ## Rules the author has set
 - Finish a part, then **stop and show the author** before starting the next part.

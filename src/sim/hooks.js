@@ -86,5 +86,38 @@ function devTrigger(w, what) {
     return `${c.name}'s time has come`;
   }
   if (what === "visitor") return visits(w, true) === false ? "nobody has gone downstream yet" : "a visitor is coming up the creek";
+  // BELIEF (Phase 3B)
+  if (what === "believe") {
+    for (let c of alive) beliefsOf(c).giver = Math.max(beliefsOf(c).giver, 0.8);
+    if (!w.givingPlace && alive[0]) chooseGivingPlace(w, alive[0]);
+    return "everyone believes the creek gives";
+  }
+  if (what === "answer") {
+    let g = w.temple || w.ancestors,
+      s = g && w.byId[g.sid];
+    if (!s) return "no temple yet (it needs 7 gifts in 14 days and most of them believing)";
+    if (!s.building || !s.building.locked) return "they're already building a part";
+    g.feel = 1;
+    greatTick(w, g, 1);
+    return "the creek has answered: the next part can be built";
+  }
+  if (what === "spring") {
+    let sp = springOf(w);
+    if (sp.found) return "the spring was already found";
+    sp.heard = sp.heard || Math.round(w.t);
+    let c = alive.find((o) => o.stage === "adult");
+    if (!c) return "no grown-up to go";
+    sp.dreamer = c.id;
+    let gate = springGate(w);
+    setPlan(w, c, { goal: "journey", steps: [{ do: "walk", x: gate.x, z: gate.z, near: 0.4, why: "spring" }, { do: "journey" }], i: 0 });
+    return `${c.name} sets out for the spring`;
+  }
+  if (what === "beyond") {
+    let c = alive.filter((o) => o.stage !== "elder" && !(o.beliefs && o.beliefs.beyond)).sort((a, b) => b.temp.curiosity - a.temp.curiosity)[0];
+    if (!c) return "nobody";
+    beliefsOf(c).giver = Math.max(beliefsOf(c).giver, 0.7);
+    becomeBeyond(w, c, null);
+    return `${c.name} believes in you`;
+  }
   return "unknown";
 }

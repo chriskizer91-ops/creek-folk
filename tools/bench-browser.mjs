@@ -11,7 +11,7 @@ const save = fs.readFileSync(file, 'utf8');
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
 const logs = [];
-page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}\n${(e.stack || '').split('\n').slice(0, 6).join('\n')}`));
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`[${m.type()}] ${m.text()}`); });
 if (process.env.THROTTLE) {
   const cdp = await page.context().newCDPSession(page);
@@ -22,6 +22,7 @@ await page.waitForFunction(() => window.__creek && window.__creek.world, null, {
 await page.evaluate(async (s) => {
   const w = JSON.parse(s);
   w.realStart = Date.now() - w.t * 1000; w.skip = 0;
+  window.__creek.frame = () => {}; // stop drawing first (frame() needs a world)
   window.__creek.world = null; // so the page doesn't save over it while unloading
   await window.__creek.store.put('main', JSON.stringify(w));
 }, save);

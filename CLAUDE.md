@@ -24,7 +24,7 @@ node tools/build.mjs --dev    # same, unminified, for debugging
 Every build makes two self-contained pages from the same source: `creekfolk.html` (the
 game; the dev menu is hidden behind Ctrl+Shift+D) and `creekfolk-dev.html` (a visible
 Dev button that works on phones, and its own saves). `BUILD_VERSION` in
-`tools/build.mjs` names the build (3A is `"3a"`); bump it for every build you hand to
+`tools/build.mjs` names the build (3B is `"3b"`); bump it for every build you hand to
 the author, because each build keeps its own saves.
 
 ## Source layout
@@ -40,7 +40,9 @@ name from earlier files.
 | `src/sim/creek.js` | The creek model (Phase 3A): nodes, floods, sediment that only builds, dams and the drop rule, ponds, the water table, drying, Stage 0 side channels, stages, wet-at-driest, what the land can feed. Tunables in `CREEK`. |
 | `src/sim/life.js` | Ages, stages, pairing, births, passing, the memorial grove, leaving downstream, housing. Tunables in `LIFE`. |
 | `src/sim/minds.js` | Stories and myths, named places, customs (passing offerings, season gatherings), lost skills, proposals, visitors from downstream. Tunables in `MINDS`. |
-| `src/sim/gift.js` | The player's 12-hour gift (rain, seeds, warm day, found object) and beliefs about the giver. |
+| `src/sim/fauna.js` | Gifts that live (Phase 3B): flowers, fruit trees, goats, bees, fish, birds (`world.fauna`); goats move each world tick. |
+| `src/sim/gift.js` | The player's 12-hour gift (17 kinds in `GIFT_KINDS`), the belief that the creek gives, requests, keeping watch, offerings, rhythm, the one who believes in you. |
+| `src/sim/temple.js` | The temple (`STRUCTURES.temple`, 3 stages x 12 parts) and its pace from giving, timber, carvings, the Hall of the Ancestors for valleys with no giver, the spring. Tunables in `TEMPLE`. |
 | `src/sim/hooks.js` | `newValley()` (five founders) and `upgradeWorld()` (runs on every load; migrates old saves). |
 | `src/sim/api.js` | `CreekSim`, the surface used by Node tools. |
 | `src/sim/worker.js` | Web Worker message handler (catch-up). Only in the worker build. |
@@ -51,7 +53,8 @@ name from earlier files.
 | `src/view/catchup.js` | Long catch-ups in a Web Worker (`CatchupWorker`). |
 | `src/view/dev.js` | Developer menu (hidden in the game, a Dev button in the dev build) and `devNow()`. |
 | `src/view/patches.js` | View patches for lives (body size, elder fur, panel lines, activity text) and the background-tab timer. |
-| `src/view/minds-view.js` | Gift button and sheet; Stories/Places/Customs in the village sheet; a creekfolk's Stories tab. |
+| `src/view/minds-view.js` | Gift button and sheet (grouped gifts, the standing request, offerings); Stories/Places/Customs in the village sheet; a creekfolk's Stories tab. |
+| `src/view/belief-view.js` | The temple and the Hall of the Ancestors drawn part by part; flowers, goats, bees, fish, birds; offerings and the lantern; stars in the water, the rainbow, snow; the wave; the village's Temple tab. |
 | `src/view/boot.js` | Starts the app. |
 | `src/page-head.html`, `src/page-tail.html` | The page around the scripts (CSS, fonts, HUD markup). |
 
@@ -125,6 +128,52 @@ Phase 1 view edits; later edits were made directly.
 - Rule: every change to the creek ends with `creekRefresh()` (or `creekDerive()` when
   its shape changed), so derived state always matches the saved state and a reload
   continues exactly.
+
+## Belief and the temple (Phase 3B)
+
+- **The creek gives.** `creature.beliefs.giver` (0..1) is the belief that the creek
+  gives; above 0.5 is a believer. Every gift is noticed by everyone awake (those who saw
+  it most), answered requests count double, a rainbow is a sign. Children start with
+  0.95 of their parents' belief (`GIFT.inherit`). The least open grown-ups of their valley (about one in
+  seven, `doubtLine`) stay doubters ("it's only luck"). The first believer names the
+  **Giving Place** (`world.givingPlace`): the terrace edge above the creek nearest the
+  village, kept clear for the temple (`TEMPLE_ROOM`, 9.5 m).
+- **The feedback loop** (`gift.js`): a believer voices the valley's top need as a
+  standing request (`world.request`) until the next gift; giving it is an answered
+  request. When a gift is due, believers keep watch at the Giving Place (goal `watch`)
+  and sometimes leave an offering for the giver (`world.offerings`). Every gift is a
+  notch on the Giving Stone (`stats.gifts`). After 3 days with no gift (or 1.5 times the
+  rhythm they know, `restAfter`): "the creek is resting" and a lantern
+  (`world.lantern`); while it rests, belief fades very slowly (`GIFT.restFade`) and doubters
+  barely sway believers, so most still believe after a month away
+  (`tools/away-test.cjs`). Rhythm is noticed in valley days and the valley hour (`giftRhythm`,
+  `rhythmText`): "the creek gives at dawn, every twenty-four days".
+- **Gifts**: 17 kinds in four groups (`GIFT_KINDS`, `giftNeedWhy`): weather (rain, warm
+  day, snow day, starry night, rainbow), living things (seeds, flowers, fruit trees,
+  goats, bees, fish, a new bird), materials (a fallen great tree, a bank of clay, a pile
+  of stones), wonder (something to find, a dream). Living gifts add a new species each
+  time (`FAUNA_KINDS`). Weather gifts use `weather.force` to set what comes next.
+- **The temple** (`temple.js`): starts with 7 gifts in 14 real days, most believing, and
+  the valley at least 7 days old. Pace from the gift rate over 14 days (`paceOfRate`:
+  every 4 days 0.5, every other day 1, daily 1.2, twice a day 1.4; 6 days without a gift
+  stops it). While the next part is locked (`building.locked`, no work is taken), the
+  feeling "the creek has answered" builds at that pace; one part's worth
+  (`TEMPLE.feelPerPart` real days) unlocks it, and it is built with ordinary labour and
+  materials. Timber comes from trees planted as a shrine part (`timbertree`, about 30
+  days to grow) or a fallen great tree (`greatlog`); clay walls cure; crown stones move
+  only in the dry season (`dryseason`). Carved parts record the village's version of a
+  story (`carveStory`); carved stories drift half as fast. A part stuck for 5 days is
+  finished with what they have. A valley with no temple by day 30 builds the Hall of the
+  Ancestors (`STRUCTURES.ancestors`) at full speed on time alone.
+- **The spring**: news comes with a visitor or traveler once a third believe (or a curious
+  elder wonders after day 60, or a dream); an explorer walks out past the head of the
+  valley (action `journey`, act type `away`, hidden) and finds it; later believers go
+  now and then and bring back spring water.
+- **The one who believes in you**: after 100 gifts and about five months since the first
+  (`GIFT.beyondGifts`, `GIFT.beyondDays`), with steady giving, one creekfolk
+  (`beliefs.beyond`) is sure the gifts come from someone beyond the valley; it waves when
+  the page opens (view only, `waveFor`). Passed to a child or young friend (`passBeyond`).
+- Core hooks are marked `// BELIEF:`.
 
 ## Lives
 
@@ -233,7 +282,15 @@ node tools/bench-browser.mjs <save> 30   # catch-up benchmark in the browser
 `year.cjs` also prints the creek each `EVERY` days (wet now, at the driest, trench,
 dams, raises, feed) and saves worlds on the days in `SAVE_AT=30,60,...`.
 
-`year.cjs` accepts `LIFE='{"pairBirthDays":4}'` in the environment for tuning.
+`year.cjs` accepts `LIFE='{"pairBirthDays":4}'` in the environment for tuning, and
+`GIFTS=every:<hours>` (every:48 is every other day) to play the gift on a rhythm; it
+prints belief and the temple's progress and checks the temple targets. Also:
+`tools/gift-smoke.cjs` (every gift in turn), `tools/temple-preview.cjs` (a temple that
+rises as fast as its builders can work, for looking at it), `tools/ui-shots.mjs` (the
+gift sheet and Temple tab), `tools/browser-gifts.mjs` (every gift and trigger in the dev
+build), `tools/away-test.cjs` (how belief holds when the gifts stop). `GIFTS=sched:48@0,96@90`
+changes the rhythm on given days (0 hours: no gifts); `SIM=<file>` runs a frozen copy of
+the simulation.
 Results go to `runs/`.
 
 ## Conventions
