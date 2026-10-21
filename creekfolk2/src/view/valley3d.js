@@ -278,10 +278,15 @@ var CF2Valley = (function () {
     function cr(p0, p1, p2, p3, t) {
       return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
     }
+    // past the valley the simulation's hills keep rising without end; drawn, they round off
+    // into wooded ridges a few tens of metres high (inside the valley they are never this high)
+    function hillCap(h) {
+      return h < 32 ? h : 32 + 14 * (1 - Math.exp(-(h - 32) / 14));
+    }
     function height(x, z) {
       if (x < 1 || z < 1 || x > VW - 1 || z > VL - 1) {
         if (x >= 0 && z >= 0 && x <= VW && z <= VL) return T.heightAt(x, z);
-        return T.heightRaw(x, z);
+        return hillCap(T.heightRaw(x, z));
       }
       var h = H(),
         ix = Math.floor(x),
@@ -1440,6 +1445,37 @@ var CF2Valley = (function () {
     W.ensure = function () {
       plan();
       while (JOBS.length) run(1e9);
+    };
+    // the water's surface at (x, z), or null where it is dry: the creek in its trench, water
+    // standing on the floor, the branches (for the creatures, the mist and the rain's rings)
+    W.water = function (x, z) {
+      if (vw.nodes && z > -24 && z < VL + 24) {
+        var f = clamp((z - CREEK.z0) / CREEK.ds, 0, vw.nodes.length - 1.0001),
+          i = Math.floor(f),
+          t = f - i,
+          a = vw.nodes[i],
+          b = vw.nodes[i + 1],
+          lerp = (k) => a[k] + (b[k] - a[k]) * t,
+          bed = lerp("bed"),
+          wl = lerp("wl");
+        if (wl > bed + 0.008) {
+          var n = { wb: lerp("wb"), m: lerp("m"), fp: lerp("fp"), bed, bw: lerp("bw"), bz: lerp("bz") };
+          if (Math.abs(x - T.creekX(z)) < 0.5 * creekWidthAt(n, wl - bed) && wl > height(x, z) + 0.01) return wl;
+        }
+      }
+      var g = G();
+      if (g && x >= 0 && z >= 0 && x < VW && z < VL) {
+        var k = Math.floor(z) * VW + Math.floor(x);
+        if (g.wt[k] > height(x, z) + 0.01) return g.wt[k];
+      }
+      if (vw.br)
+        for (var br of Object.values(T.branches)) {
+          var d = cf2BranchDist(br, x, z);
+          if (!d || d.o > br.HW[d.i] * 0.85) continue;
+          var ws = cf2BranchWater({ terrain: T, creek: { br: vw.br, flood: vw.flood }, t: vw.t }, br, d.i);
+          if (ws != null && ws > height(x, z) + 0.01) return ws;
+        }
+      return null;
     };
     W.CUT = CUT;
     W.setOverlay = function (o) {
