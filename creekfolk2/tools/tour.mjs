@@ -41,8 +41,9 @@ if (src === 'new') {
   await p.evaluate((t) => window.__cf2.post({ type: 'import', text: t }), text);
 }
 await p.waitForFunction(() => window.__cf2.vw.ready && window.__cf2.renderer && window.__cf2.renderer.ready, null, { timeout: 180000 });
-const kind = await p.evaluate(() => window.__cf2.renderer.constructor.name);
-check('the 3D view is drawing', kind === 'View3D', kind);
+// (the minified game renames classes, so the 3D view is known by what it has: a valley and a pixel pass)
+const is3D = await p.evaluate(() => !!(window.__cf2.renderer.valley && window.__cf2.renderer.px));
+check('the 3D view is drawing', is3D);
 // frames drawn: counted from the page's own loop
 await p.evaluate(() => {
   const R = window.__cf2.renderer,

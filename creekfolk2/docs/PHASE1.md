@@ -49,6 +49,16 @@ close in, a full creekfolk built like What the Water Brings' Sheet king, on its 
 Creekfolk 1's 3C looks (fur colour, stripes, saddle, patches or spots, a mask or a blaze, pale
 paws, what they wear for what they love) and a cloth pattern that runs in each family line.
 
+**Beyond the brief's Phase 1: the valley's life and air.** What the Water Brings' creatures
+(heron, turtles, minnows, frogs, dragonflies, butterflies, teal) live where this valley gives
+them a place, and their numbers follow how wet and green it is, so a cut-down creek has few and
+a healed wetland has them everywhere; they scatter, plop in or fly off when a creekfolk comes
+near. Its air: rain and storms with lightning, snow on the cold days of deep winter, mist on the
+water at dawn, fireflies at summer dusks, falling leaves, swallows. The light follows the
+valley's hour and its year (the sun rises far to the south-east at midwinter, where the sky
+stones point). Trees go bare in winter and gold in autumn; windows and porch lanterns are lit at
+night. All of this is drawing only: it never changes the simulation.
+
 **5. Offline, with the clock guards.** No network requests (checked). If the clock goes back,
 the valley waits. If it jumps more than 90 days ahead, the page asks whether to replay it all or
 treat the clock as wrong. Settings can set the valley's clock and save or open a backup file.
@@ -67,7 +77,7 @@ these ran, so speeds are on the slow side). Nothing was measured on a phone or a
 | Catch-up of 30 days in the browser's worker, from a day-15 valley of 23 creekfolk (`tools/bench-browser.mjs`) | 7.8 minutes (5,520 times real time) |
 | The rules in a browser (`tools/browser-test.mjs`): new valley, jumps, reload, the clock guards, pause, the sheets, refusing other builds' saves, no network | 20 of 20 pass |
 | The 3D view live (`tools/tour.mjs`): every zoom, following, drifting, overlays, storm, flood, beavers, sky stones, fish run, a jump | 16 of 16 pass, no page errors |
-| Screenshots of the valley from the air to a face, new and at a month, by day and night, in winter and spring; the interface on a laptop and a phone | looked at one by one (`runs/`, not kept in the repository) |
+| Screenshots of the valley from the air to a face, new and at a month, in all four seasons, at dawn, by day, at dusk and at night, in a storm; the creatures and the air; the interface on a laptop and a phone | looked at one by one; a selection is in `docs/img/phase1/` (`valley.jpg`, `close.jpg`, `life.jpg`) |
 
 ## What isn't right yet
 
@@ -83,6 +93,11 @@ these ran, so speeds are on the slow side). Nothing was measured on a phone or a
 - **Close up, what creekfolk do is laid over three clips** (walk, sit, idle): sleeping curled up,
   working bent over, talking with their hands, hopping, eating, carrying what they carry. There
   are no hand-made clips for these yet.
+- **The small creatures only read close in.** At real scale a frog, a minnow or a dragonfly is a
+  few pixels until the view is down to about 6 to 12 m.
+- **Snow falls but doesn't lie on the ground yet.**
+- **The creatures' "a healed wetland is full of them"** has only been seen by pretending, on
+  the page, that the floor had healed: the real test valleys are still dry (see the first point).
 - **No sound.**
 
 ## What I couldn't test
