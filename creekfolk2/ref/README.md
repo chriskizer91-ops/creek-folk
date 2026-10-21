@@ -11,8 +11,9 @@ from them, but nothing here is part of its build. Don't edit them.
   and `king3.js`, `valley.js`, `life.js`, `cloth.js`, `core.js`, and `tools/shots.py`,
   `sheet.py`, `perf.py`. The lifelike king, the finds, the poems and the card belong to
   that game and its people and don't come into Creekfolk 2, and neither do their names.
-  _Not added yet: waiting for the author to confirm it should be public in full,
-  including the character card's portrait._
+  This copy leaves out, at the author's wish, the character card's portrait (blank images
+  stand in for it in `src/card_assets.js`) and the names of the people the game was made
+  for; everything else is as it was given, and it still builds and runs.
 - `creek-care/`: Creek Care, a creek and stormwater sandbox. Creekfolk 1 already ported its
   river model (`src/river-core.js`, also in `../../ref/`). Useful for what that port left
   out (bends migrating and oxbows, `P._migrate` and `P._cutoffs`), its calibration

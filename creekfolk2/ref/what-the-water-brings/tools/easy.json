@@ -1,0 +1,6 @@
+[
+ {"name":"e1-start-still","easy":true,"at":"start","hour":8.5,"step":4},
+ {"name":"e2-walking","easy":true,"at":[-62,-0.5],"hour":10,"yaw":1.6,"eval":"W.walkTo(-52,-2.5)","step":2.5},
+ {"name":"e3-evening","easy":true,"at":"lookout","hour":18.6,"step":4},
+ {"name":"e4-night","easy":true,"at":[93,12],"hour":22.5,"step":4}
+]

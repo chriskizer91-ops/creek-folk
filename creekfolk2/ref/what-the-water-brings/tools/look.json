@@ -1,0 +1,14 @@
+[
+ {"name":"01-start-morning","at":"start","hour":8.5},
+ {"name":"02-heron-morning","at":[-62,-3.2],"hour":9.5,"yaw":3.1},
+ {"name":"03-bridge-midday","at":[12,3.5],"hour":12.5},
+ {"name":"04-falls-afternoon","at":"rock","hour":15.5},
+ {"name":"05-lookout-evening","at":"lookout","hour":18.6},
+ {"name":"06-pond-dusk","at":[-58,36],"hour":19.6},
+ {"name":"07-trestle-night","at":[93,12],"hour":22.5},
+ {"name":"08-low-view-creek","at":[-70,-1.5],"hour":10,"el":0.12,"zoom":0.7},
+ {"name":"09-storm","at":"start","hour":21,"storm":true,"step":4},
+ {"name":"10-fireflies","at":[-44,30],"hour":20.9,"step":3},
+ {"name":"11-mist","at":[-62,-3.2],"hour":6.6,"step":3},
+ {"name":"12-sky-lookout","at":"lookout","hour":18.4,"el":0.06,"az":3.2,"zoom":1.3}
+]

@@ -1,0 +1,552 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>What the Water Brings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* A full-screen pixel game: the creek fills the window, small dark chips float over it, and parchment cards (captions,
+     poems, the journal, the character card) pop up over the play. The chrome is a deliberately single dark look. */
+  :root {
+    --bg: #1b1a18; --ink: #f2efe9; --muted: #b5aea2; --line: rgba(242, 239, 233, 0.16); --chip: rgba(27, 26, 24, 0.82); --chip-solid: #2a2825;
+    --accent: #ea7a2a; --gold: #c9a24e; --gold-d: #8f6d2a; --parch: #f3e9d2; --parch-ink: #3b2f22; --parch-mute: #7a6a52; --rule: #d9c9a4;
+    --f-display: 'Gloock', 'Iowan Old Style', Georgia, serif;
+    --f-body: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: #a8d0de; color: var(--ink); font-family: var(--f-body); overflow: hidden; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: none; overscroll-behavior: none; }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+  button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hidden { display: none !important; }
+
+  /* ---------- heads-up chips */
+  #hud { position: fixed; left: 0; right: 0; top: 0; z-index: 5; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); pointer-events: none; }
+  #hud > * { pointer-events: auto; }
+  .tally { display: flex; align-items: center; gap: 12px; background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  .tally .t { display: flex; align-items: baseline; gap: 6px; font: 500 10px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .tally .t b { font: 600 16px/1 var(--f-body); letter-spacing: 0; color: var(--ink); font-variant-numeric: tabular-nums; text-transform: none; }
+  .tally .t b small { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .tally .sep { width: 1px; align-self: stretch; background: var(--line); }
+  .lefthud { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+  .clock { margin: 0; padding: 5px 10px; border-radius: 999px; background: var(--chip); border: 1px solid var(--line); font: italic 400 13px/1.2 var(--f-display); color: var(--ink); }
+  .restsheet .restopts { display: flex; flex-direction: column; gap: 8px; margin: 4px 4px 4px; }
+  .restsheet .restopts .btn { background: #ead9b4; color: #3b2f22; border-color: #b89a5e; text-align: left; }
+  .sheet .done { gap: 8px; flex-wrap: wrap; }
+  .tools { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .tools .row { display: flex; gap: 6px; }
+  .ib { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  .ib svg { width: 20px; height: 20px; }
+  .ib[aria-pressed="true"] { background: var(--ink); color: #1c1b1a; }
+  #map { display: block; width: 168px; height: 96px; border-radius: 10px; border: 1px solid var(--line); background: #efe4c8; cursor: pointer; }
+  .sheet.mapsheet { width: min(980px, 100%); }
+  #bigMap { display: block; width: 100%; height: auto; border-radius: 8px; border: 2px solid var(--gold-d); background: #efe4c8; }
+  .mapsheet .note { margin: 8px 4px 0; font: 500 11px/1.4 var(--f-mono); color: var(--parch-mute); }
+  #toast { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 6; transform: translate(-50%, -8px); opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+    background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 9px 16px; font: italic 400 15px/1.3 var(--f-display); color: var(--ink); max-width: min(88vw, 520px); text-align: center; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  /* ---------- prompt and touch controls */
+  #prompt { position: fixed; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom, 0px)); z-index: 5; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+    background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 8px 8px 8px 16px; font: 600 14px/1 var(--f-body); color: var(--ink); white-space: nowrap; cursor: pointer; }
+  #prompt kbd { font: 500 12px/1 var(--f-mono); background: var(--ink); color: #1c1b1a; border-radius: 6px; padding: 6px 8px; }
+  #pads { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 5; display: none; flex-direction: column; align-items: flex-end; gap: 12px; }
+  .touch #pads { display: flex; }
+  .touch #prompt { display: none; }
+  .pad { border-radius: 50%; border: 2px solid rgba(242, 239, 233, 0.5); background: var(--chip); color: var(--ink); font: 700 13px/1.1 var(--f-body); cursor: pointer; display: grid; place-items: center; text-align: center; padding: 4px; }
+  #bJump { width: 74px; height: 74px; }
+  #bAct { width: 92px; height: 92px; background: linear-gradient(180deg, #f1d58c, #d4ae5a); color: #2a2116; border-color: #8f6d2a; box-shadow: 0 3px 0 #6e5220; font-size: 14px; }
+  #bAct[hidden] { display: none; }
+  .turns { display: flex; gap: 8px; }
+  #stick { position: fixed; z-index: 4; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(242, 239, 233, 0.45); background: rgba(27, 26, 24, 0.35); pointer-events: none; display: none; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(242, 239, 233, 0.85); box-shadow: 0 2px 0 rgba(0,0,0,0.3); }
+  #stick.run { border-color: var(--accent); }
+  #tapmark { position: fixed; z-index: 4; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 3px solid #fff6d0; border-radius: 50%; pointer-events: none; opacity: 0; }
+  #tapmark.on { animation: tap 0.6s ease-out; }
+  @keyframes tap { 0% { opacity: 1; transform: scale(0.4); } 100% { opacity: 0; transform: scale(1.5); } }
+
+  /* ---------- dark panels: title screen and menu */
+  .veil { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(16, 14, 12, 0.55); }
+  .veil[hidden] { display: none; }
+  .veil:not([hidden]) > * { animation: rise 0.28s cubic-bezier(.2,.9,.25,1.1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .veil:not([hidden]) > * { animation: none; } }
+  .panel { width: min(440px, 100%); max-height: calc(100% - 8px); overflow-y: auto; background: rgba(27, 26, 24, 0.94); border: 1px solid var(--line); border-radius: 18px; padding: 22px 20px 18px; box-shadow: 0 20px 60px rgba(0,0,0,0.45); }
+  .eyebrow { margin: 0; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+  .panel h1 { margin: 6px 0 10px; font: 400 38px/1.02 var(--f-display); letter-spacing: -0.01em; text-wrap: balance; }
+  .panel h2 { margin: 0 0 12px; font: 400 26px/1.1 var(--f-display); }
+  .panel p { margin: 0 0 12px; font: 400 15px/1.5 var(--f-body); color: #ddd6ca; max-width: 60ch; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 4px 0 16px; font: 400 13px/1.35 var(--f-body); color: #ddd6ca; }
+  .keys dt { font: 500 11px/1.6 var(--f-mono); color: var(--ink); white-space: nowrap; }
+  .keys dd { margin: 0; }
+  .go { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { min-height: 46px; border-radius: 12px; padding: 0 18px; font: 600 15px/1 var(--f-body); cursor: pointer; border: 1px solid var(--line); background: var(--chip-solid); color: var(--ink); }
+  .btn.gold { background: linear-gradient(180deg, #f1d58c, #d4ae5a); color: #2a2116; border-color: #8f6d2a; box-shadow: 0 3px 0 #6e5220; }
+  .btn.small { min-height: 38px; font-size: 13px; padding: 0 12px; border-radius: 10px; }
+  .loadline { font: 500 11px/1.4 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+  .setrow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .setrow:first-of-type { border-top: 0; }
+  .setrow .lab { flex: none; width: 74px; font: 500 10px/1.3 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg button { min-height: 36px; border-radius: 9px; padding: 0 12px; font: 500 13px/1 var(--f-body); cursor: pointer; border: 1px solid var(--line); background: var(--chip-solid); color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #1c1b1a; font-weight: 600; }
+  .stat { margin: -2px 0 6px 84px !important; font: 500 11px/1.45 var(--f-mono) !important; color: var(--muted) !important; font-variant-numeric: tabular-nums; }
+  @media (max-width: 420px) { .stat { margin-left: 0 !important; } }
+  .x { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: var(--chip-solid); color: var(--ink); font: 600 17px/1 var(--f-body); cursor: pointer; }
+  .panel { position: relative; }
+
+  /* ---------- parchment: find caption, poem page, journal, character card */
+  .parch { background: var(--parch); color: var(--parch-ink); border-radius: 16px; box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px #3a2e1c, 0 24px 60px rgba(0,0,0,0.5); }
+  #caption { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); z-index: 8; width: min(420px, calc(100% - 32px)); transform: translate(-50%, 140%); transition: transform 0.35s cubic-bezier(.2,.9,.25,1.15); padding: 14px 16px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; cursor: pointer; }
+  #caption.on { transform: translate(-50%, 0); }
+  #caption .k { grid-column: 1 / -1; font: 500 10px/1.3 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--parch-mute); }
+  #caption h3 { margin: 0; font: 400 22px/1.1 var(--f-display); }
+  #caption .n { align-self: end; font: 500 12px/1 var(--f-mono); color: var(--parch-mute); font-variant-numeric: tabular-nums; }
+  #caption p { margin: 4px 0 0; font: italic 400 15px/1.45 var(--f-body); color: #4a3c2a; }
+  #caption { grid-template-columns: 64px 1fr auto; align-items: start; }
+  #caption .capicon { width: 64px; height: 64px; image-rendering: pixelated; image-rendering: crisp-edges; background: #2a2420; border: 3px solid #6a4c34; border-radius: 6px; }
+  #caption .capbody { min-width: 0; }
+  #caption .k { grid-column: auto; }
+  #caption p.tag { margin: 2px 0 0; font: 500 11px/1.4 var(--f-mono); font-style: normal; color: var(--parch-mute); }
+  /* the studio wall: shadow boxes in pine frames */
+  .sheet.studiosheet { width: min(860px, 100%); }
+  .snote { margin: 0 4px 10px; font: italic 400 15px/1.4 var(--f-body); color: #4a3c2a; }
+  .sgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 4px; }
+  @media (max-width: 560px) { .sgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .sbox { min-width: 0; }
+  .sbox .frame { background: #241e1a; border: 7px solid #8d6646; border-top-color: #a8836a; border-left-color: #a8836a; border-radius: 3px; box-shadow: inset 0 4px 10px rgba(0,0,0,0.6); padding: 8px; }
+  .sbox.full .frame { border-color: #c9a24e; border-top-color: #e2bc5a; border-left-color: #e2bc5a; }
+  .sbox .slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .sbox .slot { aspect-ratio: 1; display: grid; place-items: center; border-radius: 3px; }
+  .sbox .slot img { width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .sbox .slot.empty { border: 1px dashed rgba(242, 239, 233, 0.18); }
+  .sbox .slot.new { animation: hang 0.9s cubic-bezier(.2,.9,.25,1.3); }
+  @keyframes hang { from { transform: translateY(-14px) scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sbox h4 { margin: 6px 2px 0; font: 400 16px/1.15 var(--f-display); color: var(--parch-ink); text-wrap: balance; }
+  .sbox .gcount { margin: 2px 2px 0; font: 500 10.5px/1.4 var(--f-mono); color: var(--parch-mute); }
+  .sbox .gcard { margin: 4px 2px 0; padding: 5px 7px; background: #fffaf0; border: 1px solid #d9c9a4; font: 500 10px/1.45 var(--f-mono); color: var(--parch-ink); }
+  .sbox .gcard i { font: italic 400 12.5px/1.2 var(--f-display); }
+  /* the commonplace book */
+  .jtip { margin: 2px 4px 10px; font: italic 400 14px/1.45 var(--f-body); color: #4a3c2a; }
+  .jbag { margin: 4px 4px 10px; padding: 8px 10px; border-radius: 8px; background: #3a2e1c; color: #f1d58c; font: 500 12.5px/1.4 var(--f-body); }
+  .jcoll { margin: 6px 4px 0; border-top: 1px dashed #c8b48a; padding-top: 6px; }
+  .jcoll summary { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; cursor: pointer; list-style: none; padding: 4px 2px; }
+  .jcoll summary::-webkit-details-marker { display: none; }
+  .jcoll summary b { font: 400 17px/1.2 var(--f-display); }
+  .jcoll summary span { font: 500 11px/1 var(--f-mono); color: var(--parch-mute); }
+  .jcoll.full summary b::after { content: ' \2713'; color: #8f6d2a; }
+  .jline { margin: 0 2px 6px; font: italic 400 13.5px/1.45 var(--f-display); color: #5a4a34; }
+  .jline em { font: 500 10px/1.4 var(--f-mono); font-style: normal; color: var(--parch-mute); }
+  .jlist img.ic { width: 34px; height: 34px; image-rendering: pixelated; image-rendering: crisp-edges; background: #2a2420; padding: 0; }
+  .sheet { position: relative; width: min(420px, 100%); max-height: calc(100% - 8px); overflow-y: auto; padding: 18px 16px 16px; }
+  .sheet .x { background: #f3e9d2; color: #3b2f22; border-color: #8f6d2a; }
+  .sheet .spot { margin: 0 44px 2px 4px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--parch-mute); }
+  .sheet h3 { margin: 2px 44px 2px 4px; font: 400 25px/1.1 var(--f-display); text-wrap: balance; }
+  .sheet .by { margin: 0 4px 12px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--parch-mute); }
+  .poem { margin: 0 4px; padding: 14px 14px 12px; border-radius: 9px; border: 2px solid var(--gold-d); background: #f8f1df; min-height: 280px; }
+  .poem .ln { margin: 0; font: italic 400 16px/1.75 var(--f-display); color: #3b2f22; padding-left: 1.4em; text-indent: -1.4em; }   /* a long line that wraps hangs under itself */
+  .poem .ln.gap { height: 0.9em; }
+  .poem .ln.rule { border-bottom: 1px solid var(--rule); }
+  .poem .kept { margin: 12px 0 0; font: 500 10.5px/1.5 var(--f-mono); color: var(--parch-mute); text-align: center; }
+  .poem .kept.src { text-align: left; margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--rule); }
+  .poem .pnote { margin: 0 0 10px; font: italic 400 13px/1.45 var(--f-body); color: #6a5a42; }
+  body.easy .poem .pnote { font-size: 17px; color: #2a2016; }
+  .sheet .done { display: flex; justify-content: center; margin-top: 14px; }
+  .sheet .done .btn { background: #ead9b4; color: #3b2f22; border-color: #b89a5e; }
+  .jlist { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .jlist li { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; background: #f8f1df; border: 1px solid #e2d3b0; }
+  .jlist li.no { opacity: 0.62; }
+  .jlist .ic { width: 34px; height: 34px; border-radius: 8px; background: #3a2e1c; color: #f1d58c; display: grid; place-items: center; font: 600 14px/1 var(--f-mono); }
+  .jlist li.no .ic { background: #d8c9a6; color: #7a6a52; }
+  .jlist b { display: block; font: 600 14px/1.25 var(--f-body); }
+  .jlist span { display: block; font: 400 12.5px/1.35 var(--f-body); color: #5a4a34; }
+  .jlist button { min-height: 34px; border-radius: 9px; border: 1px solid #b89a5e; background: #ead9b4; color: #3b2f22; font: 600 12px/1 var(--f-body); padding: 0 10px; cursor: pointer; }
+  .jlist button[aria-pressed="true"] { background: #3a2e1c; color: #f1d58c; border-color: #3a2e1c; }
+  .jhead { margin: 14px 4px 4px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--parch-mute); display: flex; justify-content: space-between; }
+
+  /* ---------- character card (shared markup with the other pages) */
+  #cardWrap { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(12, 10, 8, 0); transition: background 0.25s; }
+  #cardWrap.on { background: rgba(12, 10, 8, 0.66); }
+  #cardWrap[hidden] { display: none; }
+  .card { position: relative; width: min(360px, 100%); max-height: calc(100% - 8px); overflow-y: auto; background: var(--parch); color: var(--parch-ink); border-radius: 16px; padding: 12px;
+    box-shadow: 0 0 0 3px var(--gold), 0 0 0 6px #3a2e1c, 0 24px 60px rgba(0,0,0,0.5);
+    transform: perspective(900px) rotateY(-80deg) scale(0.9); opacity: 0; transition: transform 0.38s cubic-bezier(.2,.9,.25,1.15), opacity 0.2s; }
+  #cardWrap.on .card { transform: none; opacity: 1; }
+  .card .art { position: relative; border-radius: 9px; overflow: hidden; border: 2px solid var(--gold-d); aspect-ratio: 480 / 560; background: #ddd; }
+  .card .art img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 0; display: block; }
+  .card .badge { position: absolute; right: 8px; bottom: 8px; width: 56px; height: 76px; background: rgba(243,233,210,0.92); border: 2px solid var(--gold-d); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .card .badge img { width: 40px; height: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .card .cls { position: absolute; left: 8px; top: 8px; font: 500 9.5px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; background: #3a2e1c; color: #f1d58c; padding: 6px 8px; border-radius: 6px; }
+  .card h2 { margin: 12px 4px 2px; font: 400 25px/1.05 var(--f-display); text-wrap: balance; }
+  .card .tag { margin: 0 4px 10px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--parch-mute); }
+  .card ul { list-style: none; margin: 0 4px; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+  .card li { display: grid; grid-template-columns: 78px 1fr 22px; align-items: center; gap: 8px; font: 500 12px/1 var(--f-body); }
+  .card li b { display: flex; gap: 2px; }
+  .card li i { flex: 1; height: 8px; border-radius: 2px; background: #dccfb2; }
+  .card li i.on { background: linear-gradient(180deg, #e2bc5a, #b58b3d); }
+  .card li em { font: 500 11px/1 var(--f-mono); font-style: normal; text-align: right; color: var(--parch-mute); font-variant-numeric: tabular-nums; }
+  .card .items { margin: 12px 4px 0; font: 500 10.5px/1.5 var(--f-mono); color: var(--parch-mute); }
+  .card .items strong { color: var(--parch-ink); font-weight: 500; }
+  .card .flavor { margin: 10px 4px 4px; padding-top: 10px; border-top: 1px dashed #c8b48a; font: 400 13.5px/1.45 var(--f-body); font-style: italic; color: #5a4a34; }
+  .card .who { margin: -1px 4px 4px; font: italic 400 16px/1.2 var(--f-display); color: #6a5638; }
+  .card.turning { transform: perspective(900px) rotateY(88deg) !important; transition: transform 0.17s ease-in !important; }
+  .card .turn { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 8px); margin: 12px 4px 2px; min-height: 40px; border-radius: 10px; border: 1px solid #b89a5e; background: #ead9b4; color: #3b2f22; font: 600 13px/1 var(--f-body); cursor: pointer; }
+  .card .poemhead { margin: 34px 4px 2px; font: 400 23px/1.1 var(--f-display); text-wrap: balance; }
+  .card .poemby { margin: 0 4px 12px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--parch-mute); }
+  .card .poem { min-height: 300px; }
+  .card .poem .ln { font-size: 15px; }
+  #cardClose { position: absolute; top: 18px; right: 18px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 1px solid #8f6d2a; background: #f3e9d2; color: #3b2f22; font: 600 16px/1 var(--f-body); cursor: pointer; }
+
+  @media (max-width: 700px) {
+    #caption { bottom: auto; top: calc(146px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -24px); opacity: 0; pointer-events: none; transition: transform 0.3s, opacity 0.3s; }
+    #caption.on { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+    #toast { top: calc(146px + env(safe-area-inset-top, 0px)); }
+  }
+  @media (max-width: 560px) {
+    .panel h1 { font-size: 32px; }
+    #map { width: 120px; height: 70px; }
+    .tally { gap: 9px; padding: 7px 10px; }
+    .tally .t b { font-size: 15px; }
+    .ib { width: 40px; height: 40px; }
+  }
+
+  /* ---------- step 4: ponder card, read-aloud buttons, photo mode, the ending */
+  #ponder { position: fixed; left: 50%; top: calc(64px + env(safe-area-inset-top, 0px)); z-index: 7; width: min(460px, calc(100% - 32px)); transform: translate(-50%, -16px); opacity: 0; pointer-events: none; transition: opacity 0.35s, transform 0.35s; padding: 12px 16px 12px; cursor: pointer; box-sizing: border-box; }
+  #ponder.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  #ponder .note { margin: 0 34px 8px 0; font: 400 14px/1.45 var(--f-body); color: #4a3c2a; }
+  #ponder blockquote { margin: 0; padding: 8px 0 0; border-top: 1px dashed #c9b48a; font: italic 400 17px/1.4 var(--f-display); color: #3b2f22; text-wrap: pretty; }
+  #ponder cite { display: block; margin-top: 5px; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; font-style: normal; color: var(--parch-mute); }
+  .say { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid #b89a5e; background: #ead9b4; color: #3b2f22; display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .say svg { width: 16px; height: 16px; }
+  #caption .capbody { padding-right: 26px; }
+  .padrow { display: flex; align-items: center; gap: 10px; }
+  #bPonder { width: 60px; height: 60px; font-size: 12px; }
+  body.photo #hud, body.photo #pads, body.photo #prompt, body.photo #toast, body.photo #caption, body.photo #ponder, body.photo #stick,
+  body.cine #hud, body.cine #pads, body.cine #prompt, body.cine #toast, body.cine #caption, body.cine #ponder, body.cine #stick { display: none !important; }
+  #photoBar { position: fixed; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 9; width: min(780px, calc(100% - 24px)); box-sizing: border-box;
+    background: var(--chip); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #photoBar[hidden] { display: none; }
+  #photoBar .pbrow { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  #photoBar .pgroup { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #photoBar .lab { font: 500 10px/1.3 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  #photoBar .seg button { min-height: 32px; padding: 0 10px; font-size: 12.5px; }
+  #photoBar .pbgo { display: flex; align-items: center; gap: 14px; }
+  #photoBar .phint { font: 400 12px/1.35 var(--f-body); color: var(--muted); }
+  .shutter { flex: none; width: 58px; height: 58px; border-radius: 50%; border: 4px solid var(--ink); background: radial-gradient(circle, #f2efe9 0 55%, transparent 57%); cursor: pointer; padding: 0; }
+  .shutter:active { transform: scale(0.94); }
+  #flash { position: fixed; inset: 0; z-index: 30; background: #fff; opacity: 0; pointer-events: none; }
+  #flash.on { animation: flash 0.45s ease-out; }
+  #fade { position: fixed; inset: 0; z-index: 29; background: #000; opacity: 0; pointer-events: none; }
+  #fade.on { animation: fade 1.2s ease-in-out; }
+  @keyframes fade { 0% { opacity: 0; } 35%, 55% { opacity: 1; } 100% { opacity: 0; } }
+  @keyframes flash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+  .photosheet { width: min(640px, 100%); touch-action: pan-y; }
+  #photoImg { display: block; width: 100%; height: auto; max-height: 56vh; object-fit: contain; background: #e9dcc0; margin: 6px 0 0; border-radius: 6px; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; touch-action: auto; }
+  .photosheet .snote, .restsheet .snote { margin: 8px 4px 0; }
+  #cineText { position: fixed; left: 50%; bottom: calc(40px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 8px); z-index: 9; width: min(620px, calc(100% - 40px)); text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.9s, transform 0.9s; }
+  #cineText.on { opacity: 1; transform: translate(-50%, 0); }
+  #cineLine { margin: 0; font: italic 400 21px/1.4 var(--f-display); color: #f7f1e4; text-shadow: 0 1px 2px #000, 0 0 18px rgba(0,0,0,0.75); text-wrap: balance; }
+  #cineBy { margin: 6px 0 0; font: 500 10.5px/1.4 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: #e2d7c2; text-shadow: 0 1px 2px #000; }
+  #bSkip { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 10; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); font: 600 13px/1 var(--f-body); cursor: pointer; }
+  #bSkip[hidden] { display: none; }
+  #endVeil, #creditsVeil { background: rgba(16, 14, 12, 0.22); }
+  .credits #creditList { margin: 6px 4px 4px; }
+  .credits .cr { margin: 0; padding: 9px 0; text-align: center; opacity: 0; animation: crIn 0.9s forwards; }
+  .credits .cr + .cr { border-top: 1px dashed #d9c9a4; }
+  .credits .cr span { display: block; font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--parch-mute); }
+  .credits .cr b { display: block; margin-top: 2px; font: 400 19px/1.25 var(--f-display); color: var(--parch-ink); text-wrap: balance; }
+  .credits .cr.title b { font-size: 28px; }
+  @keyframes crIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .credits .cr { animation: none; opacity: 1; } #flash.on { animation: none; } }
+  @media (max-width: 700px) { #ponder { top: calc(146px + env(safe-area-inset-top, 0px)); } #cineLine { font-size: 18px; } }
+  @media (max-width: 480px) {
+    .tally { flex-direction: column; align-items: stretch; gap: 5px; padding: 7px 10px; }
+    .tally .sep { display: none; }
+    .tally .t { justify-content: space-between; gap: 12px; }
+    .tally .t b { font-size: 14px; }
+    .tools .row { gap: 5px; }
+    .ib { width: 38px; height: 38px; }
+    #photoBar { padding: 8px 10px; }
+    #photoBar .phint { display: none; }
+    #photoBar .pbgo { justify-content: space-between; }
+  }
+
+  /* ---------- Easy to see: everything over the game a good deal bigger and plainer (--ez is set from the window size, about 2 on a TV) */
+  body.easy #hud, body.easy #toast, body.easy #prompt, body.easy #ponder, body.easy #caption, body.easy #pads, body.easy .veil > *, body.easy #photoBar, body.easy #cineText, body.easy #bSkip, body.easy #nextCard { zoom: var(--ez, 1.6); }
+  body.easy #map { display: none !important; }
+  body.easy .parch { color: #120c06; box-shadow: 0 0 0 4px #f1d58c, 0 0 0 9px #120c06, 0 24px 60px rgba(0,0,0,0.6); }
+  body.easy #caption p, body.easy .poem .ln, body.easy #ponder .note, body.easy #ponder blockquote, body.easy .jtip { color: #120c06; }
+  body.easy #caption h3 { font-size: 28px; }
+  body.easy #toast { background: #120c06; color: #fff8e6; border: 2px solid #f1d58c; font-size: 17px; }
+  body.easy .tally, body.easy .clock, body.easy .ib { background: rgba(10, 8, 6, 0.94); border-color: rgba(255, 248, 230, 0.5); }
+  body.easy .veil > .panel, body.easy .veil > .sheet { max-height: calc((100vh - 32px) / var(--ez, 1.6)); overflow-y: auto; }
+  body.easy #keysDesk, body.easy #keysTouch { display: none !important; }
+  #easyTip { display: none; margin: 0 0 14px; font: 500 15px/1.45 var(--f-body); color: #fff8e6; }
+  body.easy #easyTip { display: block; }
+  #nextCard { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 5; transform: translateX(-50%); display: none; align-items: center; gap: 12px; max-width: min(640px, calc(100% - 32px));
+    padding: 10px 12px 10px 18px; border-radius: 14px; border: 2px solid #f1d58c; background: rgba(10, 8, 6, 0.94); color: #fff8e6; font: 500 16px/1.3 var(--f-body); text-align: left; cursor: pointer; }
+  #nextCard.on { display: flex; }
+  #nextCard kbd { flex: none; font: 600 12px/1 var(--f-mono); background: #f1d58c; color: #120c06; border-radius: 6px; padding: 7px 9px; }
+  body.easy #nextCard { bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+  body.easy #prompt { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); }
+  .touch #nextCard { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 16px; transform: none; max-width: calc(100% - 140px); }
+  /* on a touch screen the Go, Ponder and Jump pads sit along the bottom: the Next card goes above them, full width; the Go pad replaces the G key */
+  body.touch #nextCard, body.easy.touch #nextCard { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; transform: none; max-width: none; }
+  body.touch #nextKey { display: none; }
+  #bGuide { width: 60px; height: 60px; font-size: 13px; }
+  #chapter { position: fixed; left: 50%; top: 20%; transform: translate(-50%, -50%); z-index: 9; width: min(980px, calc(100% - 40px)); box-sizing: border-box; padding: 22px 28px 24px; border-radius: 22px; background: rgba(8, 6, 4, 0.72); text-align: center; opacity: 0; pointer-events: none; transition: opacity 1s; }
+  #chapter.on { opacity: 1; }
+  #chTitle { margin: 0; font: 400 60px/1.1 var(--f-display); color: #fff8e6; text-shadow: 0 2px 3px #000, 0 0 30px rgba(0,0,0,0.9), 0 0 60px rgba(0,0,0,0.7); text-wrap: balance; }
+  #chSub:empty { display: none; }
+  #chSub { margin: 12px 0 0; font: 500 18px/1.4 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: #f1d58c; text-shadow: 0 1px 2px #000, 0 0 16px rgba(0,0,0,0.9); }
+  body.easy #chTitle { font-size: 84px; }
+  body.easy #chSub { font-size: 24px; }
+  body.easy .poem .ln { font-size: 22px; line-height: 1.6; }
+  body.easy .poem .kept { font-size: 13px; color: #3b2f22; }
+  #watchBar { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 9; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 14px; background: rgba(10, 8, 6, 0.9); border: 1px solid rgba(255, 248, 230, 0.3); }
+  #watchBar[hidden] { display: none; }
+  #watchBar .wlab { font: 500 11px/1 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: #f1d58c; padding: 0 6px; }
+  body.easy #watchBar { zoom: var(--ez, 1.6); }
+  body.watch #pads, body.watch #prompt, body.watch #nextCard, body.watch #stick { display: none !important; }
+  #bEasy[aria-pressed="true"] { background: #fff8e6; color: #120c06; border-color: #f1d58c; }
+</style>
+
+<canvas id="view" tabindex="0" aria-label="The creek, drawn as pixel art. The Philosopher King walks where you steer him."></canvas>
+
+<div id="hud">
+  <div class="lefthud"><div class="tally" aria-live="polite">
+    <span class="t">Finds <b id="nFind">0<small>/48</small></b></span>
+    <span class="sep" aria-hidden="true"></span>
+    <span class="t">Solids <b id="nSolid">0<small>/5</small></b></span>
+    <span class="sep" aria-hidden="true"></span>
+    <span class="t">Poems <b id="nPoem">0<small>/5</small></b></span>
+  </div>
+  <p class="clock" id="clock">Day 1 &middot; morning</p></div>
+  <div class="tools">
+    <div class="row">
+      <button class="ib" id="bMap" type="button" aria-label="Map of the valley"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2.5 5l5-2 5 2 5-2v12l-5 2-5-2-5 2z"/><path d="M7.5 3v12M12.5 5v12"/></svg></button>
+      <button class="ib" id="bClose" type="button" aria-pressed="false" aria-label="Close-up of his face"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="9" r="5.5"/><path d="M7.8 8.2h.01M12.2 8.2h.01M8 11.6c1.2.9 2.8.9 4 0"/><path d="M2.5 6V3.5h2.5M15 3.5h2.5V6M17.5 14v2.5H15M5 16.5H2.5V14"/></svg></button>
+      <button class="ib" id="bPhoto" type="button" aria-label="Photo mode"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2.5 6.5h3l1.5-2h6l1.5 2h3v9h-15z"/><circle cx="10" cy="11" r="3"/></svg></button>
+      <button class="ib" id="bJournal" type="button" aria-label="Journal"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 3h9a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3z"/><path d="M4 14a3 3 0 0 1 3-3h9"/></svg></button>
+      <button class="ib" id="bMenu" type="button" aria-label="Menu"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3.5 6h13M3.5 10h13M3.5 14h13"/></svg></button>
+    </div>
+    <canvas id="map" width="168" height="96" aria-label="Map of the creek"></canvas>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+<div id="ponder" class="parch" role="status" aria-live="polite">
+  <button class="say" id="ponSay" type="button" aria-label="Read it aloud"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z"/><path d="M13.2 7.2a4 4 0 0 1 0 5.6M15.5 5a7 7 0 0 1 0 10"/></svg></button>
+  <p class="note" id="ponNote"></p>
+  <blockquote><span id="ponLine"></span><cite id="ponBy"></cite></blockquote>
+</div>
+<button id="nextCard" type="button"><span id="nextLine"></span><kbd id="nextKey">G to go</kbd></button>
+<button id="prompt" type="button" class="hidden"><span id="promptText">Read the poem</span><kbd>E</kbd></button>
+<div id="pads">
+  <div class="turns">
+    <button class="pad ib" id="bTurnL" type="button" aria-label="Turn the view left"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4L3.5 7.5 7 11"/><path d="M4 7.5h7a5 5 0 0 1 0 10H8"/></svg></button>
+    <button class="pad ib" id="bTurnR" type="button" aria-label="Turn the view right"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4l3.5 3.5L13 11"/><path d="M16 7.5H9a5 5 0 0 0 0 10h3"/></svg></button>
+  </div>
+  <button class="pad" id="bAct" type="button" hidden>Read</button>
+  <div class="padrow"><button class="pad" id="bGuide" type="button">Go</button><button class="pad" id="bPonder" type="button">Ponder</button><button class="pad" id="bJump" type="button">Jump</button></div>
+</div>
+<div id="stick"><i></i></div>
+<div id="tapmark"></div>
+
+<div id="caption" class="parch" role="status" aria-live="polite">
+  <button class="say" id="capSay" type="button" aria-label="Read it aloud"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8v4h3l4 3.5v-11L6 8z"/><path d="M13.2 7.2a4 4 0 0 1 0 5.6M15.5 5a7 7 0 0 1 0 10"/></svg></button>
+  <img id="capIcon" class="capicon" alt="">
+  <div class="capbody">
+    <span class="k" id="capK">Found</span>
+    <h3 id="capName">Wooden bowl</h3>
+    <p class="tag" id="capTag"></p>
+    <p id="capText"></p>
+  </div>
+  <span class="n" id="capN"></span>
+</div>
+
+<div class="veil" id="intro">
+  <div class="panel">
+    <p class="eyebrow">The Philosopher King</p>
+    <h1>What the Water Brings</h1>
+    <p>The Philosopher King walks down to the creek to see what the water has brought: King&rsquo;s Creek, the Dry Fork under the bluff, Teal Branch from its spring, the stock pond, the old road and the railroad. What he finds goes on the wall of the studio. Rest when the light goes long, sit out a storm, and look for five old shapes. In ten quiet places a poem is waiting, old ones about water, stars and the shapes of things.</p>
+    <dl class="keys" id="keysDesk">
+      <dt>W A S D / arrows</dt><dd>walk (hold Shift to run)</dd>
+      <dt>Click</dt><dd>walk to a spot</dd>
+      <dt>Space</dt><dd>jump</dd>
+      <dt>E</dt><dd>read a poem, pick something up, go into the studio</dd>
+      <dt>Q</dt><dd>ponder: he holds up his icosahedron, and the valley answers</dd>
+      <dt>P</dt><dd>photo mode: pose him, crown on or off, take a picture</dd>
+      <dt>B</dt><dd>easy to see: big, bold and read aloud</dd>
+      <dt>Drag &middot; Z X &middot; R F</dt><dd>turn and tilt the view</dd>
+      <dt>Wheel &middot; + -</dt><dd>zoom, right in to his face</dd>
+      <dt>T &middot; V</dt><dd>close-up of his face &middot; reset the view</dd>
+      <dt>J &middot; M &middot; N</dt><dd>journal &middot; the valley map &middot; hide the small map</dd>
+    </dl>
+    <dl class="keys hidden" id="keysTouch">
+      <dt>Drag left side</dt><dd>walk; drag further to run</dd>
+      <dt>Tap</dt><dd>walk to a spot</dd>
+      <dt>Drag right side</dt><dd>turn and tilt the view; pinch to zoom right in</dd>
+      <dt>Face button</dt><dd>a close-up of his face (press again to go back)</dd>
+      <dt>Ponder</dt><dd>he holds up his icosahedron, and nearby finds catch the light</dd>
+      <dt>Camera button</dt><dd>photo mode: pose him and take a picture</dd>
+      <dt>Buttons</dt><dd>jump, and read when he reaches a poem; tap the small map for the whole valley</dd>
+    </dl>
+    <p id="easyTip">Easy to see is on: everything is big, and the game reads things out. Press G, or A on a controller, and he walks to the next thing. Or choose Watch the story, sit back and listen.</p>
+    <p class="loadline" id="loadline" role="status">Walking down to the water&hellip;</p>
+    <div class="go">
+      <button class="btn gold" id="bStart" type="button" disabled>Start</button>
+      <button class="btn" id="bWatch" type="button">Watch the story</button>
+      <button class="btn" id="bEasy" type="button" aria-pressed="false">Easy to see: off</button>
+      <button class="btn" id="cardBtn" type="button" aria-haspopup="dialog">Character card</button>
+    </div>
+  </div>
+</div>
+
+<div class="veil" id="menu" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+    <button class="x" id="menuClose" type="button" aria-label="Close the menu">&times;</button>
+    <h2 id="menuTitle">Menu</h2>
+    <div class="setrow"><span class="lab">Quality</span><div class="seg" id="segQual"><button type="button" data-v="low">Low</button><button type="button" data-v="medium">Medium</button><button type="button" data-v="high">High</button></div></div>
+    <p class="stat"><span id="qualNote"></span><br><span id="detStats" aria-live="polite"></span></p>
+    <div class="setrow"><span class="lab">View</span><div class="seg"><button type="button" id="mTurnL">Turn left</button><button type="button" id="mTurnR">Turn right</button><button type="button" id="mHigher">Higher</button><button type="button" id="mLower">Lower</button><button type="button" id="mZoomIn">Closer</button><button type="button" id="mZoomOut">Farther</button><button type="button" id="mClose">His face</button><button type="button" id="mReset2">Reset view</button></div></div>
+    <div class="setrow"><span class="lab">Sound</span><div class="seg" id="segSound"><button type="button" data-v="on">On</button><button type="button" data-v="off">Off</button></div></div>
+    <div class="setrow"><span class="lab">Easy to see</span><div class="seg" id="segEasy"><button type="button" data-v="on">On</button><button type="button" data-v="off">Off</button></div></div>
+    <div class="setrow" id="voiceRow"><span class="lab">Read aloud</span><div class="seg" id="segVoice"><button type="button" data-v="on">On</button><button type="button" data-v="off">Off</button></div></div>
+    <div class="setrow"><span class="lab">More</span><div class="seg"><button type="button" id="mWatch">Watch the story</button><button type="button" id="mPhoto">Photo mode</button><button type="button" id="mCard">Character card</button><button type="button" id="mHelp">Controls</button></div></div>
+    <div class="setrow"><span class="lab">Progress</span><div class="seg"><button type="button" id="mReset">Start over</button></div></div>
+    <p class="loadline" id="resetNote" style="margin:8px 0 0" hidden>Tap Start over again to clear the finds and poems on this device.</p>
+  </div>
+</div>
+
+<div class="veil" id="poemVeil" hidden>
+  <article class="sheet parch" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <button class="x" id="poemClose" type="button" aria-label="Close the poem">&times;</button>
+    <p class="spot" id="pSpot">The bench</p>
+    <h3 id="pTitle">A poem for the creek</h3>
+    <p class="by" id="pBy">by the Philosopher King</p>
+    <div class="poem" id="pPage"></div>
+    <div class="done"><button class="btn small" id="poemSay" type="button">Read aloud</button><button class="btn small" id="poemRest" type="button" hidden>Rest here a while</button><button class="btn small" id="poemDone" type="button">Back to the creek</button></div>
+  </article>
+</div>
+
+<div class="veil" id="journalVeil" hidden>
+  <article class="sheet parch" role="dialog" aria-modal="true" aria-labelledby="jTitle">
+    <button class="x" id="journalClose" type="button" aria-label="Close the journal">&times;</button>
+    <p class="spot">His commonplace book</p>
+    <h3 id="jTitle">What the water brought</h3>
+    <div class="jhead"><span>So far</span><span id="jFindN"></span></div>
+    <div id="jBook"></div>
+  </article>
+</div>
+
+<div class="veil" id="doneVeil" hidden>
+  <article class="sheet parch" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+    <p class="spot">The studio</p>
+    <h3 id="doneTitle">Every box is full</h3>
+    <p style="margin:6px 4px 12px;font:italic 400 16px/1.5 var(--f-body);color:#4a3c2a">Forty-eight things the water brought, hung in pine boxes, and ten old poems read where they belong. The creek will go on bringing things. It has nowhere else to put them.</p>
+    <div class="done"><button class="btn small" id="doneClose" type="button">Keep wandering</button></div>
+  </article>
+</div>
+
+<div class="veil" id="studioVeil" hidden>
+  <article class="sheet parch studiosheet" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+    <button class="x" id="studioClose" type="button" aria-label="Close the studio">&times;</button>
+    <p class="spot">At the trailhead</p>
+    <h3 id="sTitle">The studio</h3>
+    <p class="snote" id="sNote"></p>
+    <div class="sgrid" id="sGrid"></div>
+    <div class="jhead"><span id="sCount"></span><span></span></div>
+    <div class="done"><button class="btn small" id="studioRest" type="button">Sit in his chair a while</button><button class="btn small" id="studioDone" type="button">Back to the creek</button></div>
+  </article>
+</div>
+
+<div class="veil" id="restVeil" hidden>
+  <article class="sheet parch restsheet" role="dialog" aria-modal="true" aria-labelledby="restTitle">
+    <button class="x" id="restClose" type="button" aria-label="Close">&times;</button>
+    <p class="spot" id="restWhere">On the bench</p>
+    <h3 id="restTitle">Rest a while</h3>
+    <p class="snote" id="restNote"></p>
+    <div class="restopts" id="restOpts"></div>
+  </article>
+</div>
+
+<div class="veil" id="mapVeil" hidden>
+  <article class="sheet parch mapsheet" role="dialog" aria-modal="true" aria-labelledby="mapTitle">
+    <button class="x" id="mapClose" type="button" aria-label="Close the map">&times;</button>
+    <p class="spot">Field map</p>
+    <h3 id="mapTitle">The valley</h3>
+    <canvas id="bigMap" aria-label="Map of the valley: the parts he has walked are drawn in, the rest is still blank paper"></canvas>
+    <p class="note" id="mapNote"></p>
+  </article>
+</div>
+
+<div id="photoBar" hidden role="group" aria-label="Photo mode">
+  <div class="pbrow">
+    <div class="pgroup"><span class="lab">Pose</span><div class="seg" id="segPose"><button type="button" data-v="stand">Hands behind</button><button type="button" data-v="icosa">Icosahedron</button><button type="button" data-v="bottle">The bottle</button><button type="button" data-v="find">A find</button></div></div>
+    <div class="pgroup"><span class="lab">Crown</span><div class="seg" id="segCrown"><button type="button" data-v="on">On</button><button type="button" data-v="off">Off</button></div></div>
+    <div class="pgroup"><span class="lab">Frame</span><div class="seg" id="segFrame"><button type="button" data-v="tag">Specimen tag</button><button type="button" data-v="plain">Plain</button></div></div>
+  </div>
+  <div class="pbgo"><button class="btn small" id="bPhotoX" type="button">Done</button><button class="shutter" id="bShutter" type="button" aria-label="Take the picture"></button><span class="phint">Drag to turn the view, scroll or pinch to zoom. Space takes the picture.</span></div>
+</div>
+<div id="flash"></div>
+<div id="fade"></div>
+<div id="chapter" aria-live="polite"><p id="chTitle"></p><p id="chSub"></p></div>
+<div id="watchBar" hidden role="group" aria-label="Watching the story"><span class="wlab">Watching</span><button type="button" class="btn small" id="wPause">Pause</button><button type="button" class="btn small" id="wSkip">Skip</button><button type="button" class="btn small" id="wStop">Stop</button></div>
+<div id="cineText" aria-live="polite"><p id="cineLine"></p><p id="cineBy"></p></div>
+<button id="bSkip" type="button" hidden>Skip</button>
+
+<div class="veil" id="photoVeil" hidden>
+  <article class="sheet parch photosheet" role="dialog" aria-modal="true" aria-labelledby="phTitle">
+    <button class="x" id="photoClose" type="button" aria-label="Close">&times;</button>
+    <p class="spot">Photo mode</p>
+    <h3 id="phTitle">The picture</h3>
+    <img id="photoImg" alt="Picture of the Philosopher King at the creek">
+    <p class="snote" id="photoNote">Download it, or long-press the picture on a phone (right-click on a computer) to keep it.</p>
+    <div class="done"><button class="btn small" id="photoSave" type="button">Download</button><button class="btn small" id="photoAgain" type="button">Take another</button><button class="btn small" id="photoDone" type="button">Back to the creek</button></div>
+  </article>
+</div>
+
+<div class="veil" id="endVeil" hidden>
+  <article class="sheet parch" role="dialog" aria-modal="true" aria-labelledby="eTitle">
+    <p class="spot">At the mouth of the cave</p>
+    <h3 id="eTitle">The last page</h3>
+    <p class="by" id="eBy">by the Philosopher King</p>
+    <div class="poem" id="ePage"></div>
+    <div class="done"><button class="btn small" id="eSay" type="button">Read aloud</button><button class="btn small" id="eNext" type="button">Turn the page</button></div>
+  </article>
+</div>
+
+<div class="veil" id="creditsVeil" hidden>
+  <article class="sheet parch credits" role="dialog" aria-modal="true" aria-labelledby="crTitle">
+    <p class="spot" id="crTitle">The end, for now</p>
+    <div id="creditList"></div>
+    <div class="done"><button class="btn small" id="creditsDone" type="button">Keep wandering</button></div>
+  </article>
+</div>
+
+<div id="cardWrap" hidden role="dialog" aria-modal="true" aria-labelledby="cardName">
+  <article class="card">
+    <button id="cardClose" type="button" aria-label="Close the card">&times;</button>
+    <div id="cardFront">
+      <div class="art"><img id="cardArt" alt="Drawing of the Philosopher King"><span class="cls">Wandering sage</span><div class="badge"><img id="cardSprite" alt="Pixel sprite"></div></div>
+      <h2 id="cardName">The Philosopher King</h2>
+      <p class="who">The Philosopher King</p>
+      <p class="tag">Keeper of the creek &middot; Level 92</p>
+      <ul id="cardStats"></ul>
+      <p class="items"><strong>Carries</strong> paper crown &middot; wooden icosahedron &middot; bottle with a tiny king</p>
+      <p class="flavor">Walks the creek with his hands behind his back. Picks up whatever he finds and turns it over slowly, as if it might answer.</p>
+      <button class="turn" id="cardTurn" type="button">Turn over &middot; his poem <span aria-hidden="true">&#x21bb;</span></button>
+    </div>
+    <div id="cardBack" hidden>
+      <h3 class="poemhead" id="poemTitle">A poem for the creek</h3>
+      <p class="poemby" id="poemBy">by the Philosopher King</p>
+      <div class="poem" id="poemPage"></div>
+      <button class="turn" id="cardTurnBack" type="button">Turn back <span aria-hidden="true">&#x21ba;</span></button>
+    </div>
+  </article>
+</div>
+
+<script>/*@@THREE@@*/</script>
+<script>/*@@GAME@@*/</script>
+
+</body></html>
