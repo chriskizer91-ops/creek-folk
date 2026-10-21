@@ -1,0 +1,18 @@
+{
+  "name": "creekfolk2",
+  "version": "0.1.0",
+  "description": "Creekfolk 2: the Leavers. Eight creekfolk heal a new valley in one real month.",
+  "private": true,
+  "license": "ISC",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "build:dev": "node tools/build.mjs --dev",
+    "vendor": "node tools/vendor-three.mjs",
+    "test": "node tools/build.mjs --dev && node tools/determinism.cjs 5"
+  },
+  "devDependencies": {
+    "esbuild": "0.23.1",
+    "playwright": "1.56.0",
+    "three": "0.186.0"
+  }
+}
