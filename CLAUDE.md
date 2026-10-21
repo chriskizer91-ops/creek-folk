@@ -43,6 +43,12 @@ name from earlier files.
 | `src/sim/fauna.js` | Gifts that live (Phase 3B): flowers, fruit trees, goats, bees, fish, birds (`world.fauna`); goats move each world tick. |
 | `src/sim/gift.js` | The player's 12-hour gift (17 kinds in `GIFT_KINDS`), the belief that the creek gives, requests, keeping watch, offerings, rhythm, the one who believes in you. |
 | `src/sim/temple.js` | The temple (`STRUCTURES.temple`, 3 stages x 12 parts) and its pace from giving, timber, carvings, the Hall of the Ancestors for valleys with no giver, the spring. Tunables in `TEMPLE`. |
+| `src/sim/looks.js` | Phase 3C: 24 fur colours, coat patterns and markings, things to wear by passion, all inherited (`looksOf`, `looksInherit`; a local `Rng`, never `world.rng`). |
+| `src/sim/homes.js` | Phase 3C: porches and hearths (paced), more gardens and beds, decorations by the door from what the owner loves. Tunables in `HOMES`. |
+| `src/sim/grove.js` | Phase 3C: memorial tree kinds by family, growth all year, falls into nurse logs (bounded); goats' kids, wool blankets. Tunables in `GROVE`, `GOATS`. |
+| `src/sim/beavers.js` | Phase 3C: the beavers (`world.beavers`): arrival, the lodge, dam-tending, kits. Tunables in `BEAVER`. |
+| `src/sim/skycal.js` | Phase 3C: the sky stones that find their midwinter (`world.skycal`). |
+| `src/sim/returning.js` | Phase 3C: the procession path and the Returning every midwinter (`world.returning`); also the 3C hooks `lifeTick3C`, `lifeOptions3C`, `devTrigger3C`, `partDone3C`. Tunables in `RETURNING`. |
 | `src/sim/hooks.js` | `newValley()` (five founders) and `upgradeWorld()` (runs on every load; migrates old saves). |
 | `src/sim/api.js` | `CreekSim`, the surface used by Node tools. |
 | `src/sim/worker.js` | Web Worker message handler (catch-up). Only in the worker build. |
@@ -54,7 +60,14 @@ name from earlier files.
 | `src/view/dev.js` | Developer menu (hidden in the game, a Dev button in the dev build) and `devNow()`. |
 | `src/view/patches.js` | View patches for lives (body size, elder fur, panel lines, activity text) and the background-tab timer. |
 | `src/view/minds-view.js` | Gift button and sheet (grouped gifts, the standing request, offerings); Stories/Places/Customs in the village sheet; a creekfolk's Stories tab. |
-| `src/view/belief-view.js` | The temple and the Hall of the Ancestors drawn part by part; flowers, goats, bees, fish, birds; offerings and the lantern; stars in the water, the rainbow, snow; the wave; the village's Temple tab. |
+| `src/view/belief-view.js` | The temple and the Hall of the Ancestors drawn part by part; flowers, goats, bees, fish, birds; offerings and the lantern; stars in the water, the rainbow, snow; the wave; the village's Temple tab. `VIEW_EXTRAS`: later view files register drawing classes here. |
+| `src/view/looks-view.js` | Phase 3C: coats, markings, worn things, ages at a glance, the treasure a believer wears; `looksFurColor`. |
+| `src/view/homes-view.js` | Phase 3C: doors, decorations, porches and hearths, markers at named places, the land beyond the valley (lent to then-and-now). |
+| `src/view/life-view.js` | Phase 3C: the memorial grove (instanced), nurse logs, goats' kids, butterflies, herons, dawn mist; Land tab lines. |
+| `src/view/soundscape.js` | Phase 3C: frogs, birds and insects that grow fuller as the wetland heals (WebAudio, hangs off `Sound`). |
+| `src/view/thennow.js` | Phase 3C: hold the button (or T) to see the valley as it was on day one, from the same camera. |
+| `src/view/beavers-view.js` | Phase 3C: beavers, the lodge, stick dams. |
+| `src/view/returning-view.js` | Phase 3C: the sky stones, the procession path, the Returning (gold water and the sun's road, glowing fish, lanterns, fireflies), the pyramid's lanterns, the Temple tab's 3C lines. |
 | `src/view/boot.js` | Starts the app. |
 | `src/page-head.html`, `src/page-tail.html` | The page around the scripts (CSS, fonts, HUD markup). |
 
@@ -174,6 +187,39 @@ Phase 1 view edits; later edits were made directly.
   (`beliefs.beyond`) is sure the gifts come from someone beyond the valley; it waves when
   the page opens (view only, `waveFor`). Passed to a child or young friend (`passBeyond`).
 - Core hooks are marked `// BELIEF:`.
+
+## Life and the ending (Phase 3C)
+
+- **Looks** (`looks.js`): 24 fur colours in a ring (kin look alike), coat patterns and
+  face markings each from one parent (5-6% new), a thing to wear by their signature passion
+  (`c.sig`), children with big heads, elders grey with a cane; a believer wears the treasure
+  they found. Looks use a local `Rng` so they never change what happens.
+- **Homes** (`homes.js`): porch and hearth levels (rest only, no capacity; paced: one at a
+  time, at most one every 8 hours), up to three gardens with four beds, decorations by the
+  door; doors in the owner's fur colour; a marker at every named place.
+- **The grove** (`grove.js`): tree kinds by family line (70%) or by what they loved; trees
+  grow for life; ordinary trees fall after 180-240 days (founders' 400-460) into nurse logs
+  (at most 24, 30 days each); at most 240 standing. Goats have kids in spring (herd at most 8),
+  wool becomes blankets.
+- **Beavers** (`beavers.js`): arrive after day 120 once the last year's driest share is 0.55
+  (by day 210 whatever); a lodge in the deepest pond; they mend dams and build them up to
+  0.25 m above the floor (the creekfolk stop at 0.1), within the drop rule, one dam at most
+  every 3 hours; creekfolk skip a dam a beaver is seeing to (`s.beaver`).
+- **The sky stones** (`skycal.js`): begun after their first midwinter; the markers go in on
+  the mornings the sun rises behind them, so they're done about real day 13. Midwinter
+  morning gathering there.
+- **The Returning** (`returning.js`): when the temple is done, a procession path in 12
+  stretches, one a season (24 real days); then every midwinter: dawn on the temple steps (the
+  sunrise through the crown, gold water), the walk to the Spring, at night the glowing fish
+  run and lanterns along the channels. Each adds lanterns on the pyramid (one per passing
+  since the last), a carving and a verse (`RETURNING.verses` kept). A valley without a
+  finished temple gets the fish run once its driest share is 0.7. `returningNext(w)`.
+- **Coming home**: a visitor may stay (15%, if there's room and someone they love); a fresh
+  mind, the same name, family, looks and friends, and the craft. **Legends**: stories over 40
+  days old that a third still tell (`w.legends`, 24 kept). The First Pool is named in the
+  procession.
+- **Soundscape and then-and-now**: view only (`soundscape.js`, `thennow.js`).
+- Core hooks are marked `// 3C:`.
 
 ## Lives
 
