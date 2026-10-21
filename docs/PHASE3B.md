@@ -94,7 +94,8 @@ story grows up about the half-built temple.
 
 **A valley with no giver** begins the Hall of the Ancestors near the memorial grove on day
 30 instead: a ring of carved ancestor stones, a hall, and a lantern tower, the same
-machinery at full speed on time alone. If gifts start later, the temple can still begin.
+machinery at full speed on time alone, tuned to finish in the middle of month 11 like an
+every-other-day temple. If gifts start later, the temple can still begin.
 
 **The spring.** Once a third of the village believes, the next visitor or traveler brings
 news: "the creek begins at a spring, up past the head of this valley, where the water comes

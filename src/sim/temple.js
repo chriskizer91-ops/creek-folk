@@ -28,6 +28,7 @@ var TEMPLE = {
   startWindow: 14, // real days
   minDay: 7, // the temple can't begin before week 2
   feelPerPart: 8.25, // real days of "the creek has answered" per part, at full speed
+  ancestorsPerPart: 7.9, // the Hall of the Ancestors, on time alone: done in the middle of month 11
   firstFeel: 0.7, // the first part comes sooner: they're eager
   stopDays: 6, // no gift for this long: the temple stops
   greatDay: 30, // a valley with no temple by now begins its own great project
@@ -168,7 +169,7 @@ STRUCTURES.ancestors = {
         templePart("fifth ring", { stone: 5 }, 1300, { heavy: !0, dryseason: !0 }),
         templePart("lamp room floor", { timber: 3 }, 1500),
         templePart("lamp room walls", { clay: 6 }, 1500, { cure: 40000, dry: !0 }),
-        templePart("lamp", { clay: 4, glowcap: 2 }, 1500, { cure: 20000 }),
+        templePart("lamp", { clay: 4, reeds: 2 }, 1500, { cure: 20000 }), // a clay lamp with a reed wick (glowcaps are gathered only at night, and it stuck)
         templePart("roof posts", { timber: 3, stone: 4 }, 1500, { heavy: !0 }),
         templePart("roof", { tile: 6 }, 2000, { heavy: !0 }),
         templePart("crown stone", { stone: 3 }, 1500, { heavy: !0, dryseason: !0 }),
@@ -313,7 +314,7 @@ function greatTick(w, g, pace) {
       g.storied = 0;
     }
     g.state = "waiting";
-    g.feel = +(g.feel + (pace * LIFE.tick) / (TEMPLE.feelPerPart * 86400)).toFixed(5);
+    g.feel = +(g.feel + (pace * LIFE.tick) / ((g.kind === "temple" ? TEMPLE.feelPerPart : TEMPLE.ancestorsPerPart) * 86400)).toFixed(5);
     if (g.feel >= 1) {
       g.feel = +(g.feel - 1).toFixed(5);
       b.locked = !1;

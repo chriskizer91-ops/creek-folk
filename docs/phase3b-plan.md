@@ -176,3 +176,7 @@ valley ends up different. Gifts still never decide survival.
   gifts in fourteen days; they give three or four), so that valley builds the Hall of the
   Ancestors, as the brief says for valleys that never reach the threshold. Half speed is
   for a temple already begun, when the giving slows. The year runs test both.
+- **The Hall of the Ancestors has its own pace** (`TEMPLE.ancestorsPerPart`, 7.9 days a
+  part): it begins on day 30, so at the temple's pace it finished just after day 330. Its
+  lamp is clay with a reed wick; glowcaps can only be gathered at night, and the lamp sat
+  waiting until they made do.
