@@ -134,7 +134,7 @@ Phase 1 view edits; later edits were made directly.
 - **The creek gives.** `creature.beliefs.giver` (0..1) is the belief that the creek
   gives; above 0.5 is a believer. Every gift is noticed by everyone awake (those who saw
   it most), answered requests count double, a rainbow is a sign. Children start with
-  0.75 of their parents' belief. The least open grown-ups of their valley (about one in
+  0.95 of their parents' belief (`GIFT.inherit`). The least open grown-ups of their valley (about one in
   seven, `doubtLine`) stay doubters ("it's only luck"). The first believer names the
   **Giving Place** (`world.givingPlace`): the terrace edge above the creek nearest the
   village, kept clear for the temple (`TEMPLE_ROOM`, 9.5 m).
@@ -144,7 +144,9 @@ Phase 1 view edits; later edits were made directly.
   and sometimes leave an offering for the giver (`world.offerings`). Every gift is a
   notch on the Giving Stone (`stats.gifts`). After 3 days with no gift (or 1.5 times the
   rhythm they know, `restAfter`): "the creek is resting" and a lantern
-  (`world.lantern`). Rhythm is noticed in valley days and the valley hour (`giftRhythm`,
+  (`world.lantern`); while it rests, belief fades very slowly (`GIFT.restFade`) and doubters
+  barely sway believers, so most still believe after a month away
+  (`tools/away-test.cjs`). Rhythm is noticed in valley days and the valley hour (`giftRhythm`,
   `rhythmText`): "the creek gives at dawn, every twenty-four days".
 - **Gifts**: 17 kinds in four groups (`GIFT_KINDS`, `giftNeedWhy`): weather (rain, warm
   day, snow day, starry night, rainbow), living things (seeds, flowers, fruit trees,

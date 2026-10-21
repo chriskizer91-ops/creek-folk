@@ -11030,6 +11030,8 @@ ACTIONS.tendgoat = {
 var GIFT = {
   every: 12 * 3600, // seconds between gifts
   restDays: 3, // after this long without a gift (once there have been a few), the creek is resting
+  restFade: 0.00001, // belief lost per life tick while the creek rests (about 0.0014 a day)
+  inherit: 0.95, // a child starts with this much of its parents' belief
   requestLife: 24 * 3600, // a request stands until the next gift, or this long
   requestGap: 3 * 3600, // at least this long between requests
   watchGap: 2 * 3600, // a creekfolk keeps watch at most this often
@@ -11687,7 +11689,10 @@ function giftChat(w, a, b) {
   if (Math.abs(diff) < 0.05) return;
   let r = relation(b, a),
     trust = honestyRate(r) * (0.5 + clamp(r.warmth, 0, 1));
-  bb.giver = +clamp(bb.giver + diff * 0.1 * trust * (b.stage === "child" ? 2 : 1), 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
+  let pull = diff * 0.1 * trust * (b.stage === "child" ? 2 : 1);
+  // While the creek rests, believers are hard to talk out of it: "it's only resting".
+  if (pull < 0 && w.giftsStopped) pull *= 0.05;
+  bb.giver = +clamp(bb.giver + pull, 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
   if (ba.giver > 0.5 && bb.giver > 0.3) wordFor(w, b, "giver");
   if (Math.abs(diff) > 0.55 && a.stage !== "child" && b.stage !== "child" && w.rng.chance(0.12) && w.t - (w.lastArgument || -1e9) > 86400) {
     w.lastArgument = w.t;
@@ -11701,10 +11706,11 @@ function giftChat(w, a, b) {
   if (ba.beyond && !bb.beyond && w.rng.chance(0.04)) beyondTalk(w, a, b);
 }
 
-// A child grows up with its family's belief.
+// A child grows up with most of its family's belief (it fades a little each generation
+// that sees no gifts).
 function inheritBelief(w, c, a, b) {
   let g = ((a.beliefs ? a.beliefs.giver : 0) + (b.beliefs ? b.beliefs.giver : 0)) / 2;
-  beliefsOf(c).giver = +Math.min(0.75 * g, beliefCap(w, c)).toFixed(3);
+  beliefsOf(c).giver = +Math.min(GIFT.inherit * g, beliefCap(w, c)).toFixed(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -11789,8 +11795,9 @@ function giftTick(w) {
   }
   // Doubters talk themselves back out of it: "it's only luck".
   for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.45 && !c.visitor && beliefCap(w, c) < 0.5) c.beliefs.giver = +Math.max(0.45, c.beliefs.giver - 0.002).toFixed(4);
-  // Faith fades only very slowly while the creek rests.
-  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - 0.0001 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
+  // Faith fades only very slowly while the creek rests: most still believe after a few
+  // weeks away, fewer after a month or two, as those who saw the gifts grow old.
+  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - GIFT.restFade).toFixed(5);
 }
 
 // What decide() can choose from this file: keeping watch, tending goats, the spring.
@@ -12163,7 +12170,7 @@ function greatTick(w, g, pace) {
         logEvent(w, 3, `No one has lifted a stone at ${txt.the} for days. "We'll wait for a sign," they say. They sweep the stones, leave small gifts there, and wait.`, [], s, "temple");
       } else if (!g.storied && w.t - g.stoppedAt > 4 * 86400) {
         g.storied = 1;
-        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 1, believers(w));
+        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 2, believers(w));
       }
       return;
     }
@@ -23550,6 +23557,8 @@ ACTIONS.tendgoat = {
 var GIFT = {
   every: 12 * 3600, // seconds between gifts
   restDays: 3, // after this long without a gift (once there have been a few), the creek is resting
+  restFade: 0.00001, // belief lost per life tick while the creek rests (about 0.0014 a day)
+  inherit: 0.95, // a child starts with this much of its parents' belief
   requestLife: 24 * 3600, // a request stands until the next gift, or this long
   requestGap: 3 * 3600, // at least this long between requests
   watchGap: 2 * 3600, // a creekfolk keeps watch at most this often
@@ -24207,7 +24216,10 @@ function giftChat(w, a, b) {
   if (Math.abs(diff) < 0.05) return;
   let r = relation(b, a),
     trust = honestyRate(r) * (0.5 + clamp(r.warmth, 0, 1));
-  bb.giver = +clamp(bb.giver + diff * 0.1 * trust * (b.stage === "child" ? 2 : 1), 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
+  let pull = diff * 0.1 * trust * (b.stage === "child" ? 2 : 1);
+  // While the creek rests, believers are hard to talk out of it: "it's only resting".
+  if (pull < 0 && w.giftsStopped) pull *= 0.05;
+  bb.giver = +clamp(bb.giver + pull, 0, diff > 0 ? Math.max(bb.giver, beliefCap(w, b)) : 1).toFixed(3);
   if (ba.giver > 0.5 && bb.giver > 0.3) wordFor(w, b, "giver");
   if (Math.abs(diff) > 0.55 && a.stage !== "child" && b.stage !== "child" && w.rng.chance(0.12) && w.t - (w.lastArgument || -1e9) > 86400) {
     w.lastArgument = w.t;
@@ -24221,10 +24233,11 @@ function giftChat(w, a, b) {
   if (ba.beyond && !bb.beyond && w.rng.chance(0.04)) beyondTalk(w, a, b);
 }
 
-// A child grows up with its family's belief.
+// A child grows up with most of its family's belief (it fades a little each generation
+// that sees no gifts).
 function inheritBelief(w, c, a, b) {
   let g = ((a.beliefs ? a.beliefs.giver : 0) + (b.beliefs ? b.beliefs.giver : 0)) / 2;
-  beliefsOf(c).giver = +Math.min(0.75 * g, beliefCap(w, c)).toFixed(3);
+  beliefsOf(c).giver = +Math.min(GIFT.inherit * g, beliefCap(w, c)).toFixed(3);
 }
 
 // ---------------------------------------------------------------------------
@@ -24309,8 +24322,9 @@ function giftTick(w) {
   }
   // Doubters talk themselves back out of it: "it's only luck".
   for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.45 && !c.visitor && beliefCap(w, c) < 0.5) c.beliefs.giver = +Math.max(0.45, c.beliefs.giver - 0.002).toFixed(4);
-  // Faith fades only very slowly while the creek rests.
-  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - 0.0001 * (c.beliefs.seen > 10 ? 0.5 : 1)).toFixed(4);
+  // Faith fades only very slowly while the creek rests: most still believe after a few
+  // weeks away, fewer after a month or two, as those who saw the gifts grow old.
+  if (w.giftsStopped) for (let c of w.creatures) if (c.beliefs && c.beliefs.giver > 0.3) c.beliefs.giver = +Math.max(0.3, c.beliefs.giver - GIFT.restFade).toFixed(5);
 }
 
 // What decide() can choose from this file: keeping watch, tending goats, the spring.
@@ -24683,7 +24697,7 @@ function greatTick(w, g, pace) {
         logEvent(w, 3, `No one has lifted a stone at ${txt.the} for days. "We'll wait for a sign," they say. They sweep the stones, leave small gifts there, and wait.`, [], s, "temple");
       } else if (!g.storied && w.t - g.stoppedAt > 4 * 86400) {
         g.storied = 1;
-        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 1, believers(w));
+        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 2, believers(w));
       }
       return;
     }

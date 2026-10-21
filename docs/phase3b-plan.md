@@ -180,3 +180,9 @@ valley ends up different. Gifts still never decide survival.
   part): it begins on day 30, so at the temple's pace it finished just after day 330. Its
   lamp is clay with a reed wick; glowcaps can only be gathered at night, and the lamp sat
   waiting until they made do.
+- **Belief holds while the creek rests.** Tested by stopping the gifts after two months
+  (`tools/away-test.cjs`): belief used to fall below half the village within about ten
+  days, because each new generation started with three quarters of its parents' belief and
+  doubters talked the rest down. Now children start with 0.95 of it, the fade while resting
+  is about 0.0014 a day, and doubters barely sway believers until the gifts return. The
+  temple's "waiting" story is weightier, so the village keeps telling it.

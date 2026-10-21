@@ -305,7 +305,7 @@ function greatTick(w, g, pace) {
         logEvent(w, 3, `No one has lifted a stone at ${txt.the} for days. "We'll wait for a sign," they say. They sweep the stones, leave small gifts there, and wait.`, [], s, "temple");
       } else if (!g.storied && w.t - g.stoppedAt > 4 * 86400) {
         g.storied = 1;
-        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 1, believers(w));
+        newStory(w, "temple-wait", { what: txt.levels[Math.min(s.level, 2)] }, s, 2, believers(w));
       }
       return;
     }
