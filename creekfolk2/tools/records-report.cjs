@@ -37,7 +37,17 @@ for (const f of process.argv.slice(2)) {
     deep = mud.reduce((a, r) => Math.max(a, r.b.reduce((s, x) => s + x[1], 0)), 0),
     founders = alive.filter((c) => c.founder).length;
   console.log(`\n${path.basename(f)}: day ${(w.t / 86400).toFixed(1)}, ${alive.length} creekfolk, ${founders} of the eight living${w.lastFounder ? `; the last of the eight, ${w.lastFounder.name}, passed on day ${(w.lastFounder.t / 86400).toFixed(1)}` : ""}`);
-  console.log(`  old words: ${kept} said the old way, ${changed} changed, ${lost} no one says (of ${Object.keys(ov.words).length})`);
+  let uses = 0, other = 0;
+  for (const k in ov.words)
+    for (const c of alive) {
+      const e = c.lex[k];
+      if (!e) continue;
+      let b = null, bs = -1;
+      for (const x in e) if (e[x] > bs) (bs = e[x]), (b = x);
+      uses++;
+      if (b !== ov.words[k]) other++;
+    }
+  console.log(`  old words: ${kept} said the old way by most, ${changed} changed, ${lost} no one says (of ${Object.keys(ov.words).length}); ${Math.round((100 * other) / Math.max(1, uses))}% of their uses are another word`);
   console.log(`  customs: ${Object.entries(w.customs || {}).map(([k, v]) => k + (v.old ? " (old)" : "")).join(", ")}; the creek thanked ${(w.culture && w.culture.thanks) || 0} times`);
   for (const s of old) {
     const hs = held(s), same = hs.filter((c) => S.storyText(w, s, c.lore[s.id].v) === S.storyText(w, s, s.truth)).length;

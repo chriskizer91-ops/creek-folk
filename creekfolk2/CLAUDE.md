@@ -66,12 +66,17 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/cf2-branches.js` | The Dry Fork and the spring branch: laid out, carved, their water (`world.creek.br`), the cells along them. Tunables in `CF2_BRANCH`. |
 | `src/sim/cf2-scale.js` | Real scale: homes and the village for person-sized creekfolk, counts of things in the bigger valley, how far they notice; 3C's grove, sky stones and the beavers' side dams at this scale. `CF2_SCALE`. |
 | `src/sim/cf2-life.js` | Eight founders; life stages for the one-month arc. |
+| `src/sim/cf2-culture.js` | The founders' culture: the old valley's words (`world.oldValley`, each founder with a chance of their own accent; children drift them), its customs on day one (`world.customs.*.old`), thanking the creek at the first storm of each wet season, and the old valley's stories (kinds `ov-*`, already drifted). `CULTURE`, `OLD_STORIES`. |
+| `src/sim/cf2-records.js` | What happened, written in the land: a band in the creek's bank for every flood (`world.records.mud`), the dams' record (`world.records.dams`), patches from repairs (`s.patches`); `bankAt`, `firstDamBank`, `depthWords` for the page. `RECORDS`. |
+| `src/sim/cf2-chronicle.js` | The chronicle, a page of facts for every real day (`world.chronicle`), and the last founder's passing (`world.lastFounder`, a story, a memory for everyone). `CHRONICLE`. |
+| `src/sim/cf2-carve.js` | Carvings (`world.carvings`): sand by the creek, clay tablets by homes, standing stones at the Telling Stones; wear, reading, copying, recutting and "correcting". Goal and action `carve`. `CARVE`. |
 | `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
 | `src/view/clock.js` | The page's clock: `devNow()`, the player's correction, the dev offset, the database name. |
 | `src/view/vworld.js` | The page's copy of the valley. |
 | `src/view/words.js`, `sheets.js` | Plain words about creekfolk (from Creekfolk 1's interface); the village and mind sheets. |
+| `src/view/records-view.js` | The records on the page: the creek's bank as a cross-section (`bankSheet`, opened by tapping the creek), the Ways and stories tab (customs, words, and for each story what happened, what was carved, what they say now), the Chronicle tab and its pages in "while you were away". |
 | `src/view/hud.js` | The interface: clock chip, log line, catching up, the clock's questions, settings, backups, sheets. |
 | `src/view/dev.js` | The developer menu. |
 | `src/view/mapview.js` | The valley from above on a 2D canvas: the fallback without WebGL2. |
@@ -106,6 +111,21 @@ All source files share one scope: the build concatenates them in the order liste
   homes and the rest are `CF2_SCALE.build` times bigger.
 - Rule (from Creekfolk 1): every change to the creek ends with `creekRefresh()` (or
   `creekDerive()` when its shape changed), so derived state matches the saved state.
+
+## The founders' arc (Phase 2)
+
+- They arrive with the old valley's ways (`cf2-culture.js`): its words, its customs (established,
+  not discovered), and its stories, already drifted. Belief that the creek gives stays asleep.
+- Three records of time, set side by side for the player: what happened, written in the land (the
+  mud in the bank, the grove's rings, patches on the walls, then and now); what they told
+  (carvings, stories); what they remember (habits that outlive their reasons, such as thanking
+  the creek "though no one can say anymore why").
+- **Then and now:** holding the clock-arrow button (or T) shows the valley as it was on its first
+  morning from the same camera. The worker makes day one again from the seed
+  (`cwThenWorld`: `newValley` is deterministic) and sends it as a `then` message; the page draws it
+  as a second `CF2Valley` and hides today's land, creekfolk and creatures while it is held.
+- **The last founder:** one quiet moment on the page (`Hud.moment`, the log line of kind
+  `founders`): the view turns to where they passed, two lines come and go. No ending.
 
 ## The time model
 
@@ -157,6 +177,8 @@ node tools/build.mjs && node tools/browser-test.mjs              # the rules, in
 node tools/build.mjs --dev && node tools/tour.mjs runs/x.json   # the 3D view live (WebGL): zooms, follow, triggers, a jump
 node tools/bench-browser.mjs runs/x.json 30                      # catch-up speed in the browser's worker
 node tools/ui-shots.mjs runs/x.json runs/ui                      # the interface on a laptop and a phone
+node tools/records-shots.mjs runs/x.json runs/rec                # the bank, Ways and stories, the Chronicle, then and now, the last founder's moment
+node tools/records-report.cjs runs/x.json                        # the culture and the records of a saved valley, in numbers
 ```
 
 Screenshots: `node tools/shots.mjs <save.json | new> <out dir> [views.json | -] [w h]`; contact sheets:

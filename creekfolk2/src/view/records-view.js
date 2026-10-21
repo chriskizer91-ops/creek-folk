@@ -135,13 +135,20 @@ function villageWays(w) {
     h = "",
     alive = w.creatures.filter((c) => !c.visitor),
     nowSays = (k) => {
-      let counts = {};
+      let counts = {},
+        young = {},
+        n = 0;
       for (let c of alive) {
         let f = favoriteWord(c, k);
-        if (f) counts[f] = (counts[f] || 0) + 1;
+        if (!f) continue;
+        counts[f] = (counts[f] || 0) + 1;
+        if (c.stage === "child") young[f] = (young[f] || 0) + 1;
+        n++;
       }
-      let top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      return top ? { word: top[0], n: top[1] } : null;
+      let ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]),
+        top = ranked[0],
+        alt = ranked[1] && ranked[1][1] >= n * 0.2 ? ranked[1] : null;
+      return top ? { word: top[0], n: top[1], alt: alt && alt[0], altYoung: alt && (young[alt[0]] || 0) > alt[1] / 2 } : null;
     };
   h += `<h3>Their customs</h3><ul>`;
   let from = (x) => (x && x.old ? ` <span class="mute">(from the old valley)</span>` : "");
@@ -157,15 +164,16 @@ function villageWays(w) {
       let now = nowSays(k),
         old = ov.words[k];
       if (!now) rows.push([k, old, null]);
-      else if (now.word === old) kept++, rows.push([k, old, old]);
-      else changed++, rows.push([k, old, now.word]);
+      else if (now.word === old) kept++, rows.push([k, old, old, now]);
+      else changed++, rows.push([k, old, now.word, now]);
     }
     h += `<h3>Their words</h3><p>Of the old valley's words they brought, ${kept === rows.length ? "every one is still said the old way" : `${numberWord(kept)} ${kept === 1 ? "is" : "are"} still said the old way${changed ? `, ${numberWord(changed)} ${changed === 1 ? "has" : "have"} changed` : ""}`}.</p>`;
+    let moving = (r) => r[2] !== r[1] || (r[3] && r[3].alt);
     h += `<table>${rows
-      .filter((r) => r[2] !== r[1])
-      .concat(rows.filter((r) => r[2] === r[1]).slice(0, 6))
+      .filter(moving)
+      .concat(rows.filter((r) => !moving(r)).slice(0, 6))
       .slice(0, 16)
-      .map(([k, old, now]) => `<tr><td>${esc(conceptLabel(w, k))}</td><td><i>${esc(old)}</i></td><td class="mute">${now == null ? "no one says it now" : now === old ? "the same" : `now <i>${esc(now)}</i>`}</td></tr>`)
+      .map(([k, old, now, x]) => `<tr><td>${esc(conceptLabel(w, k))}</td><td><i>${esc(old)}</i></td><td class="mute">${now == null ? "no one says it now" : now === old ? "the same" : `now <i>${esc(now)}</i>`}${x && x.alt ? `; ${x.altYoung ? "the young say" : "some say"} <i>${esc(x.alt === old ? old : x.alt)}</i>` : ""}</td></tr>`)
       .join("")}</table>`;
     let fresh = Object.keys(vocabularyByConcept(alive)).filter((k) => !CULTURE.oldWords.includes(k) && !k.startsWith("place:"));
     if (fresh.length) h += `<p class="mute">Words that began here: ${fresh.slice(0, 10).map((k) => `${esc(conceptLabel(w, k))} <i>${esc(nowSays(k).word)}</i>`).join(" · ")}.</p>`;

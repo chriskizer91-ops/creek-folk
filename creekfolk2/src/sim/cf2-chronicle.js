@@ -11,7 +11,7 @@
 // The last of the eight to pass gets one quiet moment: a line in the history, a story, a
 // memory for everyone, and `w.lastFounder` for the page. Then the valley simply goes on.
 //
-// Wraps logEvent (core.js), lifeTick (life.js), passOn (life.js) and creekStorm (creek.js);
+// Wraps logEvent (core.js), lifeTick, passOn and depart (life.js) and creekStorm (creek.js);
 // see docs/MERGE.md.
 // ==========================================================================
 
@@ -68,10 +68,16 @@ logEvent = function (w, imp, text, who = [], at = null, kind = "misc") {
   else if (kind === "passing" && who[0] != null) {
     let c = w.byId[who[0]];
     e.passed.push([name(who[0]), c && c.founder ? 1 : 0]);
-  } else if (kind === "leaving") e.left.push(...who.map(name).filter(Boolean));
-  else if (kind === "arrival" && who[0] != null) e.came.push(name(who[0]));
+  } else if (kind === "arrival" && who[0] != null) e.came.push(name(who[0]));
   else if (imp >= 3 && e.notes.length < CHRONICLE.notesPerDay) e.notes.push(text);
   return o;
+};
+
+// Each one who goes on downstream (their departure, not the day they decided).
+var cf2ChronicleDepart = depart;
+depart = function (w, c) {
+  if (w.creatures && !c.visitor) chronicleDay(w).left.push(c.name);
+  return cf2ChronicleDepart(w, c);
 };
 
 var cf2ChronicleStorm = creekStorm;

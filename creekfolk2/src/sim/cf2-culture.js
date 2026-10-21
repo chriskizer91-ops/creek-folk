@@ -26,7 +26,8 @@ var CULTURE = {
   ownWay: 0.2,     // chance a founder says an old word in their own accent
   knowStory: 0.75, // chance a founder holds an old story they only heard
   thankNear: 45,   // how far from the creek they come down to thank it (m)
-  childDrift: 0.06, // chance a child picking up a word says it a little differently
+  childDrift: 0.1,  // chance a child picking up a word says it a little differently
+  childSure: 1.4,   // and how sure of it they are
 };
 CONCEPT_LABELS.oldvalley = "the old valley";
 CONCEPT_LABELS.giver = "the creek that gives";
@@ -296,7 +297,7 @@ hearWord = function (w, speaker, listener, concept, word) {
     lx = listener.lex[concept];
   if (!had && lx && lx[word] !== undefined && listener.stage === "child" && w.rng.chance(CULTURE.childDrift)) {
     let v = sayItMyWay(word, listener.accent, w.rng);
-    if (v !== word && lx[v] === undefined) (lx[v] = lx[word]), delete lx[word];
+    if (v !== word && lx[v] === undefined) (lx[v] = Math.max(lx[word], CULTURE.childSure)), delete lx[word];
   }
   return r;
 };

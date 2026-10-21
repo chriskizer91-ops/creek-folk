@@ -111,7 +111,7 @@ function carveOption(w, c) {
   // (the founders don't all sit down to carve on the first morning)
   let last = c.lastCarve ?? (c.founder ? ((c.id % 6) * 0.5 - CARVE.gap) * 86400 : -1e9);
   if (w.t - last < (child ? 1 : CARVE.gap) * 86400) return null;
-  if (!w.rng.chance(child ? 0.01 : elder ? 0.012 : c.founder ? 0.008 : 0.004)) return null;
+  if (!w.rng.chance(child ? 0.004 : elder ? 0.012 : c.founder ? 0.008 : 0.004)) return null;
   // a crumbling tablet or a worn stone of a story they tell: copy it, or recut it
   if (!child && w.rng.chance(0.35)) {
     let worn = K.find((k) => !k.gone && k.wear > (k.mat === "stone" ? 0.55 : 0.7) && k.mat !== "sand" && c.lore && c.lore[k.s] && (k.mat === "clay" ? !K.some((o) => o.copyOf === k.id) : !k.recutBy));
@@ -119,6 +119,11 @@ function carveOption(w, c) {
       let p = worn.mat === "clay" ? carveSite(w, c, "clay") : { x: worn.x, z: worn.z };
       if (p) return { score: 0.5 + (elder ? 0.4 : 0), plan: { goal: "carve", mat: worn.mat, steps: [{ do: "walk", x: p.x, z: p.z, near: 1.1 }, { do: "carve", fix: worn.id, x: p.x, z: p.z, dur: (worn.mat === "clay" ? CARVE.clayMin : CARVE.stoneSession) * 60 }] } };
     }
+  }
+  // a stone that tells wrongly what they saw themselves: they cut it the way it was
+  if (!child && (elder || c.founder) && w.rng.chance(0.3)) {
+    let wrong = K.find((k) => !k.gone && k.mat === "stone" && k.done >= 1 && k.by !== c.id && !k.recutBy && c.lore && c.lore[k.s] && c.lore[k.s].first && w.stories[k.s] && !sameTold(w, w.stories[k.s], c.lore[k.s].v, k.v));
+    if (wrong) return { score: 0.6 + (elder ? 0.3 : 0), plan: { goal: "carve", mat: "stone", steps: [{ do: "walk", x: wrong.x, z: wrong.z, near: 1.1 }, { do: "carve", fix: wrong.id, correct: 1, dur: CARVE.stoneSession * 60 }] } };
   }
   // a story of their own to carve
   let best = null;
@@ -229,7 +234,7 @@ function fixCarving(w, c, k, step) {
     logEvent(w, 1, `${c.name} copied ${k.byName}'s crumbling clay tablet onto a new one${n.text !== k.text ? ", not quite word for word" : ""}.`, [c.id], n, "carving");
     return true;
   }
-  let theirs = mine && s && !sameTold(w, s, mine.v, k.v) && (c.stage === "elder" || mine.first) && w.rng.chance(0.45);
+  let theirs = mine && s && !sameTold(w, s, mine.v, k.v) && (step.correct || ((c.stage === "elder" || mine.first) && w.rng.chance(0.45)));
   k.recut.push([Math.round(w.t), c.name, theirs ? k.text : null]);
   if (k.recut.length > 6) k.recut.splice(0, 1);
   k.recutBy = c.id;
@@ -237,7 +242,15 @@ function fixCarving(w, c, k, step) {
   if (theirs) {
     k.v = { ...mine.v };
     k.text = storyText(w, s, k.v);
-    logEvent(w, 2, `${c.name} recut the worn stone that ${k.byName} carved, and "corrected" it as they went: now it says ${lower(k.text)}`, [c.id], k, "carving");
+    logEvent(
+      w,
+      2,
+      step.correct ? `${c.name} recut the stone ${k.byName} carved. "That isn't how it was," they said; "I was there." Now it says: ${lower(k.text)}` : `${c.name} recut the worn stone that ${k.byName} carved, and "corrected" it as they went: now it says ${lower(k.text)}`,
+      [c.id],
+      k,
+      "carving",
+    );
+    if (step.correct) remember(w, c, "carving", `I cut the stone the way it really happened. I was there.`, 0.7);
   } else logEvent(w, 1, `${c.name} recut the worn letters on ${k.byName}'s stone at the Telling Stones.`, [c.id], k, "carving");
   return true;
 }
@@ -258,6 +271,8 @@ function carveTick(w) {
     }
     if (k.mat !== "stone" && k.wear >= 1) (k.gone = Math.round(w.t)), k.mat === "clay" && logEvent(w, 1, `${k.byName}'s clay tablet has crumbled away.`, [], k, "carving");
   }
+  // what has worn away is forgotten by the record too, after a few days
+  for (let j = K.length - 1; j >= 0; j--) if (K[j].gone && w.t - K[j].gone > 3 * 86400) K.splice(j, 1);
   // reading
   if (!w.rng.chance(0.5)) return;
   let open = K.filter((k) => !k.gone && (k.mat !== "stone" || k.done >= 1));
