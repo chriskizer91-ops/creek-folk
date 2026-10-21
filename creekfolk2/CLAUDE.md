@@ -24,6 +24,8 @@ behind Ctrl+Shift+D or `#dev`) and `creekfolk2-dev.html` (a visible Dev button t
 phone, and its own saves). `BUILD_VERSION` in `tools/build.mjs` names the build (`cf2-1` is
 Phase 1); bump it for every build handed to the author, because each build keeps its own saves.
 No page ever makes a network request: three.js and the fonts (`assets/fonts`, OFL) are embedded.
+`releases/` keeps the two files handed to the author at the end of each phase
+(`creekfolk2-phase1.html`, `creekfolk2-phase1-dev.html`, build `cf2-1`); never rebuild them.
 
 ## Architecture
 
