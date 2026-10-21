@@ -16,8 +16,8 @@
 // the faith does not wake without gifts.
 //
 // The old valley is made from its own random numbers (seed + ":old-valley"), so it doesn't
-// change the rest of the new valley. Wraps newValley, storyText, shortAbout, retell, lower
-// and creekStorm; see docs/MERGE.md.
+// change the rest of the new valley. Wraps newValley, storyText, shortAbout, retell, lower,
+// hearWord and creekStorm; see docs/MERGE.md.
 // ==========================================================================
 
 var CULTURE = {
@@ -26,6 +26,7 @@ var CULTURE = {
   ownWay: 0.2,     // chance a founder says an old word in their own accent
   knowStory: 0.75, // chance a founder holds an old story they only heard
   thankNear: 45,   // how far from the creek they come down to thank it (m)
+  childDrift: 0.06, // chance a child picking up a word says it a little differently
 };
 CONCEPT_LABELS.oldvalley = "the old valley";
 CONCEPT_LABELS.giver = "the creek that gives";
@@ -284,4 +285,18 @@ retell = function (w, teller, listener, s, v) {
 var cf2CultureLower = lower;
 lower = function (t) {
   return /^(In|When)\b/.test(t) ? t[0].toLowerCase() + t.slice(1) : cf2CultureLower(t);
+};
+
+// Old words drift: a child who picks up a word now and then says it a little differently
+// (one vowel in their own accent), and the way they say it can spread like any word.
+var cf2CultureHearWord = hearWord;
+hearWord = function (w, speaker, listener, concept, word) {
+  let had = listener.lex[concept] && listener.lex[concept][word] !== undefined,
+    r = cf2CultureHearWord(w, speaker, listener, concept, word),
+    lx = listener.lex[concept];
+  if (!had && lx && lx[word] !== undefined && listener.stage === "child" && w.rng.chance(CULTURE.childDrift)) {
+    let v = sayItMyWay(word, listener.accent, w.rng);
+    if (v !== word && lx[v] === undefined) (lx[v] = lx[word]), delete lx[word];
+  }
+  return r;
 };

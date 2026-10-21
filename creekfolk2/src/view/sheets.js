@@ -121,6 +121,8 @@ function mindSheet(w, c) {
         })
         .join("") +
       `</ul>`;
+  let carved = (w.carvings || []).filter((k) => k.by === c.id && !k.gone).slice(-4);
+  if (carved.length) h += `<h3>What they carved</h3><ul>${carved.map((k) => `<li>${esc(k.text)} <span class="mute">${esc(k.mat === "stone" ? (k.done >= 1 ? "in stone, at the Telling Stones" : "in stone, still being cut") : k.mat === "clay" ? "in clay, by their home" : "in the sand by the creek")}</span></li>`).join("")}</ul>`;
   let words = Object.keys(c.lex || {})
     .map((d) => [d, favoriteWord(c, d)])
     .filter((e) => e[1])

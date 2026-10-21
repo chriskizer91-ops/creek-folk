@@ -1869,9 +1869,17 @@ var CF2Valley = (function () {
         sh = 1.35,
         sw = 0.62;
       if (up) {
-        var lean = (R() - 0.5) * 0.08;
-        B.add("lime|f", bake(cyl(sw * 0.42, sw * 0.55, sh, 5), x, y + sh / 2 - 0.05, z, lean, yaw, lean * 0.5, 1, 1, 0.55));
-        if (!far) for (q = 0; q < lines; q++) B.add("limeD|f", bake(box(sw * 0.62, 0.035, 0.04), x + Math.sin(yaw) * sw * 0.29, y + 0.35 + q * 0.13, z + Math.cos(yaw) * sw * 0.29, 0, yaw, 0));
+        // a square block (its faces square to the way it faces), narrower at the top, thin
+        var stoneG = cyl(sw * 0.62, sw * 0.78, sh, 4);
+        stoneG.rotateY(Math.PI / 4);
+        B.add("lime|f", bake(stoneG, x, y + sh / 2 - 0.05, z, 0, yaw, 0, 1, 1, 0.5));
+        // the lines cut into its face, as many as are cut and not worn away
+        if (!far)
+          for (q = 0; q < lines; q++) {
+            var ly = 0.35 + q * 0.13,
+              face = sw * 0.3536 * (0.78 - 0.16 * ((ly + 0.05) / sh)) + 0.012; // half its thickness there
+            B.add("limeD|f", bake(box(sw * 0.62, 0.035, 0.03), x + Math.sin(yaw) * face, y + ly, z + Math.cos(yaw) * face, 0, yaw, 0));
+          }
       } else {
         B.add("wood|f", bake(cyl(0.07, 0.07, 1.0, 6), x - Math.cos(yaw) * 0.45, y + 0.07, z + Math.sin(yaw) * 0.45, Math.PI / 2, yaw, 0));
         B.add("wood|f", bake(cyl(0.07, 0.07, 1.0, 6), x + Math.cos(yaw) * 0.45, y + 0.07, z - Math.sin(yaw) * 0.45, Math.PI / 2, yaw, 0));
