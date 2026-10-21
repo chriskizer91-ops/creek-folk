@@ -53,4 +53,5 @@ var CreekSim = {
   paceOfRate,
   STRUCTURES,
   devTrigger,
+  GROVE, GOATS, groveOf, groveSize, // 3C: the memorial grove and the goats (grove.js), for the Node tools
 };
