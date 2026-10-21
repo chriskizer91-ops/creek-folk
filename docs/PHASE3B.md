@@ -126,7 +126,8 @@ every gift, plus "the creek answers now", "find the spring", "one believes in yo
 ## Measured
 Everything here was run on the final build unless it says otherwise. "Tested" means I ran
 it and read the result; anything I estimated says so. The year runs are whole valleys,
-every moment simulated, 330 days each (`tools/year.cjs`, results in `runs/final/`). The
+every moment simulated, 330 days each (`tools/year.cjs`; the printouts are in
+`docs/runs-3b/`). The
 simulated player gives on a rhythm, give or take half an hour, and three times in four
 gives whatever the valley needs most (mostly warm days, snow, starry nights and rain).
 
@@ -188,7 +189,7 @@ pass or leave, so it moves through the village about every two to three weeks; t
 never more than one at a time.
 
 **When you stop giving** (`tools/away-test.cjs`: a gift every other day for two months,
-then none; `runs/final/away.txt`). The creek was "resting" from day 61.5 and the lantern
+then none; `docs/runs-3b/away.txt`). The creek was "resting" from day 61.5 and the lantern
 stayed lit. Believers: day 60, 20 of 22; day 76, 18 of 20; day 92, 24 of 28; day 96, 21
 of 26; day 100, 16 of 26; day 104, 13 of 24; day 108, 5 of 24; day 120, none. So most
 still believed five weeks after the last gift, about half at six to seven weeks, and none

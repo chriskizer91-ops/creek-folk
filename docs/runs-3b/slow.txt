@@ -1,0 +1,20 @@
+  year-1 day 30: 14 creekfolk (132 s) | creek: wet now 11%, at the driest 9%, trench 1.015m, dams 33333333313, raised 0, feed 25, bumpy 0.005/0, downstream-knowers 14 | believe 13/14, temple 2/36 waiting pace 1, offerings 19, asked 21 answered 5, spring found day 23
+  year-1 day 60: 22 creekfolk (338 s) | creek: wet now 9%, at the driest 10%, trench 0.639m, dams 33333333333333!, raised 1, feed 25, bumpy 0.034/0.001, downstream-knowers 22 | believe 20/22, temple 6/36 waiting pace 1, offerings 75, asked 50 answered 16, spring found day 23
+  year-1 day 90: 17 creekfolk (558 s) | creek: wet now 32%, at the driest 10%, trench 0.523m, dams 33333333333333, raised 5, feed 25, bumpy 0.026/0.001, downstream-knowers 17 | believe 16/17, temple 10/36 waiting pace 1, offerings 133, asked 75 answered 23, spring found day 23
+  year-1 day 120: 18 creekfolk (788 s) | creek: wet now 72%, at the driest 23%, trench 0.421m, dams 33333333333333, raised 10, feed 27, bumpy 0.013/0.001, downstream-knowers 18 | believe 16/18, temple 12/36 waiting pace 0.6, offerings 174, asked 96 answered 26, spring found day 23
+  year-1 day 150: 29 creekfolk (1173 s) | creek: wet now 56%, at the driest 49%, trench 0.374m, dams 33333333333333, raised 13, feed 31, bumpy 0.011/0.001, downstream-knowers 28 | believe 8/28, temple 14/36 waiting pace 0.46, offerings 209, asked 119 answered 29, spring found day 23
+  year-1 day 180: 28 creekfolk (1476 s) | creek: wet now 63%, at the driest 59%, trench 0.334m, dams 33333333333333, raised 17, feed 33, bumpy 0.008/0.001, downstream-knowers 28 | believe 20/28, temple 16/36 waiting pace 0.6, offerings 231, asked 144 answered 30, spring found day 23
+
+1 valleys, 200 days each, in 1693 s wall time
+
+year-1: 30d:16 60d:19 90d:17 120d:21 180d:27 | births 154, passings 116, downstream 20, generations 17, errors 0, first passing day 14.63, full by day -, sim 1693 s (10206x), save 1764 KB
+  year-1 minds: 42 stories, 33 myths (first day 16.3), 17 places, skills lost 0 / relearned 0, visits 12, gifts 73, believers 20, giver "souwou", customs seasons,thanks
+  year-1 belief: first believer day 8.6, believe 20/29, asked 161 answered 33, offerings 246, spring heard 22.7 found 23, beyond -
+  year-1 temple: started day 12.6, 17/36 parts, waiting; stages done 113.8; made do 0
+
+Targets:
+  PASS  No valley ever drops to zero.  [10]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
+  FAIL  Most valleys reach 30 creekfolk between month 2 and month 6.  []
+  PASS  Someone leaves downstream once the valley is full.  [20]

@@ -1,0 +1,26 @@
+  year-1 day 30: 22 creekfolk (111 s) | creek: wet now 12%, at the driest 10%, trench 0.95m, dams 333333333331, raised 0, feed 26, bumpy 0.009/0, downstream-knowers 22 | believe 0/22, ancestors 0/36, offerings 0, asked 0 answered 0
+  year-1 day 60: 21 creekfolk (318 s) | creek: wet now 9%, at the driest 9%, trench 0.617m, dams 33333333333333!, raised 0, feed 25, bumpy 0.041/0.001, downstream-knowers 21 | believe 0/21, ancestors 4/36, offerings 0, asked 0 answered 0
+  year-1 day 90: 21 creekfolk (512 s) | creek: wet now 57%, at the driest 17%, trench 0.48m, dams 33333333333333!, raised 5, feed 26, bumpy 0.019/0.001, downstream-knowers 21 | believe 0/21, ancestors 8/36, offerings 0, asked 0 answered 0
+  year-1 day 120: 22 creekfolk (740 s) | creek: wet now 79%, at the driest 30%, trench 0.39m, dams 33333333333333, raised 11, feed 29, bumpy 0.025/0.001, downstream-knowers 22 | believe 0/22, ancestors 11/36, offerings 0, asked 0 answered 0
+  year-1 day 150: 28 creekfolk (1041 s) | creek: wet now 78%, at the driest 68%, trench 0.273m, dams 33333333333333, raised 18, feed 33, bumpy 0.022/0.001, downstream-knowers 28 | believe 0/28, ancestors 15/36, offerings 0, asked 0 answered 0
+  year-1 day 180: 26 creekfolk (1376 s) | creek: wet now 83%, at the driest 79%, trench 0.208m, dams 33333333333333, raised 20, feed 33, bumpy 0.014/0.001, downstream-knowers 26 | believe 0/26, ancestors 19/36, offerings 0, asked 0 answered 0
+  year-1 day 210: 26 creekfolk (1723 s) | creek: wet now 93%, at the driest 85%, trench 0.178m, dams 33333333333333, raised 23, feed 33, bumpy 0.011/0.002, downstream-knowers 26 | believe 0/26, ancestors 22/36, offerings 0, asked 0 answered 0
+  year-1 day 240: 23 creekfolk (2031 s) | creek: wet now 93%, at the driest 87%, trench 0.17m, dams 33333333333333, raised 26, feed 33, bumpy 0.007/0.002, downstream-knowers 23 | believe 0/23, ancestors 26/36, offerings 0, asked 0 answered 0
+  year-1 day 270: 26 creekfolk (2349 s) | creek: wet now 87%, at the driest 86%, trench 0.181m, dams 33333333333333, raised 26, feed 33, bumpy 0.006/0.002, downstream-knowers 26 | believe 0/26, ancestors 30/36, offerings 0, asked 0 answered 0
+  year-1 day 300: 27 creekfolk (2743 s) | creek: wet now 88%, at the driest 88%, trench 0.173m, dams 33333333333333, raised 28, feed 33, bumpy 0.006/0.002, downstream-knowers 27 | believe 0/27, ancestors 34/36, offerings 0, asked 0 answered 0
+  year-1 day 330: 27 creekfolk (3158 s) | creek: wet now 92%, at the driest 86%, trench 0.185m, dams 33333333333333, raised 30, feed 33, bumpy 0.007/0.002, downstream-knowers 27 | believe 0/27, ancestors 36/36, offerings 0, asked 0 answered 0
+
+1 valleys, 330 days each, in 3159 s wall time
+
+year-1: 30d:23 60d:22 90d:20 120d:26 180d:27 240d:21 300d:28 | births 293, passings 245, downstream 28, generations 28, errors 0, first passing day 14.63, full by day 308, sim 3158 s (9027x), save 2072 KB
+  year-1 minds: 37 stories, 36 myths (first day 8.5), 20 places, skills lost 0 / relearned 0, visits 24, gifts 0, believers 0, giver the creek, customs seasons,passing
+  year-1 belief: first believer day -, believe 0/27, asked 0 answered 0, offerings 0, spring heard - found -, beyond -
+  year-1 hall of the ancestors: started day 30, 36/36 parts, done; stages done 121, 218.7, 314.6; finished day 314.6 (month 10.5)
+
+Targets:
+  PASS  No valley ever drops to zero.  [12]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [161]
+  PASS  Someone leaves downstream once the valley is full.  [28]
+  PASS  A valley with no gifts finishes its own great project.  [314.6]

@@ -1,0 +1,18 @@
+day 60: believers 20/22, resting no, lantern -, temple waiting (6 parts), the waiting story told by -
+day 64: believers 22/25, resting since day 61.5, lantern lit, temple waiting (6 parts), the waiting story told by -
+day 68: believers 20/22, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by -
+day 72: believers 19/21, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 15
+day 76: believers 18/20, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 16
+day 80: believers 20/22, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 16
+day 84: believers 21/23, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 14
+day 88: believers 23/25, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 17
+day 92: believers 24/28, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 16
+day 96: believers 21/26, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 15
+day 100: believers 16/26, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 13
+day 104: believers 13/24, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 15
+day 108: believers 5/24, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 16
+day 112: believers 1/24, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 19
+day 116: believers 1/22, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 18
+day 120: believers 0/28, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 24
+day 124: believers 0/27, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 17
+day 128: believers 0/27, resting since day 61.5, lantern lit, temple stopped (6 parts), the waiting story told by 17

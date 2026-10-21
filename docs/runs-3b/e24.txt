@@ -1,0 +1,26 @@
+  year-1 day 30: 15 creekfolk (83 s) | creek: wet now 12%, at the driest 10%, trench 0.971m, dams 333333333333!, raised 0, feed 26, bumpy 0.008/0, downstream-knowers 15 | believe 13/15, temple 4/36 waiting pace 1.2, offerings 49, asked 25 answered 17, spring found day 11.3
+  year-1 day 60: 22 creekfolk (259 s) | creek: wet now 9%, at the driest 8%, trench 0.614m, dams 3333333333331, raised 1, feed 25, bumpy 0.034/0, downstream-knowers 22 | believe 20/22, temple 8/36 waiting pace 1.2, offerings 176, asked 51 answered 29, spring found day 11.3
+  year-1 day 90: 17 creekfolk (458 s) | creek: wet now 44%, at the driest 21%, trench 0.464m, dams 3333333333333!, raised 8, feed 27, bumpy 0.017/0.001, downstream-knowers 17 | believe 16/17, temple 12/36 waiting pace 1.2, offerings 304, asked 73 answered 36, spring found day 11.3
+  year-1 day 120: 20 creekfolk (643 s) | creek: wet now 79%, at the driest 36%, trench 0.397m, dams 3333333333333!, raised 14, feed 30, bumpy 0.01/0.001, downstream-knowers 20 | believe 18/20, temple 16/36 building pace 1.2, offerings 419, asked 95 answered 45, spring found day 11.3
+  year-1 day 150: 28 creekfolk (909 s) | creek: wet now 58%, at the driest 58%, trench 0.342m, dams 3333333333333!, raised 17, feed 32, bumpy 0.017/0.001, downstream-knowers 27 | believe 26/28, temple 21/36 waiting pace 1.2, offerings 570, asked 118 answered 54, spring found day 11.3
+  year-1 day 180: 27 creekfolk (1183 s) | creek: wet now 75%, at the driest 67%, trench 0.282m, dams 3333333333333!, raised 19, feed 33, bumpy 0.008/0.001, downstream-knowers 27 | believe 25/27, temple 25/36 waiting pace 1.2, offerings 723, asked 139 answered 67, spring found day 11.3, beyond: Nellter
+  year-1 day 210: 30 creekfolk (1492 s) | creek: wet now 90%, at the driest 83%, trench 0.21m, dams 3333333333333, raised 25, feed 33, bumpy 0.013/0.001, downstream-knowers 30 | believe 27/30, temple 28/36 building pace 1.2, offerings 911, asked 162 answered 79, spring found day 11.3, beyond: Ferno
+  year-1 day 240: 27 creekfolk (1826 s) | creek: wet now 91%, at the driest 86%, trench 0.189m, dams 3333333333333, raised 32, feed 33, bumpy 0.009/0.002, downstream-knowers 27 | believe 25/27, temple 32/36 waiting pace 1.2, offerings 1079, asked 185 answered 90, spring found day 11.3, beyond: Larkly
+  year-1 day 270: 29 creekfolk (2135 s) | creek: wet now 86%, at the driest 86%, trench 0.176m, dams 3333333333333, raised 34, feed 33, bumpy 0.005/0.002, downstream-knowers 28 | believe 25/29, temple 36/36 done pace 1.2, offerings 1240, asked 207 answered 102, spring found day 11.3, beyond: Umben
+  year-1 day 300: 25 creekfolk (2494 s) | creek: wet now 88%, at the driest 87%, trench 0.184m, dams 3333333333333, raised 36, feed 33, bumpy 0.008/0.002, downstream-knowers 24 | believe 23/25, temple 36/36 done pace 1.2, offerings 1432, asked 228 answered 113, spring found day 11.3, beyond: Umb
+  year-1 day 330: 26 creekfolk (2843 s) | creek: wet now 92%, at the driest 89%, trench 0.177m, dams 3333333333333, raised 40, feed 33, bumpy 0.006/0.002, downstream-knowers 26 | believe 23/26, temple 36/36 done pace 1.2, offerings 1602, asked 251 answered 123, spring found day 11.3, beyond: Pimo
+
+1 valleys, 330 days each, in 2843 s wall time
+
+year-1: 30d:17 60d:20 90d:18 120d:22 180d:28 240d:28 300d:28 | births 288, passings 236, downstream 37, generations 27, errors 0, first passing day 14.63, full by day 196, sim 2843 s (10030x), save 2030 KB
+  year-1 minds: 45 stories, 37 myths (first day 17.8), 17 places, skills lost 0 / relearned 0, visits 16, gifts 330, believers 23, giver "trifu", customs seasons,thanks,passing
+  year-1 belief: first believer day 5.3, believe 23/26, asked 251 answered 123, offerings 1602, spring heard 11 found 11.3, beyond Ivykin@150 Nellter@166<Ivykin Ivykin@186<Nellter Ferno@205<Ivykin Mabin@217<Ferno Larkly@238<Mabin Umben@252<Larkly Ivyen@276<Umben Umb@296<Ivyen Wil@309<Umb Pimo@328<Wil
+  year-1 temple: started day 7, 36/36 parts, done; stages done 84.9, 167.4, 261.6; finished day 261.6 (month 8.7); made do 0
+
+Targets:
+  PASS  No valley ever drops to zero.  [7]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [147]
+  PASS  Someone leaves downstream once the valley is full.  [37]
+  PASS  Most of the village believes the creek gives (with a giver).  [23/26]

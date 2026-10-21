@@ -1,0 +1,17 @@
+  year-1 day 30: 14 creekfolk (134 s) | creek: wet now 11%, at the driest 9%, trench 1.015m, dams 33333333313, raised 0, feed 25, bumpy 0.005/0, downstream-knowers 14 | believe 13/14, temple 2/36 waiting pace 1, offerings 19, asked 21 answered 5, spring found day 23
+  year-1 day 60: 22 creekfolk (341 s) | creek: wet now 9%, at the driest 10%, trench 0.639m, dams 33333333333333!, raised 1, feed 25, bumpy 0.034/0.001, downstream-knowers 22 | believe 20/22, temple 6/36 waiting pace 1, offerings 75, asked 50 answered 16, spring found day 23
+  year-1 day 90: 17 creekfolk (560 s) | creek: wet now 32%, at the driest 10%, trench 0.523m, dams 33333333333333, raised 5, feed 25, bumpy 0.026/0.001, downstream-knowers 17 | believe 16/17, temple 10/36 waiting pace 1, offerings 133, asked 75 answered 23, spring found day 23
+  year-1 day 120: 21 creekfolk (831 s) | creek: wet now 66%, at the driest 27%, trench 0.445m, dams 33333333333333, raised 9, feed 28, bumpy 0.018/0.001, downstream-knowers 21 | believe 19/21, temple 12/36 waiting pace 0.6, offerings 183, asked 100 answered 25, spring found day 23
+  year-1 day 150: 23 creekfolk (1122 s) | creek: wet now 40%, at the driest 39%, trench 0.402m, dams 33333333333333, raised 12, feed 30, bumpy 0.014/0.001, downstream-knowers 22 | believe 21/23, temple 16/36 waiting pace 1, offerings 241, asked 121 answered 32, spring found day 23
+
+1 valleys, 160 days each, in 1258 s wall time
+
+year-1: 30d:16 60d:19 90d:17 120d:17 | births 103, passings 87, downstream 2, generations 14, errors 0, first passing day 14.63, full by day -, sim 1257 s (10994x), save 1440 KB
+  year-1 minds: 44 stories, 32 myths (first day 16.3), 13 places, skills lost 0 / relearned 0, visits 2, gifts 74, believers 22, giver "souwou", customs seasons,thanks
+  year-1 belief: first believer day 8.6, believe 22/25, asked 129 answered 35, offerings 267, spring heard 22.7 found 23, beyond -
+  year-1 temple: started day 12.6, 17/36 parts, waiting; stages done 118; made do 0
+
+Targets:
+  PASS  No valley ever drops to zero.  [10]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
