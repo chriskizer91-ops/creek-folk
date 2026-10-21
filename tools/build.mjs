@@ -16,7 +16,7 @@ import { transform } from 'esbuild';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dev = process.argv.includes('--dev');
-export const BUILD_VERSION = '3b';
+export const BUILD_VERSION = '3c';
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 // Order matters: later files may use names from earlier ones.
@@ -29,6 +29,12 @@ export const SIM_FILES = [
   'src/sim/fauna.js',     // gifts that live: flowers, fruit trees, goats, bees, fish, birds
   'src/sim/gift.js',      // the player's gift and beliefs about the giver
   'src/sim/temple.js',    // the temple to the creek, and the great project for valleys with no giver
+  'src/sim/looks.js',     // 3C: fur colours, coat patterns and things to wear, inherited
+  'src/sim/homes.js',     // 3C: doors, decorations, more home levels, gardens
+  'src/sim/grove.js',     // 3C: the memorial grove's tree kinds, growth and nurse logs; goats' kids
+  'src/sim/beavers.js',   // 3C: the beavers
+  'src/sim/skycal.js',    // 3C: the sky calendar that finds their midwinter
+  'src/sim/returning.js', // 3C: the procession path and the Returning, every midwinter
   'src/sim/hooks.js',     // small patches that connect life and calendar to the core
   'src/sim/api.js',       // the surface used by the app, the worker and the tests
 ];
@@ -42,6 +48,13 @@ const VIEW_FILES = [
   'src/view/patches.js',  // small patches that connect the new parts to the view
   'src/view/minds-view.js', // the gift button, stories, places, customs and beliefs in the HUD
   'src/view/belief-view.js', // the gift sheet, the Temple tab, the temple, animals, offerings, sky
+  'src/view/looks-view.js',  // 3C: patterns, things to wear, the ages at a glance
+  'src/view/homes-view.js',  // 3C: doors, decorations, cairns at named places, scenery beyond the valley
+  'src/view/life-view.js',   // 3C: grove trees, nurse logs, goats' kids, butterflies, herons, mist
+  'src/view/soundscape.js',  // 3C: the valley sounds as healthy as it is
+  'src/view/thennow.js',     // 3C: hold to see the valley as it was on day one
+  'src/view/beavers-view.js', // 3C: beavers and their lodge
+  'src/view/returning-view.js', // 3C: the procession path and the Returning
   'src/view/boot.js',     // starts the app
 ];
 
