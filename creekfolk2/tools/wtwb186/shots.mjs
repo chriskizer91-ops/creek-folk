@@ -1,10 +1,11 @@
 // Scripted pictures of both builds, for comparing them pair by pair (after build.mjs):
 //
-//   node tools/wtwb186/shots.mjs [--builds r128,r186] [--size 1280x720] [scenario.json ...]
-//     -> tools/wtwb186/out/shots/<build>/<name>.png      the WebGL canvas only (the HUD is HTML, the same in both)
+//   node tools/wtwb186/shots.mjs [--builds r128,r186] [--set all] [--size 1280x720] [--only name,name] [scenario.json ...]
+//     -> tools/wtwb186/out/shots/<set>/<build>/<name>.png      the WebGL canvas only (the HUD is HTML, the same in both)
 //
 // The scenarios default to WTWB's own tools/look.json (spots, hours, storm) and tools/easy.json (Easy to see). Each shot is the
-// one tools/shots.py takes: {name, easy, hour, storm, at: [x, z] or a spot name, yaw, el, az, zoom, step, eval, quality}.
+// one tools/shots.py takes: {name, easy, hour, storm, at: [x, z] or a spot name, yaw, el, az, zoom, step, eval, quality, mobile},
+// plus pix (?pix=, the art pixel size) and icons ('all' or a list of ids: the find icons, drawn through their own pixel pass).
 // Differences from shots.py, so the two builds can be compared picture by picture:
 //   - the page opens with ?paused: nothing moves between shots except through WWB.step (fixed steps), so the game clock, the
 //     wind, the water and the clouds are at the same moment in both builds;
@@ -22,10 +23,10 @@ const root = path.resolve(here, '..', '..');
 const ref = path.join(root, 'ref', 'what-the-water-brings');
 const args = process.argv.slice(2);
 function opt(name, def) { const i = args.indexOf(name); if (i < 0) return def; const v = args[i + 1]; args.splice(i, 2); return v; }
-const builds = opt('--builds', 'r128,r186').split(',');
+const builds = opt('--builds', 'r128,r186').split(','), only = opt('--only', ''), set = opt('--set', 'all');
 const [W, H] = opt('--size', '1280x720').split('x').map(Number);
-const scen = args.length ? args : [path.join(ref, 'tools', 'look.json'), path.join(ref, 'tools', 'easy.json')];
-const shots = scen.flatMap((f) => JSON.parse(fs.readFileSync(f, 'utf8')));
+const scen = args.length ? args : [path.join(ref, 'tools', 'look.json'), path.join(ref, 'tools', 'easy.json'), path.join(here, 'extra.json')];
+const shots = scen.flatMap((f) => JSON.parse(fs.readFileSync(f, 'utf8'))).filter((s) => !only || only.split(',').includes(s.name));
 
 // the lines of game.html that hold three.js (its <script> is the template's /*@@THREE@@*/ line)
 function threeLines(html) {
@@ -51,8 +52,14 @@ function prelude({ from, to, seed }) {
 }
 
 // the shot itself, as tools/shots.py does it
-function take(s) {
+async function take(s) {
   const W = window.WWB; W.pause(true);
+  if (s.icons) {   // the find icons in a grid, each drawn 96 x 96 and shown at twice that
+    const ids = s.icons === 'all' ? W.items.map((f) => f.id) : s.icons, n = 8, c = document.createElement('canvas'); c.width = n * 192; c.height = Math.ceil(ids.length / n) * 192;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#808080'; g.fillRect(0, 0, c.width, c.height);
+    for (let i = 0; i < ids.length; i++) { const im = new Image(); im.src = W.icon(ids[i]); await im.decode(); g.drawImage(im, (i % n) * 192, Math.floor(i / n) * 192, 192, 192); }
+    return { icons: ids.length, rand: window.__rand.game, png: c.toDataURL('image/png') };
+  }
   if (s.storm) W.startStorm(); else if (W.save.weather === 'storm') W.endStorm();
   W.resetView && W.resetView();
   if (s.hour != null) W.setHour(s.hour);
@@ -72,12 +79,12 @@ const summary = {};
 for (const build of builds) {
   const html = path.join(here, 'out', build, 'game.html');
   if (!fs.existsSync(html)) throw new Error(html + ' is missing: run build.mjs first');
-  const [from, to] = threeLines(html), dir = path.join(here, 'out', 'shots', build);
+  const [from, to] = threeLines(html), dir = path.join(here, 'out', 'shots', set, build);
   fs.mkdirSync(dir, { recursive: true });
   const groups = new Map();
-  for (const s of shots) { const k = JSON.stringify([!!s.easy, s.quality || 'medium', !!s.mobile]); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
+  for (const s of shots) { const k = JSON.stringify([!!s.easy, s.quality || 'medium', !!s.mobile, s.pix || '']); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
   for (const [k, list] of groups) {
-    const [easy, q, mobile] = JSON.parse(k), t0 = Date.now();
+    const [easy, q, mobile, pix] = JSON.parse(k), t0 = Date.now();
     const ctx = await browser.newContext({ viewport: { width: mobile ? 390 : W, height: mobile ? 844 : H }, deviceScaleFactor: mobile ? 3 : 1, isMobile: mobile, hasTouch: mobile });
     await ctx.route('**/*', (r) => (r.request().url().startsWith('file:') ? r.continue() : r.abort()));
     await ctx.addInitScript(prelude, { from, to, seed: 20260521 });
@@ -85,7 +92,7 @@ for (const build of builds) {
     const logs = [];
     pg.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(m.type() + ': ' + m.text()); });
     pg.on('pageerror', (e) => logs.push('PAGEERROR: ' + e.message));
-    await pg.goto('file://' + html + '?fresh&paused&shots&q=' + q + (easy ? '#easy' : ''));
+    await pg.goto('file://' + html + '?fresh&paused&shots&q=' + q + (pix ? '&pix=' + pix : '') + (easy ? '#easy' : ''));
     await pg.waitForFunction('window.WWB && WWB.ready', null, { timeout: 600000 });
     await pg.evaluate('WWB.start()');
     for (const s of list) {
@@ -100,4 +107,4 @@ for (const build of builds) {
   }
 }
 await browser.close();
-fs.writeFileSync(path.join(here, 'out', 'shots', 'summary.json'), JSON.stringify(summary, null, 1));
+fs.writeFileSync(path.join(here, 'out', 'shots', set, 'summary-' + builds.join('-') + '.json'), JSON.stringify(summary, null, 1));

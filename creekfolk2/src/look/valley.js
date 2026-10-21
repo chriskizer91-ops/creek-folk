@@ -1193,8 +1193,9 @@
       if (!list.length) return;
       var g = geo.clone(); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(T.x0 + TILE / 2, list[0].y || 0, T.z0 + TILE / 2), TILE * 0.75 + 4);
       var im = new THREE.InstancedMesh(g, paint(key, { soft: true, sway: !!g.attributes.sway }), list.length), o = new THREE.Object3D();
-      // R186: an InstancedMesh is now culled by its own bounding sphere (computed round every copy, without room for the sway), not its
-      // geometry's: give it the tile's sphere, as r128 used
+      // R186: an InstancedMesh is now culled by a bounding sphere of its own, which r186 makes by moving the geometry's sphere to every
+      // copy; the geometry's sphere here is already the tile's (in world space), so the copies' rotations and scales throw it about
+      // and now and then a batch of plants is culled while in view. The mesh gets the tile's sphere itself, which r128 culled with.
       im.boundingSphere = g.boundingSphere;
       for (var q = 0; q < list.length; q++) { set(o, list[q]); o.updateMatrix(); im.setMatrixAt(q, o.matrix); }
       im.instanceMatrix.needsUpdate = true; im.castShadow = !!shadow; im.receiveShadow = true; im.name = 'Inst_' + key; into.add(im);

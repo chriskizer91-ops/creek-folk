@@ -1,11 +1,12 @@
 // Compare the r128 and r186 pictures pair by pair (after shots.mjs):
 //
-//   node tools/wtwb186/compare.mjs [--sheet path.jpg]
-//     -> tools/wtwb186/out/compare/<name>-pair.png    r128 on the left, r186 on the right
-//     -> tools/wtwb186/out/compare/<name>-diff.png    where they differ: red by more than 24 (of 255) in some channel, orange by less,
-//                                                     the r128 picture dimmed where they are the same
-//     -> tools/wtwb186/out/compare/sheet.jpg          a contact sheet of every pair with its numbers (also to --sheet if given)
-//     -> tools/wtwb186/out/compare/results.json, results.md
+//   node tools/wtwb186/compare.mjs [--set all] [--a r128] [--b r186] [--sheet path.jpg] [--thumb 320] [--quality 0.84]
+//   (results in out/compare/<set>/<b>/)
+//     -> .../<name>-pair.png          a (r128) on the left, b (r186) on the right
+//     -> .../<name>-diff.png          where they differ: red by more than 24 (of 255) in some channel, orange by less,
+//                                     the r128 picture dimmed where they are the same
+//     -> .../sheet.jpg                 a contact sheet of every pair with its numbers (also to --sheet if given)
+//     -> .../results.json, results.md
 // The numbers per pair: mean absolute difference over R, G and B (0-255), the share of pixels that differ at all, and the share
 // that differ by more than 24 in some channel. The images are decoded and drawn in a headless page's canvas (no network).
 import fs from 'node:fs';
@@ -15,8 +16,9 @@ import { chromium } from 'playwright';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-const sheetArg = args.indexOf('--sheet') >= 0 ? args[args.indexOf('--sheet') + 1] : null;
-const A = path.join(here, 'out', 'shots', 'r128'), B = path.join(here, 'out', 'shots', 'r186'), O = path.join(here, 'out', 'compare');
+const arg = (n, d) => (args.indexOf(n) >= 0 ? args[args.indexOf(n) + 1] : d);
+const sheetArg = arg('--sheet', null), set = arg('--set', 'all'), an = arg('--a', 'r128'), bn = arg('--b', 'r186'), thumb = +arg('--thumb', 320), quality = +arg('--quality', 0.84);
+const A = path.join(here, 'out', 'shots', set, an), B = path.join(here, 'out', 'shots', set, bn), O = path.join(here, 'out', 'compare', set, bn);
 fs.mkdirSync(O, { recursive: true });
 const names = fs.readdirSync(A).filter((f) => f.endsWith('.png') && fs.existsSync(path.join(B, f))).map((f) => f.slice(0, -4)).sort();
 if (!names.length) throw new Error('no pairs: run shots.mjs first');
@@ -55,11 +57,11 @@ for (const n of names) {
   console.log(n.padEnd(22), 'mean |d|', String(row.meanAbsDiff).padStart(9), '  pixels that differ', String(row.pixelsDiffer).padStart(7), ('(' + row.pixelsDifferShare + '%)').padStart(10), '  by >24', (row.pixelsDifferOver24Share + '%').padStart(8), r.box ? '  in x ' + r.box[0] + '-' + r.box[2] + ', y ' + r.box[1] + '-' + r.box[3] : '');
 }
 // the contact sheet: two pairs to a row, each as r128 | r186 | where they differ, with its numbers
-const sheet = await pg.evaluate(({ results }) => {
-  const P = window.__pairs, tw = 320, th = 180, lab = 22, per = 2, cols = per * 3, rows = Math.ceil(P.length / per);
+const sheet = await pg.evaluate(({ results, an, bn, thumb, quality }) => {
+  const P = window.__pairs, tw = thumb, th = Math.round(thumb * 9 / 16), lab = 22, per = 2, cols = per * 3, rows = Math.ceil(P.length / per);
   const c = document.createElement('canvas'); c.width = cols * tw + (per - 1) * 12; c.height = rows * (th + lab) + 28; const g = c.getContext('2d');
   g.fillStyle = '#f4f1ea'; g.fillRect(0, 0, c.width, c.height); g.imageSmoothingEnabled = true;
-  g.fillStyle = '#222'; g.font = 'bold 15px sans-serif'; g.fillText('What the Water Brings: three.js r128 (left) | r186 port (middle) | where they differ (red > 24 of 255, orange less; boxed)', 8, 19);
+  g.fillStyle = '#222'; g.font = 'bold 15px sans-serif'; g.fillText('What the Water Brings: ' + an + ' (left) | ' + bn + ' (middle) | where they differ (red > 24 of 255, orange less; boxed)', 8, 19);
   P.forEach((pr, i) => {
     const x0 = (i % per) * (3 * tw + 12), y0 = 28 + Math.floor(i / per) * (th + lab), r = results[i];
     g.fillStyle = '#222'; g.font = '13px sans-serif';
@@ -69,8 +71,8 @@ const sheet = await pg.evaluate(({ results }) => {
     // a few differing pixels vanish at this size: box where they are
     if (r.where) { const b = r.where; g.strokeStyle = '#ff2020'; g.lineWidth = 2; g.strokeRect(x0 + 2 * tw + dx + b[0] * s - 4, y0 + lab + dy + b[1] * s - 4, (b[2] - b[0] + 1) * s + 8, (b[3] - b[1] + 1) * s + 8); }
   });
-  return c.toDataURL('image/jpeg', 0.84);
-}, { results });
+  return c.toDataURL('image/jpeg', quality);
+}, { results, an, bn, thumb, quality });
 const jpg = Buffer.from(sheet.split(',')[1], 'base64');
 fs.writeFileSync(path.join(O, 'sheet.jpg'), jpg);
 if (sheetArg) { fs.mkdirSync(path.dirname(path.resolve(sheetArg)), { recursive: true }); fs.writeFileSync(sheetArg, jpg); }
