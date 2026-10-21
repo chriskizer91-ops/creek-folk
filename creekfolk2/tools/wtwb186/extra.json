@@ -1,0 +1,14 @@
+[
+ {"name":"x01-closeup-face","at":"start","hour":10,"eval":"W.closeUp()","step":3},
+ {"name":"x02-carry-bottle","at":"start","hour":11,"yaw":0.6,"zoom":0.35,"eval":"W.save.found.bottle = true; W.king.setItem('bottle'); W.king.play('hold-item', 0)"},
+ {"name":"x03-hold-icosa","at":"start","hour":11.5,"yaw":0.6,"zoom":0.35,"eval":"W.save.found.icosa = true; W.king.setItem('icosa'); W.king.play('hold-item', 0)"},
+ {"name":"x04-storm-midday","at":[12,3.5],"hour":13,"storm":true,"step":4},
+ {"name":"x05-lantern-night","at":[-62,-3.2],"hour":23.5,"eval":"W.save.tools.lantern = true"},
+ {"name":"x06-icons","icons":"all"},
+ {"name":"x07-cave-ending","at":[12,-26.2],"hour":14,"step":14,"eval":"W.finds.filter(function (f) { return f.coll === 'solids'; }).forEach(function (f) { W.save.found[f.id] = true; }); W.ending.start();"},
+ {"name":"x08-low-quality","quality":"low","at":"start","hour":9},
+ {"name":"x09-high-quality","quality":"high","at":[12,3.5],"hour":12.5},
+ {"name":"x10-chunky-pixels","pix":"medium","at":[-62,-3.2],"hour":9.5,"yaw":3.1},
+ {"name":"x11-phone","mobile":true,"at":[-62,-3.2],"hour":9.5,"yaw":3.1},
+ {"name":"x12-easy-storm","easy":true,"at":"start","hour":15,"storm":true,"step":4}
+]
