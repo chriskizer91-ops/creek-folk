@@ -134,7 +134,7 @@ function storyText(w, s, v) {
     case "returning":
       return `On the first Returning the sun came up through the crown and the fish swam home to the spring${why}${big ? (big >= 2 ? ", and the whole creek glowed from end to end" : ", and nobody slept that night") : ""}.`;
     case "fishrun":
-      return `On midwinter night fish that glowed like coals swam up the creek, past every pond, all the way to the spring${why}${big ? (big >= 2 ? ", and the water shone for a week after" : ", and the frogs went quiet to watch") : ""}.`;
+      return `On midwinter night fish that glowed like coals swam up the creek, past every pond, on up toward the old valley${why}${big ? (big >= 2 ? ", and the water shone for a week after" : ", and the frogs went quiet to watch") : ""}.`; // CF2: toward the old valley (Creekfolk 1: "all the way to the spring")
     case "returnee":
       return `${v.who} came home from downstream and stayed${why}${big ? (big >= 2 ? ", with news of a whole valley healing" : ", and knew everyone's name") : ""}.`;
   }
@@ -677,7 +677,7 @@ function returneeStays(w, c) {
   if (L) L.returned = Math.round(w.t);
   w.stats.returnees = (w.stats.returnees || 0) + 1;
   logEvent(w, 3, `${c.name} has decided to stay. After everything downstream, they've come home.`, [c.id], c, "visit");
-  newStory(w, "returnee", { who: c.name }, c, 2, alive.filter((o) => dist2d(o.x, o.z, c.x, c.z) < 25));
+  newStory(w, "returnee", { who: c.name }, c, 2, alive.filter((o) => dist2d(o.x, o.z, c.x, c.z) < 25 * CF2_SCALE.see)); // CF2: they see further
   for (let o of alive) {
     let r = o.rel[c.id];
     if (r && r.warmth > 0.3) remember(w, o, "visit", `${c.name} came home to stay!`, 0.85, { who: c.id });

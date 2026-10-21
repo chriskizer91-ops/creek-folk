@@ -98,7 +98,7 @@ function skycalSite(w) {
   let T = w.terrain,
     near = villageCentre(w);
   for (let i = 0; i < 400; i++) {
-    let p = T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: 8 + i / 8 }, offFloor: true, minEdge: 3 });
+    let p = T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: (8 + i / 8) * CF2_SCALE.build }, offFloor: true, minEdge: 3 }); // CF2: the village at real scale
     if (!p || !siteFor(w, p.x, p.z, i < 250 ? SKYCAL.radius + 1 : SKYCAL.radius, "skycal")) continue;
     return p;
   }
@@ -109,7 +109,7 @@ function skycalDone(w, K, s) {
   K.done = Math.round(w.t);
   let by = w.byId[K.by];
   logEvent(w, 3, `From the sighting stone, the midwinter sun will come up right over the tallest of the sky stones. Now they can always tell how long it is until midwinter.`, by ? [by.id] : [], s, "skycal");
-  newStory(w, "skycal", { who: by ? by.name : null }, s, 2, w.creatures.filter((c) => !c.visitor && dist2d(c.x, c.z, s.x, s.z) < 30));
+  newStory(w, "skycal", { who: by ? by.name : null }, s, 2, w.creatures.filter((c) => !c.visitor && dist2d(c.x, c.z, s.x, s.z) < 30 * CF2_SCALE.see)); // CF2: they see further
   if (!(w.placeNames || []).some((p) => p.kind === "skycal")) namePlace(w, "the Sky Stones", s, "skycal", 3, by || null);
 }
 
@@ -139,9 +139,9 @@ function skycalOption(w, c) {
   if (!s) return null;
   let a = w.rng.range(0, 6.28),
     r = w.rng.range(1.6, 3),
-    x = s.x - Math.cos(SUNRISE_DIR) * 1.2 + Math.cos(a) * r * 0.5,
-    z = s.z - Math.sin(SUNRISE_DIR) * 1.2 + Math.sin(a) * r * 0.5;
-  if (!w.terrain.walkable(x, z)) (x = s.x - 2), (z = s.z);
+    x = s.x + (-Math.cos(SUNRISE_DIR) * 1.2 + Math.cos(a) * r * 0.5) * CF2_SCALE.build, // CF2: the stones at real scale
+    z = s.z + (-Math.sin(SUNRISE_DIR) * 1.2 + Math.sin(a) * r * 0.5) * CF2_SCALE.build; // CF2
+  if (!w.terrain.walkable(x, z)) (x = s.x - 2 * CF2_SCALE.build), (z = s.z); // CF2
   return { score: 1.6 + 0.3 * c.temp.curiosity, plan: { goal: "midwinter", steps: [{ do: "walk", x, z, near: 0.6 }, { do: "watchsunrise", dur: w.rng.range(150, 300), lx: s.x + Math.cos(SUNRISE_DIR) * 30, lz: s.z + Math.sin(SUNRISE_DIR) * 30 }] } };
 }
 

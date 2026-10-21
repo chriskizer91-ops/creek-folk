@@ -6,6 +6,9 @@
 // builds the temple or the Hall of the Ancestors (nothing here is paced by the player),
 // and the journey to the spring is Creekfolk 1's story (Creekfolk 2's founders came down
 // the creek, and know where it comes from). Phase 3 brings treasures carried by floods.
+// Creekfolk 1's 3C (returning.js) lays a procession path and holds the Returning festival
+// only once a temple is finished, so with no temple neither ever happens; what is left is
+// its glowing fish run at midwinter once the creek has healed (Creekfolk 2's fish run).
 // See docs/MERGE.md.
 // ==========================================================================
 

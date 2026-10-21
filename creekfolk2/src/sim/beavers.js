@@ -79,7 +79,7 @@ function beaversArrive(w, dev = false) {
   for (let k = 0; k < 2; k++) beaverAdd(w, B, "adult", { i: Math.min(cr.nodes.length - 1, li + 6 + k), side: 0 });
   let pond = (w.placeNames || []).find((p) => p.kind === "pool" && dist2d(p.x, p.z, lodge.x, lodge.z) < 14);
   logEvent(w, 3, `Two beavers came up the creek in the night and looked the ponds over. By morning they had begun a lodge of sticks in ${pond ? pond.name : "the biggest pond"}.`, [], lodge, "beavers");
-  let near = w.creatures.filter((c) => !c.visitor && !c.asleep && dist2d(c.x, c.z, lodge.x, lodge.z) < 25);
+  let near = w.creatures.filter((c) => !c.visitor && !c.asleep && dist2d(c.x, c.z, lodge.x, lodge.z) < 25 * CF2_SCALE.see); // CF2: they see further
   newStory(w, "beavers", { where: pond ? pond.name : null }, lodge, 2, near);
   for (let c of near) {
     remember(w, c, "nature", "Beavers have come to live in our ponds! They work the water the way we do.", 0.8);
@@ -278,7 +278,7 @@ function beaverSmallSite(w, B) {
     bs = -1;
   for (let k = 0; k < 60; k++) {
     let z = w.rng.range(3, VL - 3),
-      x = clamp(w.terrain.creekX(z) + w.rng.range(-18, 18), 1, VW - 1),
+      x = clamp(w.terrain.creekX(z) + w.rng.range(-18, 18) * CF2_SCALE.floor, 1, VW - 1), // CF2: the wider floor
       ci = Math.floor(z) * VW + Math.floor(x);
     if (!c.floor[ci] || c.d[ci] < 2) continue;
     if (B.small.some((s) => dist2d(s.x, s.z, x, z) < 9)) continue;

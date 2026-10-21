@@ -173,12 +173,12 @@ function groveSpotOK(w, g, x, z, trees, reach) {
   let hall = w.ancestors && w.byId[w.ancestors.sid];
   if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) return false; // ... and the Hall of the Ancestors'
   for (let s of w.structures) {
-    let r = ((STRUCTURES[s.kind] && STRUCTURES[s.kind].radius) || 1) + 1.2;
+    let r = ((STRUCTURES[s.kind] && STRUCTURES[s.kind].radius) || 1) + 1.2 * CF2_SCALE.build; // CF2: the grove at real scale
     if ((s.x - x) ** 2 + (s.z - z) ** 2 < r * r) return false;
   }
   let sp2 = GROVE.space * GROVE.space;
   for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < sp2) return false;
-  for (let l of g.logs) if (groveLogDist(l, x, z) < 0.9) return false;
+  for (let l of g.logs) if (groveLogDist(l, x, z) < 0.9 * CF2_SCALE.build) return false; // CF2
   return true;
 }
 
@@ -199,25 +199,26 @@ function groveSpot(w, g, c, from, tk) {
   for (let p of c.parents || []) add(groveTreeOf(w, p));
   for (let p of c.parents || []) for (let gp of (w.lineage && w.lineage[p] && w.lineage[p].parents) || []) add(groveTreeOf(w, gp));
   // beside the family's tree, if there is room close by
-  let a = anchors[0],
+  let B = CF2_SCALE.build, // CF2: the grove at real scale (every length below is Creekfolk 1's times B)
+    a = anchors[0],
     kin = (x, z) => {
       let s = 0;
-      for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < 10.2) s += t.tk === tk ? -1 : 0.8;
+      for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < 10.2 * B * B) s += t.tk === tk ? -1 : 0.8; // CF2
       return s;
     };
   if (a) {
     let best = null,
       bestS = 1e9;
     for (let ri = 0; ri < 5; ri++) {
-      let r = GROVE.space + 0.15 + ri * 0.55,
-        n = Math.max(10, Math.round((2 * Math.PI * r) / 0.7)),
+      let r = GROVE.space + (0.15 + ri * 0.55) * B, // CF2
+        n = Math.max(10, Math.round((2 * Math.PI * r) / (0.7 * B))), // CF2
         a0 = rng.range(0, Math.PI * 2);
       for (let k = 0; k < n; k++) {
         let ang = a0 + (k / n) * Math.PI * 2,
           x = a.x + Math.cos(ang) * r,
           z = a.z + Math.sin(ang) * r;
         if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
-        let s = 0.5 * r + 0.06 * Math.hypot(x - g.x, z - g.z) + kin(x, z);
+        let s = (0.5 * r + 0.06 * Math.hypot(x - g.x, z - g.z)) / B + kin(x, z); // CF2
         if (s < bestS) (bestS = s), (best = { x, z, near: a });
       }
     }
@@ -228,24 +229,24 @@ function groveSpot(w, g, c, from, tk) {
   // centre; often that is where an old tree fell, beside its log
   let best = null,
     bestS = 1e9,
-    step = 0.85,
+    step = 0.85 * B, // CF2
     ox = rng.range(0, step),
     oz = rng.range(0, step);
   for (let x = g.x - GROVE.reach + ox; x <= g.x + GROVE.reach; x += step)
     for (let z = g.z - GROVE.reach + oz; z <= g.z + GROVE.reach; z += step) {
       if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
-      let s = kin(x, z) + 0.04 * Math.hypot(x - g.x, z - g.z) + (a ? 0.05 * Math.hypot(x - a.x, z - a.z) : 0),
+      let s = kin(x, z) + (0.04 * Math.hypot(x - g.x, z - g.z) + (a ? 0.05 * Math.hypot(x - a.x, z - a.z) : 0)) / B, // CF2
         log = null;
-      for (let l of g.logs) if (groveLogDist(l, x, z) < 1.6) log = l;
+      for (let l of g.logs) if (groveLogDist(l, x, z) < 1.6 * B) log = l; // CF2
       if (log) s -= 0.3; // where new growth starts
-      if (s < bestS) (bestS = s), (best = { x, z, log, near: a && Math.hypot(x - a.x, z - a.z) < 4.5 ? a : null });
+      if (s < bestS) (bestS = s), (best = { x, z, log, near: a && Math.hypot(x - a.x, z - a.z) < 4.5 * B ? a : null }); // CF2
     }
   if (best) return best;
   // the grove is full: the first free place in a spiral beyond it
   for (let reach of [0])
     for (let n = 0; n < 2400; n++) {
       let a = n * 2.39996,
-        r = 0.95 * Math.sqrt(n + 0.5),
+        r = 0.95 * B * Math.sqrt(n + 0.5), // CF2
         x = g.x + Math.cos(a) * r,
         z = g.z + Math.sin(a) * r;
       if (groveSpotOK(w, g, x, z, trees, reach)) return { x, z };
@@ -301,8 +302,8 @@ function groveFell(w, g, tree, quiet) {
   let rng = new Rng(w.seed + ":grovelog:" + tree.id),
     size = groveSize(w, tree),
     wide = Math.pow(size, 0.7),
-    len = +Math.min(7.5, 1.3 * size + 0.4).toFixed(2),
-    r = +(0.2 * wide).toFixed(2),
+    len = +(Math.min(7.5, 1.3 * size + 0.4) * CF2_SCALE.build).toFixed(2), // CF2: the grove at real scale
+    r = +(0.2 * wide * CF2_SCALE.build).toFixed(2), // CF2
     trees = w.res.filter((o) => o.kind === "grove" && o !== tree),
     best = 0,
     bestS = -1e9,
@@ -315,8 +316,8 @@ function groveFell(w, g, tree, quiet) {
       s = rng.range(0, 0.4);
     if (!w.terrain.walkable(ex, ez)) s -= 6;
     let probe = { x: tree.x, z: tree.z, rot: a, len, r };
-    for (let o of trees) if (groveLogDist(probe, o.x, o.z) < 0.5) s -= 1;
-    for (let l of g.logs) for (let u = 0.15; u < 1; u += 0.2) if (groveLogDist(l, tree.x + Math.cos(a) * len * u, tree.z + Math.sin(a) * len * u) < r + 0.15) s -= 1.5; // not across another log
+    for (let o of trees) if (groveLogDist(probe, o.x, o.z) < 0.5 * CF2_SCALE.build) s -= 1; // CF2
+    for (let l of g.logs) for (let u = 0.15; u < 1; u += 0.2) if (groveLogDist(l, tree.x + Math.cos(a) * len * u, tree.z + Math.sin(a) * len * u) < r + 0.15 * CF2_SCALE.build) s -= 1.5; // not across another log // CF2
     for (let o of w.structures) if (groveLogDist(probe, o.x, o.z) < ((STRUCTURES[o.kind] && STRUCTURES[o.kind].radius) || 1)) s -= 4;
     if (w.givingPlace && groveLogDist(probe, w.givingPlace.x, w.givingPlace.z) < TEMPLE_ROOM) s -= 3;
     if (s > bestS) (bestS = s), (best = a);
@@ -331,7 +332,7 @@ function groveFell(w, g, tree, quiet) {
     kind = GROVE_WORDS[log.tk][0],
     days = Math.round((w.t - tree.planted) / DAY_S);
   if (founder)
-    logEvent(w, 3, `The great ${kind} planted for ${tree.name}, one of the first five, has fallen in the grove after ${days} days. Moss and ferns will cover it, and young trees will grow from it.`, [], log, "grove");
+    logEvent(w, 3, `The great ${kind} planted for ${tree.name}, one of the first ${numberWord(LIFE.founders)}, has fallen in the grove after ${days} days. Moss and ferns will cover it, and young trees will grow from it.`, [], log, "grove"); // CF2: eight founders (Creekfolk 1: "the first five")
   else logEvent(w, 1, `The old ${kind} planted for ${tree.name} fell in the grove. It will feed new growth.`, [], log, "grove");
   return log;
 }
@@ -436,7 +437,7 @@ function goatKids(w, f, mom) {
   let first = f.kids === n;
   logEvent(w, first ? 2 : 1, n === 2 ? `${mom.name} the goat had twins in the pasture. The children named them ${names[0]} and ${names[1]}.` : `${mom.name} the goat had a kid in the pasture. The children named it ${names[0]}.`, [], mom, "goats");
   // the children who love the goats remember it
-  for (let c of w.creatures) if (!c.visitor && !c.asleep && (c.counts.goats || 0) > 2 && dist2d(c.x, c.z, mom.x, mom.z) < 30) remember(w, c, "goats", n === 2 ? `${mom.name} the goat had twins! They wobble about after her.` : `${mom.name} the goat had a kid. It wobbles about after her.`, 0.6, { x: mom.x, z: mom.z, pv: 0.3 });
+  for (let c of w.creatures) if (!c.visitor && !c.asleep && (c.counts.goats || 0) > 2 && dist2d(c.x, c.z, mom.x, mom.z) < 30 * CF2_SCALE.see) remember(w, c, "goats", n === 2 ? `${mom.name} the goat had twins! They wobble about after her.` : `${mom.name} the goat had a kid. It wobbles about after her.`, 0.6, { x: mom.x, z: mom.z, pv: 0.3 }); // CF2: they notice from further off
 }
 
 function goatDies(w, f, g) {

@@ -298,7 +298,7 @@ function returningPhase(w) {
     if (A.phase !== "night" && w.t >= A.dusk) {
       A.phase = "night";
       R.fishRuns++;
-      logEvent(w, R.fishRuns === 1 ? 3 : 2, R.fishRuns === 1 ? "On midwinter night, fish that glowed softly like coals swam up the creek, past every pond, all the way to the spring. Nobody had ever seen it before." : "On midwinter night the glowing fish swam up the creek to the spring again.", [], null, "returning");
+      logEvent(w, R.fishRuns === 1 ? 3 : 2, R.fishRuns === 1 ? "On midwinter night, fish that glowed softly like coals swam up the creek, past every pond, on up toward the old valley. Nobody had ever seen it before." : "On midwinter night the glowing fish swam up the creek toward the old valley again.", [], null, "returning"); // CF2: the fish run swims up toward the old valley (Creekfolk 1: "to the spring")
       if (R.fishRuns === 1) newStory(w, "fishrun", {}, null, 2, w.creatures.filter((c) => !c.visitor && !c.asleep));
     }
     return;
@@ -444,7 +444,7 @@ ACTIONS.watchfish = {
     c.needs.fun = clamp(c.needs.fun + 0.3, 0, 1);
     c.needs.social = clamp(c.needs.social + 0.1, 0, 1);
     feel(c, w, "joy", 0.45);
-    if (!(c.counts.fishrun > 0)) remember(w, c, "returning", "The fish came up the creek glowing, all of them, all the way to the spring. I set my lantern on the bank and watched them go by.", 0.85);
+    if (!(c.counts.fishrun > 0)) remember(w, c, "returning", "The fish came up the creek glowing, all of them, on up toward the old valley. I sat on the bank and watched them go by.", 0.85); // CF2: toward the old valley, and no lanterns without the festival
     c.counts.fishrun = (c.counts.fishrun || 0) + 1;
     return true;
   },
