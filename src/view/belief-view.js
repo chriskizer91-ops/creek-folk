@@ -72,7 +72,7 @@ function drawHall(r, f, b) {
   let hz = 0.4,
     HW = 2.5,
     HD = 1.8,
-    wallH = 1.8;
+    wallH = 2.2; // up to the beams
   if (f(1, 0)) for (let i = 0; i < Math.round(8 * f(1, 0)); i++) {
     let corner = [[-HW, -HD], [HW, -HD], [HW, HD], [-HW, HD], [0, -HD], [HW, 0], [0, HD], [-HW, 0]][i];
     P(lt(0.5, 0.25, 0.5), stone2, { x: corner[0], y: 0.12, z: hz + corner[1] });
@@ -93,6 +93,13 @@ function drawHall(r, f, b) {
   if (f(1, 5)) for (let sg of [-1, 1]) P(lt(0.18, wallH * f(1, 5), 2 * HD), wallCol, { x: sg * HW, y: (wallH * f(1, 5)) / 2, z: hz });
   // the front wall, with a door in the middle, comes with the north wall
   if (f(1, 4) >= 1) for (let sg of [-1, 1]) P(lt(HW - 0.55, wallH, 0.18), wallCol, { x: sg * (HW / 2 + 0.28), y: wallH / 2, z: hz - HD });
+  // the gable ends, stepped clay up under the roof, come with the end walls
+  if (f(1, 4) >= 1)
+    for (let k = 0; k < 6; k++) {
+      let top = postH + 0.2 * (k + 1),
+        half = (postH + 1.18 - top) / 0.446;
+      if (half > 0.1) for (let sz of [-1, 1]) P(lt(2 * half, 0.2, 0.16), wallCol, { y: top - 0.1, z: hz + sz * HD });
+    }
   let panel = (k, x, z, ry) => f(1, k) && (P(lt(1.1, 0.8 * f(1, k), 0.06), PALETTE.clay, { x, y: 1.05, z, ry }), f(1, k) >= 1 && P(lt(0.7, 0.4, 0.07), 0x9a5a38, { x, y: 1.05, z: z + (ry ? 0 : -0.01), ry }));
   panel(6, -HW - 0.1, hz - 0.6, Math.PI / 2);
   panel(7, HW + 0.1, hz - 0.6, Math.PI / 2);

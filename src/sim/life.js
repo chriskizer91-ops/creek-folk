@@ -480,6 +480,9 @@ function groveTree(w, c) {
     let x = g.x + Math.cos(a) * r,
       z = g.z + Math.sin(a) * r;
     if (!w.terrain.walkable(x, z)) continue;
+    if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) continue; // BELIEF: the temple's ground stays clear
+    let hall = w.ancestors && w.byId[w.ancestors.sid];
+    if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) continue; // ... and the Hall of the Ancestors'
     let tree = register(w, {
       id: w.nextId++,
       kind: "grove",

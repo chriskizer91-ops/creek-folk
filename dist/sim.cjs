@@ -9648,6 +9648,9 @@ function groveTree(w, c) {
     let x = g.x + Math.cos(a) * r,
       z = g.z + Math.sin(a) * r;
     if (!w.terrain.walkable(x, z)) continue;
+    if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) continue; // BELIEF: the temple's ground stays clear
+    let hall = w.ancestors && w.byId[w.ancestors.sid];
+    if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) continue; // ... and the Hall of the Ancestors'
     let tree = register(w, {
       id: w.nextId++,
       kind: "grove",
@@ -10673,7 +10676,23 @@ function faunaNext(w, group) {
 function faunaSpot(w, near, r, extra = {}) {
   let T = w.terrain,
     avoid = w.givingPlace ? [{ x: w.givingPlace.x, z: w.givingPlace.z, r: TEMPLE_ROOM }] : [];
-  return T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r }, offFloor: true, minEdge: 3, avoid, ...extra }) || T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: r * 1.6 }, minEdge: 2, avoid });
+  return T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r }, offFloor: true, minEdge: 3, avoid, ...extra }) || T.randomPoint(w.rng, { near: { x: near.x, z: near.z, r: r * 1.6 }, minEdge: 2, avoid }) || spotInDisc(w, near, Math.max(10, r * 2), avoid);
+}
+
+// randomPoint samples the whole valley, so a small circle is often missed; this samples
+// the circle itself (the last resort, so a gift can always find a place).
+function spotInDisc(w, near, r, avoid) {
+  let T = w.terrain;
+  for (let i = 0; i < 300; i++) {
+    let a = w.rng.range(0, Math.PI * 2),
+      d = r * Math.sqrt(w.rng.next()),
+      x = near.x + Math.cos(a) * d,
+      z = near.z + Math.sin(a) * d;
+    if (x < 3 || x > VW - 3 || z < 3 || z > VL - 3 || !T.walkable(x, z) || T.edgeDist(x, z) < 1.5) continue;
+    if (avoid.some((o) => Math.hypot(x - o.x, z - o.z) < (o.r ?? 2))) continue;
+    return { x, z };
+  }
+  return null;
 }
 // The ground kept clear around the Giving Place for the temple (it reaches about 9 m
 // toward their midwinter sunrise).

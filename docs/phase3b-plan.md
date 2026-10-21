@@ -186,3 +186,12 @@ valley ends up different. Gifts still never decide survival.
   doubters talked the rest down. Now children start with 0.95 of it, the fade while resting
   is about 0.0014 a day, and doubters barely sway believers until the gifts return. The
   temple's "waiting" story is weightier, so the village keeps telling it.
+- **Every gift finds a place.** Bees (and in principle any gift placed near the village)
+  sometimes couldn't be placed in a young valley: the spot finder sampled the whole valley
+  and missed small circles. A last try now samples the circle itself (`spotInDisc`).
+- **The memorial grove keeps off the great works.** In two of the year runs the grove grew
+  into the temple's ground (86 trees inside it by day 330), and in both Hall of the
+  Ancestors valleys it grew over the hall. Memorial trees now skip the temple's ground and
+  the hall's.
+- **The hall's gable ends are closed** (stepped clay up under the roof), and its walls reach
+  the beams.
