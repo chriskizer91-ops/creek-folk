@@ -113,7 +113,63 @@ dams, no marsh, no homes, no temple. Let go and it's now again.
 now; in a valley with no temple, the fish run).
 
 ## Measured
-_(filled in from the final runs)_
+Everything here was run on the final build unless it says otherwise. The year runs are
+whole valleys, every moment simulated (`tools/year.cjs`; the printouts are in
+`docs/runs-3c/`). The simulated player gives on a rhythm, three times in four whatever the
+valley needs most, as in 3B.
+
+**Into month 13** (every other day, two valleys, 390 days):
+
+| | Valley 1 | Valley 2 |
+|---|---|---|
+| Sky stones finished | day 13 | day 13 |
+| Beavers came | day 166 | day 120 |
+| Wet at the driest, by valley year (every 5th) | 10%, 13%, 40%, 53%, **93%**, 95%, 95%, 94%, 95% | 10%, 25%, 62%, **97%**, 97%, 97%, 97%, 97%, 97% |
+| Temple finished | day 314 | day 314 |
+| Procession path | days 314 to 336 | days 314 to 336 |
+| First Returning | **day 343 (month 12)** | **day 343 (month 12)** |
+| Returnings by day 390 | 6 | 6 |
+| Lanterns on the pyramid | 69 | 66 |
+| Came home to stay | 2 | 3 |
+| Legends | 39 | 38 |
+| Population at day 300 / 365 | 32 / 30 | 32 / 29 |
+| Births, passings, gone downstream | 394, 317, 57 | 405, 326, 60 |
+| Simulation errors | 0 | 0 |
+
+**Does it keep running smoothly?** Time to simulate each 30 days (Node, two valleys at once
+on this two-core machine), months 10 to 13: 355, 370, 402, 403 s (valley 1) and 410, 397,
+404, 421 s (valley 2): about flat, with the population flat at about 30. Save size at days
+300, 330, 360, 390: 2.23, 2.32, 2.23, 2.31 MB (valley 1) and 2.21, 2.44, 2.39, 2.30 MB
+(valley 2): flat. The runner's memory in use moved between 25 and 81 MB with no trend.
+Everything new is bounded: grove trees (at most 240 standing, logs at most 24), legends (24
+kept), verses (12 kept, the count goes on), lanterns (a count; 320 drawn), beavers (6), side
+dams (12), goats (8), carvings (60). The lineage record still grows by about 450 small
+entries a year, as before.
+
+**The Returning by giving rhythm** (your expectations: month 12, about 10.5, about 9):
+
+| Giving | Temple finished | First Returning | Returnings by day 330 |
+|---|---|---|---|
+| Every other day | day 314 | day 343, month 12 | (6 by day 390) |
+| Daily | day 261.3 | day 287, month 10 (9.6 months in) | 6 |
+| Twice a day | day 234 | day 263, month 9 (8.8 months in) | 9 |
+[[E96NONE]]
+
+The Returning comes on the first midwinter after the path is done, so it lands 3 to 8 days
+after the path's last stretch. (Twice a day finished the temple on day 234 here against
+day 220 in 3B: the simulated player happened to give no dreams this time; a dream brings a
+part sooner.)
+
+**The year's targets** (`year.cjs`), in all five runs: no valley drops to zero, no errors,
+first passing after day 12, someone leaves downstream, the temple finishes in month 11 for
+every other day, most believe; and the 3C ones: beavers arrive between month 5 and month 7
+(days 120, 142, 150, 166), the sky stones are finished before their second midwinter (day
+13 in every valley), most of the floor stays wet all year by month 9 (at least 80% at the
+driest: 94%, 97%, 96%, 95% in the giving valleys [[NONEWET]]), and an every-other-day giver
+holds the first Returning in month 12 (day 343). The population target ("30 between month 2
+and month 6") passed in every run this time.
+
+[[CHECKS]]
 
 ## Pictures
 _(filled in)_

@@ -1,0 +1,32 @@
+  year-1 day 30: 16 creekfolk (157 s, save 706 KB) | creek: wet now 13%, at the driest 9%, trench 0.982m, dams 333333333331, raised 0, feed 26, bumpy 0.007/0, downstream-knowers 15 | believe 15/16, temple 4/36 waiting pace 1.2, offerings 49, asked 25 answered 12, spring found day 11.3
+  year-1 day 60: 19 creekfolk (397 s, save 1058 KB) | creek: wet now 9%, at the driest 6%, trench 0.596m, dams 3333333333333!, raised 0, feed 24, bumpy 0.031/0.001, downstream-knowers 19 | believe 17/19, temple 8/36 waiting pace 1.2, offerings 179, asked 53 answered 27, spring found day 11.3
+  year-1 day 90: 23 creekfolk (604 s, save 1240 KB) | creek: wet now 36%, at the driest 11%, trench 0.506m, dams 3333333333333, raised 7, feed 26, bumpy 0.033/0.001, downstream-knowers 22 | believe 21/23, temple 12/36 waiting pace 1.2, offerings 307, asked 77 answered 37, spring found day 11.3
+  year-1 day 120: 25 creekfolk (836 s, save 1475 KB) | creek: wet now 79%, at the driest 32%, trench 0.394m, dams 3333333333333, raised 12, feed 28, bumpy 0.017/0.001, downstream-knowers 25 | believe 23/25, temple 16/36 building pace 1.2, offerings 439, asked 98 answered 42, spring found day 11.3
+  year-1 day 150: 23 creekfolk (1165 s, save 1506 KB) | creek: wet now 92%, at the driest 89%, trench 0.294m, dams 3333333333333, raised 64, feed 36, bumpy 0.021/0.001, downstream-knowers 22 | believe 22/23, temple 20/36 waiting pace 1.2, offerings 594, asked 121 answered 51, spring found day 11.3, beavers 3
+  year-1 day 180: 29 creekfolk (1528 s, save 1883 KB) | creek: wet now 96%, at the driest 95%, trench 0.235m, dams 3333333333333, raised 94, feed 36, bumpy 0.02/0.001, downstream-knowers 29 | believe 27/29, temple 25/36 waiting pace 1.2, offerings 739, asked 151 answered 60, spring found day 11.3, beyond: Solwyn, beavers 6
+  year-1 day 210: 29 creekfolk (1907 s, save 1915 KB) | creek: wet now 97%, at the driest 96%, trench 0.216m, dams 3333333333333, raised 109, feed 36, bumpy 0.017/0.002, downstream-knowers 29 | believe 26/29, temple 28/36 building pace 1.2, offerings 903, asked 181 answered 72, spring found day 11.3, beyond: Sollo, beavers 4
+  year-1 day 240: 28 creekfolk (2338 s, save 2005 KB) | creek: wet now 98%, at the driest 96%, trench 0.206m, dams 3333333333333, raised 124, feed 36, bumpy 0.013/0.002, downstream-knowers 28 | believe 26/28, temple 32/36 waiting pace 1.2, offerings 1074, asked 211 answered 86, spring found day 11.3, beyond: Fenet, beavers 6
+  year-1 day 270: 29 creekfolk (2760 s, save 2093 KB) | creek: wet now 96%, at the driest 96%, trench 0.204m, dams 3333333333333, raised 141, feed 36, bumpy 0.012/0.002, downstream-knowers 29 | believe 27/29, temple 36/36 done pace 1.2, offerings 1237, asked 241 answered 102, spring found day 11.3, beyond: Wickow, beavers 5, path 5/12
+  year-1 day 300: 32 creekfolk (3243 s, save 2348 KB) | creek: wet now 96%, at the driest 96%, trench 0.2m, dams 3333333333333, raised 158, feed 36, bumpy 0.012/0.003, downstream-knowers 31 | believe 29/32, temple 36/36 done pace 1.2, offerings 1425, asked 271 answered 118, spring found day 11.3, beyond: Cobble, beavers 6, path 12/12, Returnings 2
+  year-1 day 330: 29 creekfolk (3726 s, save 2310 KB) | creek: wet now 97%, at the driest 94%, trench 0.197m, dams 3333333333333, raised 175, feed 36, bumpy 0.012/0.003, downstream-knowers 29 | believe 26/29, temple 36/36 done pace 1.2, offerings 1605, asked 301 answered 129, spring found day 11.3, beyond: Ashwyn, beavers 6, path 12/12, Returnings 6
+
+1 valleys, 330 days each, in 3726 s wall time
+
+year-1: 30d:16 60d:21 90d:20 120d:24 180d:29 240d:30 300d:33 | births 329, passings 249, downstream 62, generations 28, errors 0, first passing day 14.63, full by day -, sim 3726 s (7652x), save 2310 KB
+  year-1 minds: 53 stories, 38 myths (first day 12.8), 22 places, skills lost 0 / relearned 0, visits 41, gifts 330, believers 26, giver the creek, customs seasons,thanks,passing
+  year-1 belief: first believer day 5.3, believe 26/29, asked 301 answered 129, offerings 1605, spring heard 11 found 11.3, beyond Tibter@150 Solwyn@177<Tibter Quin@189<Solwyn Sollo@208<Quin Calter@225<Sollo Fenet@226<Calter Cobly@251<Fenet Wickow@267<Cobly Zinley@279<Wickow Cobble@297<Zinley Yara@311<Cobble Ashwyn@324<Yara
+  year-1 temple: started day 7, 36/36 parts, done; stages done 85, 171.3, 261.3; finished day 261.3 (month 8.7); made do 0
+  year-1 3C: beavers came day 142 (6 now; dams built up 158, mended 1348, side dams 12); sky stones day 7 to 13 (40 midwinter mornings); path 261.3 to 283.5; first Returning day 287 (month 10), Returnings 6, lanterns 65, verses 6, fish runs 0; came home to stay 2; legends 39
+  year-1 saves: d30 706KB/35MB d60 1058KB/43MB d90 1240KB/48MB d120 1475KB/31MB d150 1506KB/23MB d180 1883KB/25MB d210 1915KB/36MB d240 2005KB/47MB d270 2093KB/45MB d300 2348KB/44MB d330 2310KB/36MB
+  year-1 wet at the driest by valley year: 0.12 0.1 0.32 0.94 0.96 0.96 0.95 0.95
+
+Targets:
+  PASS  No valley ever drops to zero.  [8]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [161]
+  PASS  Someone leaves downstream once the valley is full.  [62]
+  PASS  Most of the village believes the creek gives (with a giver).  [26/29]
+  PASS  Beavers arrive between month 5 and month 7.  [142]
+  PASS  The sky stones are finished before their second midwinter (day 15).  [13]
+  PASS  Most of the valley floor stays wet all year by month 9 (at least 80% at the driest).  [0.9575]
