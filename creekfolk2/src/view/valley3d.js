@@ -251,10 +251,11 @@ var CF2Valley = (function () {
 
   // ---- the valley ------------------------------------------------------------------
   var TILE = 32,
-    TX0 = -4,
-    TX1 = Math.ceil(VW / TILE) + 4,
-    TZ0 = -3,
-    TZ1 = Math.ceil(VL / TILE) + 3;
+    TX0 = -8,
+    TX1 = Math.ceil(VW / TILE) + 8,
+    TZ0 = -7,
+    TZ1 = Math.ceil(VL / TILE) + 7,
+    RING = 4; // tiles more than this many from the valley are the distant hills: coarse, bare of things
   var TYPES = ["grass", "grassL", "grassD", "straw", "strawL", "dust", "marsh", "mud", "clay", "gravel", "bed", "lime", "limeD", "limeBed", "moss", "path", "pathE", "soil", "ovA", "ovB", "ovC", "ovD", "ovE", "ovF", "ovG"];
   var TI = {};
   TYPES.forEach((t, i) => (TI[t] = i));
@@ -274,7 +275,7 @@ var CF2Valley = (function () {
     THINGS.name = "Things";
     grp.add(FARG, NEARG, THINGS);
     // solid earth under everything, so a view cut open shows soil, not sky
-    var fl = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200).rotateX(-Math.PI / 2), paint("soil", { side: true }));
+    var fl = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), paint("soil", { side: true }));
     fl.position.set(VW / 2, -6, VL / 2);
     grp.add(fl);
 
@@ -501,8 +502,10 @@ var CF2Valley = (function () {
       for (var ti = TX0; ti < TX1; ti++) {
         let x0 = ti * TILE,
           z0 = tj * TILE,
-          inner = ti >= 0 && tj >= 0 && x0 < VW && z0 < VL;
-        TIL.push({ i: ti, j: tj, x0, z0, inner, far: null, near: null, job: null, key: "", thingsKey: "", things: null });
+          inner = ti >= 0 && tj >= 0 && x0 < VW && z0 < VL,
+          ring = Math.max(-ti, ti - (Math.ceil(VW / TILE) - 1), -tj, tj - (Math.ceil(VL / TILE) - 1), 0),
+          distant = ring > RING;
+        TIL.push({ i: ti, j: tj, x0, z0, inner, distant, far: null, near: null, job: null, key: "", thingsKey: "", things: null });
       }
     W.tiles = TIL;
     var CELL = 1; // the size of the cells being typed now (layers of rock show only in fine ones)
@@ -1945,9 +1948,10 @@ var CF2Valley = (function () {
     function farTile(Tl) {
       var g = new THREE.Group();
       g.name = "Far_" + Tl.i + "_" + Tl.j;
-      var land = groundMesh(Tl, Tl.inner ? 1 : 2);
+      var land = groundMesh(Tl, Tl.inner ? 1 : Tl.distant ? 8 : 2);
       land.receiveShadow = false;
       g.add(land);
+      if (Tl.distant) return g;
       if (Tl.inner) {
         creekRibbon(Tl, g, 2, 3);
         floorWater(Tl, g, 1);
