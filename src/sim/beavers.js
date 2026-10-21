@@ -17,7 +17,9 @@ var BEAVER = {
   raiseGap: 2 * 86400, // a dam is built up by beavers at most this often ...
   raiseEvery: 3 * 3600, // ... and the beavers build one up at most this often (all dams)
   speed: 0.4, // m/s swimming
-  smallDams: 5, // little stick dams on the side channels
+  smallDams: 12, // little stick dams on the side channels across the floor ...
+  smallHold: 0.2, // ... each holds water this far above the ground where it stands ...
+  smallReach: 7, // ... over the low ground within this many metres, all year
   oldDays: 60, // real days a beaver lives, about
 };
 
@@ -267,21 +269,50 @@ function beaverWorkDone(w, B, b) {
   beaverGo(w, b, B.lodge.i, "home");
 }
 
-// A spot on a side channel near the lodge for a little stick dam ({ x, z, i } or null).
+// A spot for a little stick dam across a side channel: anywhere on the valley floor (the
+// beavers range up and down the creek), where the ground still dries out ({ x, z, i } or null).
 function beaverSmallSite(w, B) {
-  let cr = w.creek;
-  if (!cr.chan) return null;
-  for (let k = 0; k < 40; k++) {
-    let x = B.lodge.x + w.rng.range(-18, 18),
-      z = B.lodge.z + w.rng.range(-28, 28);
-    if (x < 1 || z < 1 || x > VW - 1 || z > VL - 1) continue;
-    let vi = Math.round(z) * (VW + 1) + Math.round(x);
-    if (!(cr.chan[vi] >= 0.2)) continue;
-    if (B.small.some((s) => dist2d(s.x, s.z, x, z) < 6)) continue;
-    return { x: +x.toFixed(2), z: +z.toFixed(2), i: creekNodeIndex(z) };
+  let cr = w.creek,
+    c = creekCells(w),
+    best = null,
+    bs = -1;
+  for (let k = 0; k < 60; k++) {
+    let z = w.rng.range(3, VL - 3),
+      x = clamp(w.terrain.creekX(z) + w.rng.range(-18, 18), 1, VW - 1),
+      ci = Math.floor(z) * VW + Math.floor(x);
+    if (!c.floor[ci] || c.d[ci] < 2) continue;
+    if (B.small.some((s) => dist2d(s.x, s.z, x, z) < 9)) continue;
+    let vi = Math.round(z) * (VW + 1) + Math.round(x),
+      sc = 1 - (w.wet ? w.wet[ci] : 0) + 0.6 * Math.min(1, (cr.chan ? cr.chan[vi] : 0) / 0.2);
+    if (sc > bs) (bs = sc), (best = { x: +x.toFixed(2), z: +z.toFixed(2), i: creekNodeIndex(z) });
   }
-  return null;
+  return bs > 0.5 ? best : null;
 }
+
+// The water the side dams hold, per cell (creek.js adds it to the water table): a dam holds
+// water a little above the ground where it stands, over the low ground around it.
+function beaverPondLevels(w, c) {
+  let B = w.beavers;
+  if (!B || !B.small.length) return null;
+  let key = B.small.map((s) => s.x + ":" + s.z).join(",") + "|" + w.terrain.version,
+    m = beaverPondCache.get(w.creek);
+  if (m && m.key === key) return m.a;
+  let a = new Float32Array(CELLS),
+    R = BEAVER.smallReach;
+  a.fill(-1e9);
+  for (let s of B.small) {
+    let L = w.terrain.heightAt(s.x, s.z) + BEAVER.smallHold;
+    for (let cz = Math.max(0, Math.floor(s.z - R)); cz <= Math.min(VL - 1, Math.ceil(s.z + R)); cz++)
+      for (let cx = Math.max(0, Math.floor(s.x - R)); cx <= Math.min(VW - 1, Math.ceil(s.x + R)); cx++) {
+        let k = cz * VW + cx;
+        if (!c.floor[k] || (cx + 0.5 - s.x) ** 2 + (cz + 0.5 - s.z) ** 2 > R * R || c.h[k] > L) continue;
+        if (L > a[k]) a[k] = L;
+      }
+  }
+  beaverPondCache.set(w.creek, { key, a });
+  return a;
+}
+var beaverPondCache = new WeakMap();
 
 // The creekfolk notice how much the beavers do.
 function beaverNotice(w, B) {

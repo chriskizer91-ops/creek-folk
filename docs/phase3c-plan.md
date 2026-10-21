@@ -89,3 +89,27 @@ The work is split between helpers, each on its own branch and its own files, mer
 - Very old stories that few hold merge into a bounded list of legends. Carvings, verses,
   lanterns: kept as counts plus the most recent few. Checked by running a valley into
   month 13 (day 390) and comparing speed and save size with day 300.
+
+## What changed while building it
+- **Helpers built four pieces in parallel** (looks, homes, sound and then-and-now, grove and
+  animals), each on its own branch, merged into `phase-3c` one at a time; each reported its
+  tests and screenshots. The lead's pieces were built meanwhile.
+- **Looks follow the signature passion** (`c.sig`), not the strongest interest: interests fill
+  up to the top for nearly everyone within days, so they can't tell creekfolk apart.
+- **The grove uses per-tree spans** (180-240 days, the founders' 400-460) and a hard cap of
+  240 standing, rather than "the oldest falls when there are too many": a count bound would
+  fell the founders' trees before the end of the first year.
+- **The beavers' side dams hold water.** At first they were only drawn; the floor stayed at
+  about 79% wet at the driest. Now each of up to twelve little stick dams holds water a hand
+  above the ground over the low ground around it (`beaverPondLevels`, read by
+  `creekCellWater`), placed where the floor still dries. From a day-270 valley this took the
+  driest share from 0.79 to 0.92 within a valley year: the whole floor marshy, as the brief
+  has it for months 6-9.
+- **The beavers build dams up at a natural pace**: a given dam at most every two days, any dam
+  at most every three hours (at first they built 76 up in five days).
+- **The sky stones go up as the year turns**: each marker is set on the morning the sun rises
+  behind it, so they're finished around real day 13, not in an afternoon.
+- **The fish run without a temple is for valleys with no temple at all.** A valley building
+  one saw twenty fish runs before its first Returning; now the first fish run comes with it.
+- **3B saves can't be opened by the 3C build** (as designed); tools that need a 3B valley use
+  a copy with its `build` field changed (`runs/worlds/3c/`).

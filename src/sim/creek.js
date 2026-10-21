@@ -989,7 +989,8 @@ function creekCellWater(w, dtD, s) {
     nWet = 0,
     nGreen = 0,
     nf = 0;
-  let pf = creekPondFloor(w, c);
+  let pf = creekPondFloor(w, c),
+    bl = typeof beaverPondLevels === "function" ? beaverPondLevels(w, c) : null; // 3C: the beavers' side dams hold water on the floor
   let decay = new Float32Array(32);
   for (let j = 0; j < 32; j++) decay[j] = 1 - Math.exp(-j / 2 / lam); // d in half-metre steps
   // the creek's level and the water table are blended between the two nodes either
@@ -1014,6 +1015,7 @@ function creekCellWater(w, dtD, s) {
       f = d >= 15.5 ? 1 : decay[Math.floor(d * 2)],
       table = lv + (g - lv) * f;
     if (pf[k] > table) table = pf[k];
+    if (bl && bl[k] > table) table = bl[k];
     wt[k] = table;
     let dw = c.h[k] - table,
       gr = Math.max(soil, dw < 0.55 ? 1 : dw < CREEK.root ? 1 - (dw - 0.55) / (CREEK.root - 0.55) : 0),

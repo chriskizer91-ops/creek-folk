@@ -13,8 +13,9 @@
 // Each Returning adds a lantern on the pyramid for each creekfolk who passed since the
 // last one, a new carving, and a new verse to their song.
 //
-// A valley with no finished temple still gets the fish run at midwinter once its creek has
-// healed, without the sunrise through the crown or the festival.
+// A valley with no temple still gets the fish run at midwinter once its creek has healed,
+// without the sunrise through the crown or the festival. (A valley building one waits for
+// its first Returning.)
 //
 // This file also gathers the 3C hooks: lifeTick3C, lifeOptions3C, devTrigger3C, partDone3C.
 
@@ -263,7 +264,9 @@ function returningTick(w) {
   if (w.t < win.start || w.t >= win.end) return;
   if (R && R.lastYear === yr) return;
   if (R && R.pathDone) returningBegin(w, false);
-  else if (!(w.temple && w.temple.state === "done")) {
+  else if (!w.temple) {
+    // a valley with no temple (it never reached the giving threshold); a valley building
+    // one waits for its first Returning to see the fish
     let dr = creekDriest(w);
     if (dr && dr.wet >= RETURNING.healed) returningBegin(w, true);
   }
