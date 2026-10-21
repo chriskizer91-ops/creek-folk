@@ -64,4 +64,5 @@ var CreekSim = {
   daysToMidwinter,
   RETURNEE,
   LEGEND,
+  GROVE, GOATS, groveOf, groveSize, // 3C: the memorial grove and the goats (grove.js), for the Node tools
 };

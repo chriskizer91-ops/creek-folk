@@ -9433,6 +9433,7 @@ function lifeTick(w) {
   giftTick(w); // gifts that stopped, found objects (gift.js)
   templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
   lifeTick3C(w); // 3C: beavers, the sky calendar, the Returning (returning.js)
+  groveTick(w); // 3C: grove trees fall and become nurse logs; goats' kids; wool blankets (grove.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -9739,7 +9740,7 @@ function passOn(w, c) {
   logEvent(
     w,
     3,
-    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.${offer}`,
+    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}.${groveWords(w, tree)}${offer}`, // 3C: which tree, and beside whose
     [c.id, ...near.map((o) => o.id)],
     c.farewell || c,
     "passing",
@@ -9773,34 +9774,10 @@ function grovePlace(w) {
   return w.grove;
 }
 
+// 3C: the tree's kind follows a parent's tree or what they loved, and it is planted beside
+// the family's trees; it stays off the temple's ground and the Hall's (grove.js, grovePlant).
 function groveTree(w, c) {
-  let g = grovePlace(w);
-  // Trees spiral out from the center, a little apart, family near family.
-  for (let k = 0; k < 60; k++) {
-    let n = g.n++,
-      a = n * 2.39996,
-      r = 0.7 * Math.sqrt(n + 0.5);
-    let x = g.x + Math.cos(a) * r,
-      z = g.z + Math.sin(a) * r;
-    if (!w.terrain.walkable(x, z)) continue;
-    if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) continue; // BELIEF: the temple's ground stays clear
-    let hall = w.ancestors && w.byId[w.ancestors.sid];
-    if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) continue; // ... and the Hall of the Ancestors'
-    let tree = register(w, {
-      id: w.nextId++,
-      kind: "grove",
-      x: +x.toFixed(2),
-      z: +z.toFixed(2),
-      side: w.terrain.side(x, z),
-      who: c.id,
-      name: c.name,
-      planted: Math.round(w.t),
-      hue: c.look.hue,
-    });
-    w.res.push(tree);
-    return tree;
-  }
-  return null;
+  return grovePlant(w, c);
 }
 
 // ---------------------------------------------------------------------------
@@ -10018,6 +9995,7 @@ function stageSpeed(c) {
 }
 
 // How grown a memorial tree is: a sapling, a young tree, then a full tree after about six weeks.
+// (3C: the grove is drawn by life-view.js from groveSize, which keeps growing all year.)
 function groveStage(w, tree) {
   let d = (w.t - (tree.planted || 0)) / DAY_S;
   return d < 6 ? 1 : d < 40 ? 2 : 3;
@@ -11047,6 +11025,7 @@ function faunaMinute(w) {
   let T = w.terrain,
     night = isNight(w.t);
   for (let g of f.goats) {
+    if (goatFollow(w, f, g)) continue; // 3C: a kid trots after its mother (grove.js)
     if (w.t < g.tn) continue;
     let r = night ? 1.5 : 5.5,
       tx = f.pasture.x + w.rng.range(-r, r),
@@ -13042,6 +13021,541 @@ function homesTick(w) {
 // ==== src/sim/grove.js ====
 // Phase 3C: the memorial grove (tree kinds, growth all year, nurse logs) and goats with
 // kids and wool. Owner: helper "grove". See docs/phase3c-plan.md.
+//
+// The grove. Every creekfolk who passes on gets a tree (groveTree in life.js). Its kind
+// (oak, pine, willow or birch) usually follows a parent's tree, so a family's trees
+// match; otherwise it follows what the creekfolk loved most (their `sig`). A child's tree
+// is planted beside the tree it takes after when there's room, else among trees of its
+// own kind, so each kind (and the families it follows) keeps its own part of the grove.
+// Trees grow all their lives (groveSize). An ordinary tree stands six to eight months, the
+// five founders' trees well over a year, so theirs are the giants of the grove at the end
+// of the first year. Then a tree falls (its own time, `fall`) and lies as a nurse log with
+// moss, ferns and saplings on it, where new trees are gladly planted; logs go back to the
+// soil after a while. About 160 trees stand at a time; standing trees and logs are both
+// bounded (GROVE.maxStanding, GROVE.maxLogs), so the grove stays the same size year after
+// year (tools/grove-test.cjs).
+//
+// Goats. A nanny has a kid (sometimes twins) in spring while the herd is small; kids
+// follow their mothers (faunaMinute, fauna.js) and grow up in a few days; goats grow old
+// and die in the pasture. Brushing them gives wool; in the evenings someone spins and
+// weaves it into a warm blanket for a home, which makes winter nights in that home a
+// little more comfortable (restBonusAt, wrapped below). It is never a job.
+//
+// Everything random here comes from a local Rng seeded by the world's seed and an id,
+// so the grove and the goats never shift the valley's main random stream. State:
+//   w.grove  { x, z, n, v, logs[], fallen, founders[] }  (the grove; created by grovePlace)
+//   res entries of kind "grove" gain tk (kind), fall (time it falls), kin (lineage id)
+//   w.lineage[id].tk      the kind of that creekfolk's tree
+//   w.fauna.goats[]       gain doe, mom, dies, due, kidYear
+//   w.fauna.blankets      { homeId: time made }, w.fauna.blanketsMade
+// ==========================================================================
+
+var GROVE = {
+  kinds: ["oak", "pine", "willow", "birch"],
+  inherit: 0.7,          // a tree takes after a parent's tree this often (otherwise: what they loved)
+  space: 1.7,            // m between trunks
+  reach: 19,             // m from the grove's centre that new trees stay within while there's room
+  spanDays: [180, 240],  // how long a memorial tree stands (real days): about 160 stand at a time
+  founderSpan: [400, 460], // the first five's trees stand longest, the giants of the grove after a year
+  maxStanding: 240,      // never more standing than this: the oldest falls first
+  logDays: 30,           // a fallen tree lies as a nurse log this long, then has gone back to the soil
+  maxLogs: 24,           // never more logs than this: the most rotten goes first
+  fallPerTick: 2,        // at most this many falls per life check (an old valley catching up)
+  grow: 0.055,           // growth: size = 0.3 + grow * days^growPow (1 = a full young tree)
+  growPow: 0.72,
+  maxSize: 4.4,
+};
+
+// What they loved most decides a tree when it doesn't take after a parent's: willows for
+// those who loved the water or company (willows lean over the water, where people meet),
+// pines for explorers and builders (tall and straight), oaks or birches for those who
+// grew and gathered things, birches for those who loved sound (their leaves rustle).
+var GROVE_BY_LOVE = { water: "willow", social: "willow", exploring: "pine", building: "pine", growing: "oak", collecting: "oak", sound: "birch" };
+var GROVE_WORDS = { oak: ["oak", "oaks"], pine: ["pine", "pines"], willow: ["willow", "willows"], birch: ["birch", "birches"] };
+
+var GOATS = {
+  herdMax: 8,            // kids are born only while the herd is smaller than this
+  kidDays: 4,            // a kid grows up in about this many real days
+  lifeDays: [42, 60],    // a goat lives this long (real days)
+  kidChance: 0.6,        // chance a grown nanny has a kid in a given spring ...
+  kidChanceSmall: 0.9,   // ... or while the herd is still small (three or fewer)
+  twins: 0.3,
+  woolPerBlanket: 12,    // brushings give 0.05 each (fauna.js)
+  woolMax: 60,           // wool they keep; the rest stuffs bedding
+  blanketDays: 40,       // a blanket wears thin after about this long and is replaced
+  blanketRest: 0.15,     // extra rest at home on a winter night with a blanket
+};
+
+// ---------------------------------------------------------------------------
+// The grove's state, created and upgraded lazily.
+// ---------------------------------------------------------------------------
+function groveOf(w) {
+  let g = grovePlace(w);
+  if (!g.v) groveUpgrade(w, g);
+  return g;
+}
+
+// A grove from before 3C: give every tree a kind (in planting order, so a parent's tree
+// is known before a child's), a time to fall, and an empty list of logs.
+function groveUpgrade(w, g) {
+  g.v = 1;
+  g.logs = g.logs || [];
+  g.fallen = g.fallen || 0;
+  g.founders = g.founders || groveFounders(w);
+  let trees = w.res.filter((r) => r.kind === "grove").sort((a, b) => a.planted - b.planted || a.id - b.id);
+  for (let t of trees) {
+    let rec = w.lineage && w.lineage[t.who];
+    if (!t.tk) {
+      let k = groveKindFor(w, rec, null);
+      t.tk = k.tk;
+      if (k.from) t.kin = k.from;
+    }
+    if (rec) rec.tk = t.tk;
+    if (!t.fall) t.fall = groveFallTime(w, t);
+  }
+}
+
+// The kinds an old grove's trees will get when it is upgraded, without changing anything
+// (for the view, until the first life check upgrades it). Map of tree id -> kind.
+function groveKindsPreview(w) {
+  let tk = new Map(),
+    byWho = new Map(),
+    trees = w.res.filter((r) => r.kind === "grove").sort((a, b) => a.planted - b.planted || a.id - b.id);
+  for (let t of trees) {
+    let rec = w.lineage && w.lineage[t.who],
+      k = t.tk || groveKindFor(w, rec, null, (r) => r.tk || byWho.get(r.id)).tk;
+    tk.set(t.id, k);
+    byWho.set(t.who, k);
+  }
+  return tk;
+}
+
+// The first five: the lowest gen-0 ids born before the valley began.
+function groveFounders(w) {
+  return Object.values(w.lineage || {})
+    .filter((r) => !r.gen && r.born <= 0 && !(r.parents || []).length)
+    .sort((a, b) => a.id - b.id)
+    .slice(0, LIFE.founders)
+    .map((r) => r.id);
+}
+
+// The kind of a creekfolk's tree, and whose tree it takes after (a lineage id, or null).
+// tkOf reads the kind of a parent's tree (the view passes its own, to preview an old grove).
+function groveKindFor(w, rec, c, tkOf = (r) => r.tk) {
+  let id = rec ? rec.id : c ? c.id : 0,
+    rng = new Rng(w.seed + ":grove:" + id),
+    parents = (rec ? rec.parents : c && c.parents) || [],
+    known = parents.map((p) => w.lineage && w.lineage[p]).filter((r) => r && tkOf(r)).map((r) => ({ id: r.id, tk: tkOf(r) }));
+  if (known.length && rng.next() < GROVE.inherit) {
+    let p = known[known.length > 1 ? rng.int(0, known.length - 1) : 0];
+    return { tk: p.tk, from: p.id };
+  }
+  let sig = (c && c.sig) || (rec && rec.sig),
+    tk = GROVE_BY_LOVE[sig] || GROVE.kinds[rng.int(0, GROVE.kinds.length - 1)];
+  if ((sig === "growing" || sig === "collecting") && rng.next() < 0.4) tk = "birch";
+  return { tk, from: null };
+}
+
+// When a tree falls: its own span, from its id.
+function groveFallTime(w, tree) {
+  let rng = new Rng(w.seed + ":grovefall:" + tree.id),
+    g = w.grove,
+    [a, b] = g && (g.founders || []).includes(tree.who) ? GROVE.founderSpan : GROVE.spanDays;
+  return Math.round(tree.planted + rng.range(a, b) * DAY_S);
+}
+
+// How big a memorial tree is (1 = a full young tree; about 3.5 after ten months).
+function groveSize(w, tree, t = w.t) {
+  let d = Math.max(0, (t - (tree.planted || 0)) / DAY_S);
+  return Math.min(GROVE.maxSize, 0.3 + GROVE.grow * Math.pow(d, GROVE.growPow));
+}
+
+function groveKindOf(tree) {
+  return tree.tk || "oak";
+}
+
+// ---------------------------------------------------------------------------
+// Where a new tree goes: beside the tree it takes after (or a parent's or grandparent's)
+// when there is room close by; otherwise the free place in the grove most among trees of
+// its own kind, near its family and the centre, and gladly beside a nurse log (where new
+// growth starts); only if the grove is full, the first free place in a spiral beyond it.
+// ---------------------------------------------------------------------------
+function groveTreeOf(w, lineageId) {
+  let rec = w.lineage && w.lineage[lineageId],
+    t = rec && rec.tree != null ? w.byId[rec.tree] : null;
+  return t && t.kind === "grove" ? t : null;
+}
+
+function groveSpotOK(w, g, x, z, trees, reach) {
+  let T = w.terrain;
+  if (x < 2 || z < 2 || x > VW - 2 || z > VL - 2 || !T.walkable(x, z) || T.edgeDist(x, z) < 1.5) return false;
+  if (reach && Math.hypot(x - g.x, z - g.z) > reach) return false;
+  if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) return false; // BELIEF: the temple's ground stays clear
+  let hall = w.ancestors && w.byId[w.ancestors.sid];
+  if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) return false; // ... and the Hall of the Ancestors'
+  for (let s of w.structures) {
+    let r = ((STRUCTURES[s.kind] && STRUCTURES[s.kind].radius) || 1) + 1.2;
+    if ((s.x - x) ** 2 + (s.z - z) ** 2 < r * r) return false;
+  }
+  let sp2 = GROVE.space * GROVE.space;
+  for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < sp2) return false;
+  for (let l of g.logs) if (groveLogDist(l, x, z) < 0.9) return false;
+  return true;
+}
+
+// Distance from a point to a log (a segment from its foot along rot).
+function groveLogDist(l, x, z) {
+  let dx = Math.cos(l.rot),
+    dz = Math.sin(l.rot),
+    u = clamp((x - l.x) * dx + (z - l.z) * dz, 0, l.len);
+  return Math.hypot(x - (l.x + dx * u), z - (l.z + dz * u)) - l.r;
+}
+
+function groveSpot(w, g, c, from, tk) {
+  let trees = w.res.filter((r) => r.kind === "grove"),
+    rng = new Rng(w.seed + ":grovespot:" + c.id),
+    anchors = [],
+    add = (t) => t && !anchors.includes(t) && anchors.push(t);
+  add(from != null ? groveTreeOf(w, from) : null);
+  for (let p of c.parents || []) add(groveTreeOf(w, p));
+  for (let p of c.parents || []) for (let gp of (w.lineage && w.lineage[p] && w.lineage[p].parents) || []) add(groveTreeOf(w, gp));
+  // beside the family's tree, if there is room close by
+  let a = anchors[0],
+    kin = (x, z) => {
+      let s = 0;
+      for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < 10.2) s += t.tk === tk ? -1 : 0.8;
+      return s;
+    };
+  if (a) {
+    let best = null,
+      bestS = 1e9;
+    for (let ri = 0; ri < 5; ri++) {
+      let r = GROVE.space + 0.15 + ri * 0.55,
+        n = Math.max(10, Math.round((2 * Math.PI * r) / 0.7)),
+        a0 = rng.range(0, Math.PI * 2);
+      for (let k = 0; k < n; k++) {
+        let ang = a0 + (k / n) * Math.PI * 2,
+          x = a.x + Math.cos(ang) * r,
+          z = a.z + Math.sin(ang) * r;
+        if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
+        let s = 0.5 * r + 0.06 * Math.hypot(x - g.x, z - g.z) + kin(x, z);
+        if (s < bestS) (bestS = s), (best = { x, z, near: a });
+      }
+    }
+    if (best) return best;
+  }
+  // otherwise the free place in the grove most among its own kind (so each kind, and the
+  // families it follows, keeps its own part of the grove), near the family, toward the
+  // centre; often that is where an old tree fell, beside its log
+  let best = null,
+    bestS = 1e9,
+    step = 0.85,
+    ox = rng.range(0, step),
+    oz = rng.range(0, step);
+  for (let x = g.x - GROVE.reach + ox; x <= g.x + GROVE.reach; x += step)
+    for (let z = g.z - GROVE.reach + oz; z <= g.z + GROVE.reach; z += step) {
+      if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
+      let s = kin(x, z) + 0.04 * Math.hypot(x - g.x, z - g.z) + (a ? 0.05 * Math.hypot(x - a.x, z - a.z) : 0),
+        log = null;
+      for (let l of g.logs) if (groveLogDist(l, x, z) < 1.6) log = l;
+      if (log) s -= 0.3; // where new growth starts
+      if (s < bestS) (bestS = s), (best = { x, z, log, near: a && Math.hypot(x - a.x, z - a.z) < 4.5 ? a : null });
+    }
+  if (best) return best;
+  // the grove is full: the first free place in a spiral beyond it
+  for (let reach of [0])
+    for (let n = 0; n < 2400; n++) {
+      let a = n * 2.39996,
+        r = 0.95 * Math.sqrt(n + 0.5),
+        x = g.x + Math.cos(a) * r,
+        z = g.z + Math.sin(a) * r;
+      if (groveSpotOK(w, g, x, z, trees, reach)) return { x, z };
+    }
+  return null;
+}
+
+// Plant a memorial tree (called from groveTree in life.js).
+function grovePlant(w, c) {
+  let g = groveOf(w),
+    rec = lineageRecord(w, c),
+    k = groveKindFor(w, rec, c),
+    spot = groveSpot(w, g, c, k.from, k.tk);
+  if (!spot) return null;
+  g.n = (g.n || 0) + 1;
+  let tree = register(w, {
+    id: w.nextId++,
+    kind: "grove",
+    x: +spot.x.toFixed(2),
+    z: +spot.z.toFixed(2),
+    side: w.terrain.side(spot.x, spot.z),
+    who: c.id,
+    name: c.name,
+    planted: Math.round(w.t),
+    hue: c.look.hue,
+    tk: k.tk,
+  });
+  if (k.from) tree.kin = k.from;
+  tree.fall = groveFallTime(w, tree);
+  rec.tk = k.tk;
+  w.res.push(tree);
+  groveLastNear = { id: tree.id, near: spot.near ? spot.near.who : spot.log ? -1 : null, mode: spot.near ? "family" : spot.log ? "log" : "spiral" }; // for the log line (groveWords) and tools/grove-test.cjs
+  return tree;
+}
+var groveLastNear = null;
+
+// "A young oak was planted for them in the grove, beside Tamsin's."
+function groveWords(w, tree) {
+  if (!tree) return "";
+  let kind = GROVE_WORDS[groveKindOf(tree)][0],
+    near = groveLastNear && groveLastNear.id === tree.id ? groveLastNear.near : null,
+    rec = w.lineage && w.lineage[tree.who],
+    nr = near > 0 && w.lineage && w.lineage[near],
+    rel = !nr || !rec ? "" : (rec.parents || []).includes(near) ? "their parent " : (rec.parents || []).some((p) => w.lineage[p] && (w.lineage[p].parents || []).includes(near)) ? "their grandparent " : "",
+    by = nr ? rel + nr.name : null;
+  return ` A young ${kind} was planted for them in the grove${by ? `, beside ${by}'s` : near === -1 ? ", beside an old fallen tree" : ""}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Falling, and the nurse logs.
+// ---------------------------------------------------------------------------
+function groveFell(w, g, tree, quiet) {
+  let rng = new Rng(w.seed + ":grovelog:" + tree.id),
+    size = groveSize(w, tree),
+    wide = Math.pow(size, 0.7),
+    len = +Math.min(7.5, 1.3 * size + 0.4).toFixed(2),
+    r = +(0.2 * wide).toFixed(2),
+    trees = w.res.filter((o) => o.kind === "grove" && o !== tree),
+    best = 0,
+    bestS = -1e9,
+    a0 = rng.range(0, Math.PI * 2);
+  // it falls the way with the most room
+  for (let k = 0; k < 10; k++) {
+    let a = a0 + (k / 10) * Math.PI * 2,
+      ex = tree.x + Math.cos(a) * len,
+      ez = tree.z + Math.sin(a) * len,
+      s = rng.range(0, 0.4);
+    if (!w.terrain.walkable(ex, ez)) s -= 6;
+    let probe = { x: tree.x, z: tree.z, rot: a, len, r };
+    for (let o of trees) if (groveLogDist(probe, o.x, o.z) < 0.5) s -= 1;
+    for (let l of g.logs) for (let u = 0.15; u < 1; u += 0.2) if (groveLogDist(l, tree.x + Math.cos(a) * len * u, tree.z + Math.sin(a) * len * u) < r + 0.15) s -= 1.5; // not across another log
+    for (let o of w.structures) if (groveLogDist(probe, o.x, o.z) < ((STRUCTURES[o.kind] && STRUCTURES[o.kind].radius) || 1)) s -= 4;
+    if (w.givingPlace && groveLogDist(probe, w.givingPlace.x, w.givingPlace.z) < TEMPLE_ROOM) s -= 3;
+    if (s > bestS) (bestS = s), (best = a);
+  }
+  let log = { id: tree.id, x: tree.x, z: tree.z, rot: +best.toFixed(3), len, r, tk: groveKindOf(tree), who: tree.who, name: tree.name, planted: tree.planted, fell: Math.round(w.t) };
+  g.logs.push(log);
+  if (g.logs.length > GROVE.maxLogs) g.logs.splice(0, g.logs.length - GROVE.maxLogs);
+  g.fallen = (g.fallen || 0) + 1;
+  removeThing(w, tree, w.res);
+  if (quiet) return log;
+  let founder = (g.founders || []).includes(tree.who),
+    kind = GROVE_WORDS[log.tk][0],
+    days = Math.round((w.t - tree.planted) / DAY_S);
+  if (founder)
+    logEvent(w, 3, `The great ${kind} planted for ${tree.name}, one of the first five, has fallen in the grove after ${days} days. Moss and ferns will cover it, and young trees will grow from it.`, [], log, "grove");
+  else logEvent(w, 1, `The old ${kind} planted for ${tree.name} fell in the grove. It will feed new growth.`, [], log, "grove");
+  return log;
+}
+
+// Every life check (600 s), from lifeTick.
+function groveTick(w) {
+  groveTreesTick(w);
+  goatTick(w);
+  woolTick(w);
+}
+
+// Trees whose time has come fall; logs go back to the soil.
+function groveTreesTick(w) {
+  if (w.grove) {
+    let g = groveOf(w),
+      standing = [],
+      due = [];
+    for (let r of w.res)
+      if (r.kind === "grove") {
+        standing.push(r);
+        if (w.t >= r.fall) due.push(r);
+      }
+    // never more than maxStanding: the oldest go first
+    if (standing.length > GROVE.maxStanding) {
+      standing.sort((a, b) => a.planted - b.planted || a.id - b.id);
+      for (let t of standing.slice(0, standing.length - GROVE.maxStanding)) if (!due.includes(t)) due.push(t);
+    }
+    due.sort((a, b) => a.planted - b.planted || a.id - b.id);
+    let quiet = due.length > 2 * GROVE.fallPerTick; // a valley catching up on many falls says nothing
+    for (let t of due.slice(0, GROVE.fallPerTick)) groveFell(w, g, t, quiet);
+    // the logs go back to the soil
+    while (g.logs.length && w.t - g.logs[0].fell > GROVE.logDays * DAY_S) g.logs.shift();
+  }
+}
+
+// How far a log has rotted, 0 (just fallen) .. 1 (gone).
+function groveLogDecay(w, l, t = w.t) {
+  return clamp((t - l.fell) / (GROVE.logDays * DAY_S), 0, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Goats: kids in spring, growing up, growing old.
+// ---------------------------------------------------------------------------
+function goatAge(w, g) {
+  return (w.t - (g.born || 0)) / DAY_S;
+}
+function goatGrown(w, g) {
+  return !g.mom || goatAge(w, g) >= GOATS.kidDays;
+}
+
+function goatTick(w) {
+  let f = w.fauna;
+  if (!f || !f.goats || !f.goats.length) return;
+  let s = seasonAt(w);
+  for (let g of f.goats) {
+    if (g.doe === undefined) g.doe = g.id % 2 === 1; // the gift's pair: a nanny and a billy
+    if (!g.dies) {
+      let r = new Rng(w.seed + ":goat:" + g.id),
+        life = r.range(GOATS.lifeDays[0], GOATS.lifeDays[1]) * DAY_S;
+      g.dies = Math.round(Math.max(g.born + life, w.t + life * 0.5)); // goats from before 3C get a fair while yet
+    }
+  }
+  // old goats die in the pasture
+  for (let g of f.goats.slice()) if (w.t >= g.dies) goatDies(w, f, g);
+  // each spring a grown nanny may have a kid, at a time of her own
+  let billy = f.goats.some((g) => !g.doe && goatGrown(w, g) && goatAge(w, g) > GOATS.kidDays);
+  for (let g of f.goats) {
+    if (!g.doe || !goatGrown(w, g) || goatAge(w, g) < GOATS.kidDays * 1.5) continue;
+    if (s.name === "spring" && g.kidYear !== s.year) {
+      g.kidYear = s.year;
+      let r = new Rng(w.seed + ":kid:" + g.id + ":" + s.year);
+      if (billy && r.next() < (f.goats.length <= 3 ? GOATS.kidChanceSmall : GOATS.kidChance)) g.due = Math.round(w.t + r.range(0.05, 0.9) * (1 - s.progress) * SEASON_DAYS * VALLEY_DAY);
+    }
+    if (g.due && w.t >= g.due) {
+      g.due = null;
+      if (f.goats.length < GOATS.herdMax) goatKids(w, f, g);
+    }
+  }
+}
+
+function goatName(w, r) {
+  let living = new Set(w.fauna.goats.map((g) => g.name));
+  for (let k = 0; k < 20; k++) {
+    let n = (NAME_START[r.int(0, NAME_START.length - 1)] + NAME_END[r.int(0, NAME_END.length - 1)]).slice(0, 8);
+    if (!living.has(n)) return n;
+  }
+  return "Kid";
+}
+
+function goatKids(w, f, mom) {
+  let r = new Rng(w.seed + ":kids:" + mom.id + ":" + Math.round(w.t)),
+    n = r.next() < GOATS.twins && f.goats.length + 2 <= GOATS.herdMax ? 2 : 1,
+    names = [];
+  for (let i = 0; i < n; i++) {
+    let x = +(mom.x + r.range(-0.6, 0.6)).toFixed(2),
+      z = +(mom.z + r.range(-0.6, 0.6)).toFixed(2),
+      kid = { id: (f.goatSeq = (f.goatSeq || 0) + 1), name: goatName(w, r), x, z, px: x, pz: z, pt: Math.round(w.t), tn: Math.round(w.t + 120), coat: r.next() < 0.7 ? mom.coat : r.int(0, 3), born: Math.round(w.t), doe: r.next() < 0.5, mom: mom.id };
+    f.goats.push(kid);
+    names.push(kid.name);
+  }
+  f.kids = (f.kids || 0) + n;
+  let first = f.kids === n;
+  logEvent(w, first ? 2 : 1, n === 2 ? `${mom.name} the goat had twins in the pasture. The children named them ${names[0]} and ${names[1]}.` : `${mom.name} the goat had a kid in the pasture. The children named it ${names[0]}.`, [], mom, "goats");
+  // the children who love the goats remember it
+  for (let c of w.creatures) if (!c.visitor && !c.asleep && (c.counts.goats || 0) > 2 && dist2d(c.x, c.z, mom.x, mom.z) < 30) remember(w, c, "goats", n === 2 ? `${mom.name} the goat had twins! They wobble about after her.` : `${mom.name} the goat had a kid. It wobbles about after her.`, 0.6, { x: mom.x, z: mom.z, pv: 0.3 });
+}
+
+function goatDies(w, f, g) {
+  let i = f.goats.indexOf(g);
+  if (i < 0) return;
+  f.goats.splice(i, 1);
+  for (let k of f.goats) if (k.mom === g.id && !goatGrown(w, k)) k.mom = null; // the herd looks after a kid that lost its mother
+  let fond = w.creatures.filter((c) => !c.visitor && (c.counts.goats || 0) > 6).sort((a, b) => (b.counts.goats || 0) - (a.counts.goats || 0))[0];
+  logEvent(w, 1, `Old ${g.name} the goat lay down in the pasture one last time.${fond ? ` ${fond.name}, who brushed them most, sat with them a while.` : ""}`, fond ? [fond.id] : [], g, "goats");
+  if (fond) remember(w, fond, "goats", `Old ${g.name} the goat is gone. I brushed them so many times.`, 0.6);
+}
+
+// A kid trots after its mother (from faunaMinute in fauna.js): where she is going, a
+// little to one side. No random numbers, so the valley's stream is untouched.
+function goatFollow(w, f, g) {
+  if (!g.mom || goatGrown(w, g)) return false;
+  let m = f.goats.find((o) => o.id === g.mom);
+  if (!m) return false;
+  if (w.t < g.tn && dist2d(g.x, g.z, m.x, m.z) < 1.6) return true;
+  let a = hash01s(g.id * 7.1 + Math.floor(w.t / 600)) * Math.PI * 2,
+    d = 0.5 + 0.5 * hash01s(g.id * 3.3 + Math.floor(w.t / 900)),
+    tx = m.x + Math.cos(a) * d,
+    tz = m.z + Math.sin(a) * d;
+  if (!w.terrain.walkable(tx, tz)) (tx = m.x), (tz = m.z);
+  let dist = dist2d(g.x, g.z, tx, tz);
+  g.px = g.x;
+  g.pz = g.z;
+  g.pt = Math.round(w.t);
+  g.x = +tx.toFixed(2);
+  g.z = +tz.toFixed(2);
+  g.tn = Math.round(w.t + dist / FAUNA.goatSpeed + 30);
+  return true;
+}
+
+// A small deterministic hash in 0..1 (integer arithmetic only, the same in every engine).
+function hash01s(x) {
+  let h = Math.imul(Math.round(x * 1000) ^ 0x9e3779b9, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+// ---------------------------------------------------------------------------
+// Wool: spun and woven in the evenings into blankets for the homes.
+// ---------------------------------------------------------------------------
+function woolTick(w) {
+  let f = w.fauna;
+  if (!f) return;
+  if (f.wool > GOATS.woolMax) f.wool = GOATS.woolMax;
+  if (!f.blankets) {
+    if (!(f.wool >= GOATS.woolPerBlanket)) return;
+    f.blankets = {};
+  }
+  // blankets wear thin; homes that are gone don't need one
+  for (let id in f.blankets) {
+    let s = w.byId[id];
+    if (!s || s.kind !== "home" || w.t - f.blankets[id] > GOATS.blanketDays * DAY_S) delete f.blankets[id];
+  }
+  if (f.wool < GOATS.woolPerBlanket) return;
+  let ph = dayPhase(w.t);
+  if (ph < 0.7 || ph > 0.86) return; // in the evening, by the fire
+  let homes = w.structures.filter((s) => s.kind === "home" && s.level > 0 && !f.blankets[s.id]);
+  if (!homes.length) return;
+  let free = (c) => !c.visitor && !c.asleep && !c.farewell && !c.leaving && !(c.act && c.act.type === "away") && c.home != null,
+    folk = w.creatures.filter(free).sort((a, b) => (b.stage === "elder") - (a.stage === "elder") || (b.counts.goats || 0) - (a.counts.goats || 0) || a.id - b.id),
+    maker = folk[Math.floor(hash01s(f.blanketsMade || 0) * Math.min(3, folk.length))]; // one of those who love the goats most
+  if (!maker) return;
+  let home = homes.find((s) => s.id === maker.home) || homes.find((s) => s.owner && w.byId[s.owner] && maker.rel[s.owner] && maker.rel[s.owner].warmth > 0.3) || homes.sort((a, b) => a.id - b.id)[0];
+  f.blankets[home.id] = Math.round(w.t);
+  f.wool = +(f.wool - GOATS.woolPerBlanket).toFixed(2);
+  f.blanketsMade = (f.blanketsMade || 0) + 1;
+  let owner = home.owner && w.byId[home.owner],
+    whose = !owner ? "an empty home" : owner === maker ? "their own home" : `${owner.name}'s home`;
+  if (f.blanketsMade === 1) logEvent(w, 3, `${maker.name} spun the goats' wool by the fire and wove the valley's first warm blanket, for ${whose}. Winter nights will be easier there.`, [maker.id], home, "goats");
+  else logEvent(w, 1, `${maker.name} wove a warm blanket from the goats' wool, for ${whose}.`, [maker.id], home, "goats");
+  remember(w, maker, "goats", "I spun the goats' wool and wove a warm blanket.", 0.5);
+  if (owner && owner !== maker) remember(w, owner, "goats", `${maker.name} wove us a wool blanket. Winter nights are warmer now.`, 0.55);
+}
+
+// Extra rest at a home with a blanket, on a winter night.
+function woolWarmth(w, x, z) {
+  let f = w.fauna;
+  if (!f || !f.blankets || !isNight(w.t) || seasonAt(w).name !== "winter") return 0;
+  for (let id in f.blankets) {
+    let s = w.byId[id];
+    if (s && (s.x - x) ** 2 + (s.z - z) ** 2 < 4) return GOATS.blanketRest;
+  }
+  return 0;
+}
+
+// 3C: a home with a wool blanket is a little more restful on a winter night.
+restBonusAt = (function (orig) {
+  return function (w, c, x, z) {
+    let b = orig(w, c, x, z);
+    return b > 0 ? b + woolWarmth(w, x, z) : b;
+  };
+})(restBonusAt);
 
 // ==== src/sim/beavers.js ====
 // Phase 3C: the beavers.
@@ -14209,6 +14723,7 @@ var CreekSim = {
   daysToMidwinter,
   RETURNEE,
   LEGEND,
+  GROVE, GOATS, groveOf, groveSize, // 3C: the memorial grove and the goats (grove.js), for the Node tools
 };
 
 // ==========================================================================
@@ -23556,6 +24071,7 @@ function lifeTick(w) {
   giftTick(w); // gifts that stopped, found objects (gift.js)
   templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
   lifeTick3C(w); // 3C: beavers, the sky calendar, the Returning (returning.js)
+  groveTick(w); // 3C: grove trees fall and become nurse logs; goats' kids; wool blankets (grove.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -23862,7 +24378,7 @@ function passOn(w, c) {
   logEvent(
     w,
     3,
-    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.${offer}`,
+    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}.${groveWords(w, tree)}${offer}`, // 3C: which tree, and beside whose
     [c.id, ...near.map((o) => o.id)],
     c.farewell || c,
     "passing",
@@ -23896,34 +24412,10 @@ function grovePlace(w) {
   return w.grove;
 }
 
+// 3C: the tree's kind follows a parent's tree or what they loved, and it is planted beside
+// the family's trees; it stays off the temple's ground and the Hall's (grove.js, grovePlant).
 function groveTree(w, c) {
-  let g = grovePlace(w);
-  // Trees spiral out from the center, a little apart, family near family.
-  for (let k = 0; k < 60; k++) {
-    let n = g.n++,
-      a = n * 2.39996,
-      r = 0.7 * Math.sqrt(n + 0.5);
-    let x = g.x + Math.cos(a) * r,
-      z = g.z + Math.sin(a) * r;
-    if (!w.terrain.walkable(x, z)) continue;
-    if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) continue; // BELIEF: the temple's ground stays clear
-    let hall = w.ancestors && w.byId[w.ancestors.sid];
-    if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) continue; // ... and the Hall of the Ancestors'
-    let tree = register(w, {
-      id: w.nextId++,
-      kind: "grove",
-      x: +x.toFixed(2),
-      z: +z.toFixed(2),
-      side: w.terrain.side(x, z),
-      who: c.id,
-      name: c.name,
-      planted: Math.round(w.t),
-      hue: c.look.hue,
-    });
-    w.res.push(tree);
-    return tree;
-  }
-  return null;
+  return grovePlant(w, c);
 }
 
 // ---------------------------------------------------------------------------
@@ -24141,6 +24633,7 @@ function stageSpeed(c) {
 }
 
 // How grown a memorial tree is: a sapling, a young tree, then a full tree after about six weeks.
+// (3C: the grove is drawn by life-view.js from groveSize, which keeps growing all year.)
 function groveStage(w, tree) {
   let d = (w.t - (tree.planted || 0)) / DAY_S;
   return d < 6 ? 1 : d < 40 ? 2 : 3;
@@ -25170,6 +25663,7 @@ function faunaMinute(w) {
   let T = w.terrain,
     night = isNight(w.t);
   for (let g of f.goats) {
+    if (goatFollow(w, f, g)) continue; // 3C: a kid trots after its mother (grove.js)
     if (w.t < g.tn) continue;
     let r = night ? 1.5 : 5.5,
       tx = f.pasture.x + w.rng.range(-r, r),
@@ -27165,6 +27659,541 @@ function homesTick(w) {
 // ==== src/sim/grove.js ====
 // Phase 3C: the memorial grove (tree kinds, growth all year, nurse logs) and goats with
 // kids and wool. Owner: helper "grove". See docs/phase3c-plan.md.
+//
+// The grove. Every creekfolk who passes on gets a tree (groveTree in life.js). Its kind
+// (oak, pine, willow or birch) usually follows a parent's tree, so a family's trees
+// match; otherwise it follows what the creekfolk loved most (their `sig`). A child's tree
+// is planted beside the tree it takes after when there's room, else among trees of its
+// own kind, so each kind (and the families it follows) keeps its own part of the grove.
+// Trees grow all their lives (groveSize). An ordinary tree stands six to eight months, the
+// five founders' trees well over a year, so theirs are the giants of the grove at the end
+// of the first year. Then a tree falls (its own time, `fall`) and lies as a nurse log with
+// moss, ferns and saplings on it, where new trees are gladly planted; logs go back to the
+// soil after a while. About 160 trees stand at a time; standing trees and logs are both
+// bounded (GROVE.maxStanding, GROVE.maxLogs), so the grove stays the same size year after
+// year (tools/grove-test.cjs).
+//
+// Goats. A nanny has a kid (sometimes twins) in spring while the herd is small; kids
+// follow their mothers (faunaMinute, fauna.js) and grow up in a few days; goats grow old
+// and die in the pasture. Brushing them gives wool; in the evenings someone spins and
+// weaves it into a warm blanket for a home, which makes winter nights in that home a
+// little more comfortable (restBonusAt, wrapped below). It is never a job.
+//
+// Everything random here comes from a local Rng seeded by the world's seed and an id,
+// so the grove and the goats never shift the valley's main random stream. State:
+//   w.grove  { x, z, n, v, logs[], fallen, founders[] }  (the grove; created by grovePlace)
+//   res entries of kind "grove" gain tk (kind), fall (time it falls), kin (lineage id)
+//   w.lineage[id].tk      the kind of that creekfolk's tree
+//   w.fauna.goats[]       gain doe, mom, dies, due, kidYear
+//   w.fauna.blankets      { homeId: time made }, w.fauna.blanketsMade
+// ==========================================================================
+
+var GROVE = {
+  kinds: ["oak", "pine", "willow", "birch"],
+  inherit: 0.7,          // a tree takes after a parent's tree this often (otherwise: what they loved)
+  space: 1.7,            // m between trunks
+  reach: 19,             // m from the grove's centre that new trees stay within while there's room
+  spanDays: [180, 240],  // how long a memorial tree stands (real days): about 160 stand at a time
+  founderSpan: [400, 460], // the first five's trees stand longest, the giants of the grove after a year
+  maxStanding: 240,      // never more standing than this: the oldest falls first
+  logDays: 30,           // a fallen tree lies as a nurse log this long, then has gone back to the soil
+  maxLogs: 24,           // never more logs than this: the most rotten goes first
+  fallPerTick: 2,        // at most this many falls per life check (an old valley catching up)
+  grow: 0.055,           // growth: size = 0.3 + grow * days^growPow (1 = a full young tree)
+  growPow: 0.72,
+  maxSize: 4.4,
+};
+
+// What they loved most decides a tree when it doesn't take after a parent's: willows for
+// those who loved the water or company (willows lean over the water, where people meet),
+// pines for explorers and builders (tall and straight), oaks or birches for those who
+// grew and gathered things, birches for those who loved sound (their leaves rustle).
+var GROVE_BY_LOVE = { water: "willow", social: "willow", exploring: "pine", building: "pine", growing: "oak", collecting: "oak", sound: "birch" };
+var GROVE_WORDS = { oak: ["oak", "oaks"], pine: ["pine", "pines"], willow: ["willow", "willows"], birch: ["birch", "birches"] };
+
+var GOATS = {
+  herdMax: 8,            // kids are born only while the herd is smaller than this
+  kidDays: 4,            // a kid grows up in about this many real days
+  lifeDays: [42, 60],    // a goat lives this long (real days)
+  kidChance: 0.6,        // chance a grown nanny has a kid in a given spring ...
+  kidChanceSmall: 0.9,   // ... or while the herd is still small (three or fewer)
+  twins: 0.3,
+  woolPerBlanket: 12,    // brushings give 0.05 each (fauna.js)
+  woolMax: 60,           // wool they keep; the rest stuffs bedding
+  blanketDays: 40,       // a blanket wears thin after about this long and is replaced
+  blanketRest: 0.15,     // extra rest at home on a winter night with a blanket
+};
+
+// ---------------------------------------------------------------------------
+// The grove's state, created and upgraded lazily.
+// ---------------------------------------------------------------------------
+function groveOf(w) {
+  let g = grovePlace(w);
+  if (!g.v) groveUpgrade(w, g);
+  return g;
+}
+
+// A grove from before 3C: give every tree a kind (in planting order, so a parent's tree
+// is known before a child's), a time to fall, and an empty list of logs.
+function groveUpgrade(w, g) {
+  g.v = 1;
+  g.logs = g.logs || [];
+  g.fallen = g.fallen || 0;
+  g.founders = g.founders || groveFounders(w);
+  let trees = w.res.filter((r) => r.kind === "grove").sort((a, b) => a.planted - b.planted || a.id - b.id);
+  for (let t of trees) {
+    let rec = w.lineage && w.lineage[t.who];
+    if (!t.tk) {
+      let k = groveKindFor(w, rec, null);
+      t.tk = k.tk;
+      if (k.from) t.kin = k.from;
+    }
+    if (rec) rec.tk = t.tk;
+    if (!t.fall) t.fall = groveFallTime(w, t);
+  }
+}
+
+// The kinds an old grove's trees will get when it is upgraded, without changing anything
+// (for the view, until the first life check upgrades it). Map of tree id -> kind.
+function groveKindsPreview(w) {
+  let tk = new Map(),
+    byWho = new Map(),
+    trees = w.res.filter((r) => r.kind === "grove").sort((a, b) => a.planted - b.planted || a.id - b.id);
+  for (let t of trees) {
+    let rec = w.lineage && w.lineage[t.who],
+      k = t.tk || groveKindFor(w, rec, null, (r) => r.tk || byWho.get(r.id)).tk;
+    tk.set(t.id, k);
+    byWho.set(t.who, k);
+  }
+  return tk;
+}
+
+// The first five: the lowest gen-0 ids born before the valley began.
+function groveFounders(w) {
+  return Object.values(w.lineage || {})
+    .filter((r) => !r.gen && r.born <= 0 && !(r.parents || []).length)
+    .sort((a, b) => a.id - b.id)
+    .slice(0, LIFE.founders)
+    .map((r) => r.id);
+}
+
+// The kind of a creekfolk's tree, and whose tree it takes after (a lineage id, or null).
+// tkOf reads the kind of a parent's tree (the view passes its own, to preview an old grove).
+function groveKindFor(w, rec, c, tkOf = (r) => r.tk) {
+  let id = rec ? rec.id : c ? c.id : 0,
+    rng = new Rng(w.seed + ":grove:" + id),
+    parents = (rec ? rec.parents : c && c.parents) || [],
+    known = parents.map((p) => w.lineage && w.lineage[p]).filter((r) => r && tkOf(r)).map((r) => ({ id: r.id, tk: tkOf(r) }));
+  if (known.length && rng.next() < GROVE.inherit) {
+    let p = known[known.length > 1 ? rng.int(0, known.length - 1) : 0];
+    return { tk: p.tk, from: p.id };
+  }
+  let sig = (c && c.sig) || (rec && rec.sig),
+    tk = GROVE_BY_LOVE[sig] || GROVE.kinds[rng.int(0, GROVE.kinds.length - 1)];
+  if ((sig === "growing" || sig === "collecting") && rng.next() < 0.4) tk = "birch";
+  return { tk, from: null };
+}
+
+// When a tree falls: its own span, from its id.
+function groveFallTime(w, tree) {
+  let rng = new Rng(w.seed + ":grovefall:" + tree.id),
+    g = w.grove,
+    [a, b] = g && (g.founders || []).includes(tree.who) ? GROVE.founderSpan : GROVE.spanDays;
+  return Math.round(tree.planted + rng.range(a, b) * DAY_S);
+}
+
+// How big a memorial tree is (1 = a full young tree; about 3.5 after ten months).
+function groveSize(w, tree, t = w.t) {
+  let d = Math.max(0, (t - (tree.planted || 0)) / DAY_S);
+  return Math.min(GROVE.maxSize, 0.3 + GROVE.grow * Math.pow(d, GROVE.growPow));
+}
+
+function groveKindOf(tree) {
+  return tree.tk || "oak";
+}
+
+// ---------------------------------------------------------------------------
+// Where a new tree goes: beside the tree it takes after (or a parent's or grandparent's)
+// when there is room close by; otherwise the free place in the grove most among trees of
+// its own kind, near its family and the centre, and gladly beside a nurse log (where new
+// growth starts); only if the grove is full, the first free place in a spiral beyond it.
+// ---------------------------------------------------------------------------
+function groveTreeOf(w, lineageId) {
+  let rec = w.lineage && w.lineage[lineageId],
+    t = rec && rec.tree != null ? w.byId[rec.tree] : null;
+  return t && t.kind === "grove" ? t : null;
+}
+
+function groveSpotOK(w, g, x, z, trees, reach) {
+  let T = w.terrain;
+  if (x < 2 || z < 2 || x > VW - 2 || z > VL - 2 || !T.walkable(x, z) || T.edgeDist(x, z) < 1.5) return false;
+  if (reach && Math.hypot(x - g.x, z - g.z) > reach) return false;
+  if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) return false; // BELIEF: the temple's ground stays clear
+  let hall = w.ancestors && w.byId[w.ancestors.sid];
+  if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) return false; // ... and the Hall of the Ancestors'
+  for (let s of w.structures) {
+    let r = ((STRUCTURES[s.kind] && STRUCTURES[s.kind].radius) || 1) + 1.2;
+    if ((s.x - x) ** 2 + (s.z - z) ** 2 < r * r) return false;
+  }
+  let sp2 = GROVE.space * GROVE.space;
+  for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < sp2) return false;
+  for (let l of g.logs) if (groveLogDist(l, x, z) < 0.9) return false;
+  return true;
+}
+
+// Distance from a point to a log (a segment from its foot along rot).
+function groveLogDist(l, x, z) {
+  let dx = Math.cos(l.rot),
+    dz = Math.sin(l.rot),
+    u = clamp((x - l.x) * dx + (z - l.z) * dz, 0, l.len);
+  return Math.hypot(x - (l.x + dx * u), z - (l.z + dz * u)) - l.r;
+}
+
+function groveSpot(w, g, c, from, tk) {
+  let trees = w.res.filter((r) => r.kind === "grove"),
+    rng = new Rng(w.seed + ":grovespot:" + c.id),
+    anchors = [],
+    add = (t) => t && !anchors.includes(t) && anchors.push(t);
+  add(from != null ? groveTreeOf(w, from) : null);
+  for (let p of c.parents || []) add(groveTreeOf(w, p));
+  for (let p of c.parents || []) for (let gp of (w.lineage && w.lineage[p] && w.lineage[p].parents) || []) add(groveTreeOf(w, gp));
+  // beside the family's tree, if there is room close by
+  let a = anchors[0],
+    kin = (x, z) => {
+      let s = 0;
+      for (let t of trees) if ((t.x - x) ** 2 + (t.z - z) ** 2 < 10.2) s += t.tk === tk ? -1 : 0.8;
+      return s;
+    };
+  if (a) {
+    let best = null,
+      bestS = 1e9;
+    for (let ri = 0; ri < 5; ri++) {
+      let r = GROVE.space + 0.15 + ri * 0.55,
+        n = Math.max(10, Math.round((2 * Math.PI * r) / 0.7)),
+        a0 = rng.range(0, Math.PI * 2);
+      for (let k = 0; k < n; k++) {
+        let ang = a0 + (k / n) * Math.PI * 2,
+          x = a.x + Math.cos(ang) * r,
+          z = a.z + Math.sin(ang) * r;
+        if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
+        let s = 0.5 * r + 0.06 * Math.hypot(x - g.x, z - g.z) + kin(x, z);
+        if (s < bestS) (bestS = s), (best = { x, z, near: a });
+      }
+    }
+    if (best) return best;
+  }
+  // otherwise the free place in the grove most among its own kind (so each kind, and the
+  // families it follows, keeps its own part of the grove), near the family, toward the
+  // centre; often that is where an old tree fell, beside its log
+  let best = null,
+    bestS = 1e9,
+    step = 0.85,
+    ox = rng.range(0, step),
+    oz = rng.range(0, step);
+  for (let x = g.x - GROVE.reach + ox; x <= g.x + GROVE.reach; x += step)
+    for (let z = g.z - GROVE.reach + oz; z <= g.z + GROVE.reach; z += step) {
+      if (!groveSpotOK(w, g, x, z, trees, GROVE.reach)) continue;
+      let s = kin(x, z) + 0.04 * Math.hypot(x - g.x, z - g.z) + (a ? 0.05 * Math.hypot(x - a.x, z - a.z) : 0),
+        log = null;
+      for (let l of g.logs) if (groveLogDist(l, x, z) < 1.6) log = l;
+      if (log) s -= 0.3; // where new growth starts
+      if (s < bestS) (bestS = s), (best = { x, z, log, near: a && Math.hypot(x - a.x, z - a.z) < 4.5 ? a : null });
+    }
+  if (best) return best;
+  // the grove is full: the first free place in a spiral beyond it
+  for (let reach of [0])
+    for (let n = 0; n < 2400; n++) {
+      let a = n * 2.39996,
+        r = 0.95 * Math.sqrt(n + 0.5),
+        x = g.x + Math.cos(a) * r,
+        z = g.z + Math.sin(a) * r;
+      if (groveSpotOK(w, g, x, z, trees, reach)) return { x, z };
+    }
+  return null;
+}
+
+// Plant a memorial tree (called from groveTree in life.js).
+function grovePlant(w, c) {
+  let g = groveOf(w),
+    rec = lineageRecord(w, c),
+    k = groveKindFor(w, rec, c),
+    spot = groveSpot(w, g, c, k.from, k.tk);
+  if (!spot) return null;
+  g.n = (g.n || 0) + 1;
+  let tree = register(w, {
+    id: w.nextId++,
+    kind: "grove",
+    x: +spot.x.toFixed(2),
+    z: +spot.z.toFixed(2),
+    side: w.terrain.side(spot.x, spot.z),
+    who: c.id,
+    name: c.name,
+    planted: Math.round(w.t),
+    hue: c.look.hue,
+    tk: k.tk,
+  });
+  if (k.from) tree.kin = k.from;
+  tree.fall = groveFallTime(w, tree);
+  rec.tk = k.tk;
+  w.res.push(tree);
+  groveLastNear = { id: tree.id, near: spot.near ? spot.near.who : spot.log ? -1 : null, mode: spot.near ? "family" : spot.log ? "log" : "spiral" }; // for the log line (groveWords) and tools/grove-test.cjs
+  return tree;
+}
+var groveLastNear = null;
+
+// "A young oak was planted for them in the grove, beside Tamsin's."
+function groveWords(w, tree) {
+  if (!tree) return "";
+  let kind = GROVE_WORDS[groveKindOf(tree)][0],
+    near = groveLastNear && groveLastNear.id === tree.id ? groveLastNear.near : null,
+    rec = w.lineage && w.lineage[tree.who],
+    nr = near > 0 && w.lineage && w.lineage[near],
+    rel = !nr || !rec ? "" : (rec.parents || []).includes(near) ? "their parent " : (rec.parents || []).some((p) => w.lineage[p] && (w.lineage[p].parents || []).includes(near)) ? "their grandparent " : "",
+    by = nr ? rel + nr.name : null;
+  return ` A young ${kind} was planted for them in the grove${by ? `, beside ${by}'s` : near === -1 ? ", beside an old fallen tree" : ""}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Falling, and the nurse logs.
+// ---------------------------------------------------------------------------
+function groveFell(w, g, tree, quiet) {
+  let rng = new Rng(w.seed + ":grovelog:" + tree.id),
+    size = groveSize(w, tree),
+    wide = Math.pow(size, 0.7),
+    len = +Math.min(7.5, 1.3 * size + 0.4).toFixed(2),
+    r = +(0.2 * wide).toFixed(2),
+    trees = w.res.filter((o) => o.kind === "grove" && o !== tree),
+    best = 0,
+    bestS = -1e9,
+    a0 = rng.range(0, Math.PI * 2);
+  // it falls the way with the most room
+  for (let k = 0; k < 10; k++) {
+    let a = a0 + (k / 10) * Math.PI * 2,
+      ex = tree.x + Math.cos(a) * len,
+      ez = tree.z + Math.sin(a) * len,
+      s = rng.range(0, 0.4);
+    if (!w.terrain.walkable(ex, ez)) s -= 6;
+    let probe = { x: tree.x, z: tree.z, rot: a, len, r };
+    for (let o of trees) if (groveLogDist(probe, o.x, o.z) < 0.5) s -= 1;
+    for (let l of g.logs) for (let u = 0.15; u < 1; u += 0.2) if (groveLogDist(l, tree.x + Math.cos(a) * len * u, tree.z + Math.sin(a) * len * u) < r + 0.15) s -= 1.5; // not across another log
+    for (let o of w.structures) if (groveLogDist(probe, o.x, o.z) < ((STRUCTURES[o.kind] && STRUCTURES[o.kind].radius) || 1)) s -= 4;
+    if (w.givingPlace && groveLogDist(probe, w.givingPlace.x, w.givingPlace.z) < TEMPLE_ROOM) s -= 3;
+    if (s > bestS) (bestS = s), (best = a);
+  }
+  let log = { id: tree.id, x: tree.x, z: tree.z, rot: +best.toFixed(3), len, r, tk: groveKindOf(tree), who: tree.who, name: tree.name, planted: tree.planted, fell: Math.round(w.t) };
+  g.logs.push(log);
+  if (g.logs.length > GROVE.maxLogs) g.logs.splice(0, g.logs.length - GROVE.maxLogs);
+  g.fallen = (g.fallen || 0) + 1;
+  removeThing(w, tree, w.res);
+  if (quiet) return log;
+  let founder = (g.founders || []).includes(tree.who),
+    kind = GROVE_WORDS[log.tk][0],
+    days = Math.round((w.t - tree.planted) / DAY_S);
+  if (founder)
+    logEvent(w, 3, `The great ${kind} planted for ${tree.name}, one of the first five, has fallen in the grove after ${days} days. Moss and ferns will cover it, and young trees will grow from it.`, [], log, "grove");
+  else logEvent(w, 1, `The old ${kind} planted for ${tree.name} fell in the grove. It will feed new growth.`, [], log, "grove");
+  return log;
+}
+
+// Every life check (600 s), from lifeTick.
+function groveTick(w) {
+  groveTreesTick(w);
+  goatTick(w);
+  woolTick(w);
+}
+
+// Trees whose time has come fall; logs go back to the soil.
+function groveTreesTick(w) {
+  if (w.grove) {
+    let g = groveOf(w),
+      standing = [],
+      due = [];
+    for (let r of w.res)
+      if (r.kind === "grove") {
+        standing.push(r);
+        if (w.t >= r.fall) due.push(r);
+      }
+    // never more than maxStanding: the oldest go first
+    if (standing.length > GROVE.maxStanding) {
+      standing.sort((a, b) => a.planted - b.planted || a.id - b.id);
+      for (let t of standing.slice(0, standing.length - GROVE.maxStanding)) if (!due.includes(t)) due.push(t);
+    }
+    due.sort((a, b) => a.planted - b.planted || a.id - b.id);
+    let quiet = due.length > 2 * GROVE.fallPerTick; // a valley catching up on many falls says nothing
+    for (let t of due.slice(0, GROVE.fallPerTick)) groveFell(w, g, t, quiet);
+    // the logs go back to the soil
+    while (g.logs.length && w.t - g.logs[0].fell > GROVE.logDays * DAY_S) g.logs.shift();
+  }
+}
+
+// How far a log has rotted, 0 (just fallen) .. 1 (gone).
+function groveLogDecay(w, l, t = w.t) {
+  return clamp((t - l.fell) / (GROVE.logDays * DAY_S), 0, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Goats: kids in spring, growing up, growing old.
+// ---------------------------------------------------------------------------
+function goatAge(w, g) {
+  return (w.t - (g.born || 0)) / DAY_S;
+}
+function goatGrown(w, g) {
+  return !g.mom || goatAge(w, g) >= GOATS.kidDays;
+}
+
+function goatTick(w) {
+  let f = w.fauna;
+  if (!f || !f.goats || !f.goats.length) return;
+  let s = seasonAt(w);
+  for (let g of f.goats) {
+    if (g.doe === undefined) g.doe = g.id % 2 === 1; // the gift's pair: a nanny and a billy
+    if (!g.dies) {
+      let r = new Rng(w.seed + ":goat:" + g.id),
+        life = r.range(GOATS.lifeDays[0], GOATS.lifeDays[1]) * DAY_S;
+      g.dies = Math.round(Math.max(g.born + life, w.t + life * 0.5)); // goats from before 3C get a fair while yet
+    }
+  }
+  // old goats die in the pasture
+  for (let g of f.goats.slice()) if (w.t >= g.dies) goatDies(w, f, g);
+  // each spring a grown nanny may have a kid, at a time of her own
+  let billy = f.goats.some((g) => !g.doe && goatGrown(w, g) && goatAge(w, g) > GOATS.kidDays);
+  for (let g of f.goats) {
+    if (!g.doe || !goatGrown(w, g) || goatAge(w, g) < GOATS.kidDays * 1.5) continue;
+    if (s.name === "spring" && g.kidYear !== s.year) {
+      g.kidYear = s.year;
+      let r = new Rng(w.seed + ":kid:" + g.id + ":" + s.year);
+      if (billy && r.next() < (f.goats.length <= 3 ? GOATS.kidChanceSmall : GOATS.kidChance)) g.due = Math.round(w.t + r.range(0.05, 0.9) * (1 - s.progress) * SEASON_DAYS * VALLEY_DAY);
+    }
+    if (g.due && w.t >= g.due) {
+      g.due = null;
+      if (f.goats.length < GOATS.herdMax) goatKids(w, f, g);
+    }
+  }
+}
+
+function goatName(w, r) {
+  let living = new Set(w.fauna.goats.map((g) => g.name));
+  for (let k = 0; k < 20; k++) {
+    let n = (NAME_START[r.int(0, NAME_START.length - 1)] + NAME_END[r.int(0, NAME_END.length - 1)]).slice(0, 8);
+    if (!living.has(n)) return n;
+  }
+  return "Kid";
+}
+
+function goatKids(w, f, mom) {
+  let r = new Rng(w.seed + ":kids:" + mom.id + ":" + Math.round(w.t)),
+    n = r.next() < GOATS.twins && f.goats.length + 2 <= GOATS.herdMax ? 2 : 1,
+    names = [];
+  for (let i = 0; i < n; i++) {
+    let x = +(mom.x + r.range(-0.6, 0.6)).toFixed(2),
+      z = +(mom.z + r.range(-0.6, 0.6)).toFixed(2),
+      kid = { id: (f.goatSeq = (f.goatSeq || 0) + 1), name: goatName(w, r), x, z, px: x, pz: z, pt: Math.round(w.t), tn: Math.round(w.t + 120), coat: r.next() < 0.7 ? mom.coat : r.int(0, 3), born: Math.round(w.t), doe: r.next() < 0.5, mom: mom.id };
+    f.goats.push(kid);
+    names.push(kid.name);
+  }
+  f.kids = (f.kids || 0) + n;
+  let first = f.kids === n;
+  logEvent(w, first ? 2 : 1, n === 2 ? `${mom.name} the goat had twins in the pasture. The children named them ${names[0]} and ${names[1]}.` : `${mom.name} the goat had a kid in the pasture. The children named it ${names[0]}.`, [], mom, "goats");
+  // the children who love the goats remember it
+  for (let c of w.creatures) if (!c.visitor && !c.asleep && (c.counts.goats || 0) > 2 && dist2d(c.x, c.z, mom.x, mom.z) < 30) remember(w, c, "goats", n === 2 ? `${mom.name} the goat had twins! They wobble about after her.` : `${mom.name} the goat had a kid. It wobbles about after her.`, 0.6, { x: mom.x, z: mom.z, pv: 0.3 });
+}
+
+function goatDies(w, f, g) {
+  let i = f.goats.indexOf(g);
+  if (i < 0) return;
+  f.goats.splice(i, 1);
+  for (let k of f.goats) if (k.mom === g.id && !goatGrown(w, k)) k.mom = null; // the herd looks after a kid that lost its mother
+  let fond = w.creatures.filter((c) => !c.visitor && (c.counts.goats || 0) > 6).sort((a, b) => (b.counts.goats || 0) - (a.counts.goats || 0))[0];
+  logEvent(w, 1, `Old ${g.name} the goat lay down in the pasture one last time.${fond ? ` ${fond.name}, who brushed them most, sat with them a while.` : ""}`, fond ? [fond.id] : [], g, "goats");
+  if (fond) remember(w, fond, "goats", `Old ${g.name} the goat is gone. I brushed them so many times.`, 0.6);
+}
+
+// A kid trots after its mother (from faunaMinute in fauna.js): where she is going, a
+// little to one side. No random numbers, so the valley's stream is untouched.
+function goatFollow(w, f, g) {
+  if (!g.mom || goatGrown(w, g)) return false;
+  let m = f.goats.find((o) => o.id === g.mom);
+  if (!m) return false;
+  if (w.t < g.tn && dist2d(g.x, g.z, m.x, m.z) < 1.6) return true;
+  let a = hash01s(g.id * 7.1 + Math.floor(w.t / 600)) * Math.PI * 2,
+    d = 0.5 + 0.5 * hash01s(g.id * 3.3 + Math.floor(w.t / 900)),
+    tx = m.x + Math.cos(a) * d,
+    tz = m.z + Math.sin(a) * d;
+  if (!w.terrain.walkable(tx, tz)) (tx = m.x), (tz = m.z);
+  let dist = dist2d(g.x, g.z, tx, tz);
+  g.px = g.x;
+  g.pz = g.z;
+  g.pt = Math.round(w.t);
+  g.x = +tx.toFixed(2);
+  g.z = +tz.toFixed(2);
+  g.tn = Math.round(w.t + dist / FAUNA.goatSpeed + 30);
+  return true;
+}
+
+// A small deterministic hash in 0..1 (integer arithmetic only, the same in every engine).
+function hash01s(x) {
+  let h = Math.imul(Math.round(x * 1000) ^ 0x9e3779b9, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+// ---------------------------------------------------------------------------
+// Wool: spun and woven in the evenings into blankets for the homes.
+// ---------------------------------------------------------------------------
+function woolTick(w) {
+  let f = w.fauna;
+  if (!f) return;
+  if (f.wool > GOATS.woolMax) f.wool = GOATS.woolMax;
+  if (!f.blankets) {
+    if (!(f.wool >= GOATS.woolPerBlanket)) return;
+    f.blankets = {};
+  }
+  // blankets wear thin; homes that are gone don't need one
+  for (let id in f.blankets) {
+    let s = w.byId[id];
+    if (!s || s.kind !== "home" || w.t - f.blankets[id] > GOATS.blanketDays * DAY_S) delete f.blankets[id];
+  }
+  if (f.wool < GOATS.woolPerBlanket) return;
+  let ph = dayPhase(w.t);
+  if (ph < 0.7 || ph > 0.86) return; // in the evening, by the fire
+  let homes = w.structures.filter((s) => s.kind === "home" && s.level > 0 && !f.blankets[s.id]);
+  if (!homes.length) return;
+  let free = (c) => !c.visitor && !c.asleep && !c.farewell && !c.leaving && !(c.act && c.act.type === "away") && c.home != null,
+    folk = w.creatures.filter(free).sort((a, b) => (b.stage === "elder") - (a.stage === "elder") || (b.counts.goats || 0) - (a.counts.goats || 0) || a.id - b.id),
+    maker = folk[Math.floor(hash01s(f.blanketsMade || 0) * Math.min(3, folk.length))]; // one of those who love the goats most
+  if (!maker) return;
+  let home = homes.find((s) => s.id === maker.home) || homes.find((s) => s.owner && w.byId[s.owner] && maker.rel[s.owner] && maker.rel[s.owner].warmth > 0.3) || homes.sort((a, b) => a.id - b.id)[0];
+  f.blankets[home.id] = Math.round(w.t);
+  f.wool = +(f.wool - GOATS.woolPerBlanket).toFixed(2);
+  f.blanketsMade = (f.blanketsMade || 0) + 1;
+  let owner = home.owner && w.byId[home.owner],
+    whose = !owner ? "an empty home" : owner === maker ? "their own home" : `${owner.name}'s home`;
+  if (f.blanketsMade === 1) logEvent(w, 3, `${maker.name} spun the goats' wool by the fire and wove the valley's first warm blanket, for ${whose}. Winter nights will be easier there.`, [maker.id], home, "goats");
+  else logEvent(w, 1, `${maker.name} wove a warm blanket from the goats' wool, for ${whose}.`, [maker.id], home, "goats");
+  remember(w, maker, "goats", "I spun the goats' wool and wove a warm blanket.", 0.5);
+  if (owner && owner !== maker) remember(w, owner, "goats", `${maker.name} wove us a wool blanket. Winter nights are warmer now.`, 0.55);
+}
+
+// Extra rest at a home with a blanket, on a winter night.
+function woolWarmth(w, x, z) {
+  let f = w.fauna;
+  if (!f || !f.blankets || !isNight(w.t) || seasonAt(w).name !== "winter") return 0;
+  for (let id in f.blankets) {
+    let s = w.byId[id];
+    if (s && (s.x - x) ** 2 + (s.z - z) ** 2 < 4) return GOATS.blanketRest;
+  }
+  return 0;
+}
+
+// 3C: a home with a wool blanket is a little more restful on a winter night.
+restBonusAt = (function (orig) {
+  return function (w, c, x, z) {
+    let b = orig(w, c, x, z);
+    return b > 0 ? b + woolWarmth(w, x, z) : b;
+  };
+})(restBonusAt);
 
 // ==== src/sim/beavers.js ====
 // Phase 3C: the beavers.
@@ -28332,6 +29361,7 @@ var CreekSim = {
   daysToMidwinter,
   RETURNEE,
   LEGEND,
+  GROVE, GOATS, groveOf, groveSize, // 3C: the memorial grove and the goats (grove.js), for the Node tools
 };
 
 // ==== src/vendor/three-r186.js ====
@@ -64537,6 +65567,665 @@ var HomesView = class {
 // ==== src/view/life-view.js ====
 // Phase 3C: drawing grove trees, nurse logs, goats' kids, butterflies, herons, mist.
 // Owner: helper "grove".
+//
+// Everything here reads the world and never changes it. It is hooked in by wrapping:
+//   ResourceView no longer draws memorial trees one by one (makeView/sig skip "grove");
+//   BeliefView.update also updates a LifeView (created on first use), and BeliefView's
+//   goats are drawn small while they are kids;
+//   the panel for someone who has passed says which tree grows for them, or that it fell.
+// The grove is drawn with a few instanced meshes (a trunk and a crown per kind of tree),
+// so hundreds of trees cost a handful of draw calls.
+// ==========================================================================
+
+// Leaf colours through the year (crowns are drawn in greys and tinted per tree).
+var GROVE_LEAF = {
+  oak: { spring: 0x84b84c, summer: 0x467f34, autumn: 0xc8622a, winter: 0x7d6a4e },
+  birch: { spring: 0xa8d060, summer: 0x9cc852, autumn: 0xeab830, winter: 0x9a8c6c },
+  willow: { spring: 0xb4d064, summer: 0xa8bc66, autumn: 0xa8b448, winter: 0x8e9a60 },
+  pine: { spring: 0x3c7c4c, summer: 0x2f6b46, autumn: 0x2f6846, winter: 0x2b5c44 },
+};
+var GROVE_BARK = { oak: 0x6b4a2b, pine: 0x5e4430, willow: 0x6e5a3a, birch: 0xe6e2d6 };
+var BUTTERFLY_COLOR = [0xfffcf0, 0xffd820, 0xff8a1c, 0x58a8ff, 0xfff4a0, 0xff6a3a];
+
+// One kind of memorial tree: the trunk in its own colours, the crown in greys (tinted per
+// tree). Scale 1 is a full young tree, about as tall as the valley's other trees.
+function groveKindGeometry(kind) {
+  let G = 0xffffff,
+    g2 = 0xdcdcdc,
+    g3 = 0xc4c4c4,
+    trunk,
+    crown;
+  if (kind === "pine") {
+    trunk = mergeParts([part(yt(0.08, 0.15, 1.1, 5), GROVE_BARK.pine, { y: 0.55 })]);
+    crown = mergeParts([
+      part(ze(0.85, 1.1, 7), g2, { y: 1.05 }),
+      part(ze(0.66, 0.95, 7), G, { y: 1.6, ry: 0.4 }),
+      part(ze(0.46, 0.8, 7), g2, { y: 2.12 }),
+      part(ze(0.24, 0.55, 6), G, { y: 2.55, ry: 0.3 }),
+    ]);
+  } else if (kind === "willow") {
+    trunk = mergeParts([part(yt(0.12, 0.2, 1.4, 6), GROVE_BARK.willow, { y: 0.7, rz: 0.06 }), part(yt(0.05, 0.07, 0.7, 4), GROVE_BARK.willow, { x: 0.25, y: 1.3, rz: -0.7 })]);
+    let a = [part(qt(0.85, 0), G, { y: 1.8, sy: 0.6 }), part(qt(0.55, 0), g2, { x: 0.35, y: 2.05, z: -0.2, sy: 0.6 })];
+    for (let l = 0; l < 9; l++) {
+      let c = (l / 9) * 6.28;
+      a.push(part(ze(0.26, 1.35, 4), l % 2 ? g2 : g3, { x: Math.cos(c) * 0.78, y: 1.2, z: Math.sin(c) * 0.78, rx: Math.PI }));
+    }
+    crown = mergeParts(a);
+  } else if (kind === "birch") {
+    trunk = mergeParts([
+      part(yt(0.07, 0.1, 2.0, 6), GROVE_BARK.birch, { y: 1.0 }),
+      part(lt(0.1, 0.04, 0.11), 0x2a2622, { y: 0.55 }),
+      part(lt(0.1, 0.04, 0.11), 0x2a2622, { y: 1.05, ry: 1.1 }),
+      part(lt(0.09, 0.035, 0.1), 0x2a2622, { y: 1.5, ry: 2 }),
+    ]);
+    crown = mergeParts([part(qt(0.55, 0), G, { y: 2.05, sy: 1.45 }), part(qt(0.4, 0), g2, { x: 0.28, y: 1.75, z: 0.15, sy: 1.2 }), part(qt(0.36, 0), g3, { x: -0.22, y: 2.35, z: -0.12, sy: 1.2 })]);
+  } else {
+    trunk = mergeParts([part(yt(0.13, 0.19, 1.35, 6), GROVE_BARK.oak, { y: 0.67 }), part(yt(0.05, 0.08, 0.7, 4), GROVE_BARK.oak, { x: -0.25, y: 1.25, rz: 0.75 })]);
+    crown = mergeParts([
+      part(qt(0.9, 0), G, { y: 1.8, sy: 0.85 }),
+      part(qt(0.6, 0), g2, { x: 0.58, y: 1.55, z: 0.2 }),
+      part(qt(0.55, 0), g3, { x: -0.5, y: 1.65, z: -0.25 }),
+      part(qt(0.5, 0), g2, { x: 0.05, y: 2.25, z: -0.35 }),
+    ]);
+  }
+  return { trunk, crown };
+}
+
+// Mist: a soft round puff (a canvas texture made once).
+var groveMistTex = null;
+function groveMistTexture() {
+  if (groveMistTex) return groveMistTex;
+  let c = document.createElement("canvas");
+  c.width = c.height = 64;
+  let x = c.getContext("2d"),
+    gr = x.createRadialGradient(32, 32, 2, 32, 32, 31);
+  gr.addColorStop(0, "rgba(255,255,255,1)");
+  gr.addColorStop(0.45, "rgba(255,255,255,0.55)");
+  gr.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = gr;
+  x.fillRect(0, 0, 64, 64);
+  groveMistTex = new Tr(c);
+  return groveMistTex;
+}
+
+// How much of a season colour has turned toward the next one.
+function groveSeasonColor(kind, s, jitter, col) {
+  let order = ["spring", "summer", "autumn", "winter"],
+    L = GROVE_LEAF[kind],
+    turn = smoothstep(0.55, 1, clamp(s.progress + (jitter - 0.5) * 0.3, 0, 1));
+  col.set(L[s.name]);
+  if (turn > 0) col.lerp(new wt(L[order[(s.idx + 1) % 4]]), turn);
+  return col;
+}
+
+var LifeView = class {
+  constructor(world, scene) {
+    this.world = world;
+    this.scene = scene;
+    this.group = new Pe();
+    scene.add(this.group);
+    this.m4 = new se();
+    this.q = new mn();
+    this.eu = new bn();
+    this.v = new z();
+    this.sc = new z(1, 1, 1);
+    this.col = new wt();
+    this.col2 = new wt();
+    let inst = (geom, n, mat, shadow = true) => {
+      let m = new Ts(geom, mat, n);
+      m.count = 0;
+      m.frustumCulled = false;
+      m.castShadow = shadow;
+      this.group.add(m);
+      return m;
+    };
+    this.inst = inst;
+    // the grove: a trunk and a crown per kind
+    let N = GROVE.maxStanding + GROVE.maxLogs * 2 + 8;
+    this.kinds = {};
+    for (let k of GROVE.kinds) {
+      let g = groveKindGeometry(k);
+      this.kinds[k] = { trunk: inst(g.trunk, N, he()), crown: inst(g.crown, N, he()) };
+    }
+    this.stones = inst(mergeParts([part(on(0.09), 0xffffff, { y: 0.05 })]), GROVE.maxStanding + 8, new Qe({ vertexColors: true, flatShading: true }), false);
+    // nurse logs: a log (unit length along +x, unit radius), moss, ferns
+    this.logs = inst(
+      mergeParts([part(yt(1, 1, 1, 8), 0xffffff, { rz: Math.PI / 2, x: 0.5 }), part(yt(0.86, 0.86, 0.02, 8), 0x9a8a78, { rz: Math.PI / 2, x: 0.002 }), part(yt(0.86, 0.86, 0.02, 8), 0x9a8a78, { rz: Math.PI / 2, x: 0.998 })]),
+      GROVE.maxLogs + 2,
+      new Qe({ vertexColors: true, flatShading: true }),
+    );
+    this.moss = inst(mergeParts([part(qt(0.16, 0), 0xffffff, { sy: 0.45 })]), (GROVE.maxLogs + 2) * 10, new Qe({ vertexColors: true, flatShading: true }), false);
+    let fr = [];
+    for (let i = 0; i < 6; i++) {
+      let a = (i / 6) * Math.PI * 2;
+      fr.push(part(lt(0.05, 0.012, 0.42), i % 2 ? 0xffffff : 0xd8d8d8, { x: Math.cos(a) * 0.17, y: 0.13, z: Math.sin(a) * 0.17, ry: -a + Math.PI / 2, rx: 0, rz: 0 }));
+    }
+    // each frond arches out and up from the middle
+    fr = fr.map((g, i) => {
+      let a = (i / 6) * Math.PI * 2,
+        m = new se().compose(new z(0, 0, 0), new mn().setFromEuler(new bn(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5)), new z(1, 1, 1));
+      return g.applyMatrix4(m);
+    });
+    this.ferns = inst(mergeParts(fr), (GROVE.maxLogs + 2) * 5, new Qe({ vertexColors: true, flatShading: true }), false);
+    // butterflies: two wings beating about the body
+    let wingMat = new je({ vertexColors: true, side: 2 });
+    let wing = (sg) => mergeParts([part(lt(0.12, 0.004, 0.13), 0xffffff, { z: sg * 0.07 }), part(lt(0.06, 0.006, 0.05), 0x2a2420, { x: 0.035, z: sg * 0.12 }), sg > 0 ? part(lt(0.11, 0.025, 0.025), 0x2a2420, {}) : null]);
+    this.wingL = inst(wing(1), 64, wingMat, false);
+    this.wingR = inst(wing(-1), 64, wingMat, false);
+    // herons, a few at most
+    this.herons = [];
+    // mist
+    this.mistMat = new je({ map: groveMistTexture(), color: 0xf4f6f8, transparent: true, opacity: 0, depthWrite: false });
+    this.mist = inst(new As(1, 1), 160, this.mistMat, false);
+    this.mist.renderOrder = 2;
+    this.mistSpots = [];
+    this.mistKey = "";
+    this.flySpots = [];
+    this.flyKey = "";
+    this.heronKey = "";
+    this.heronSpots = [];
+    this.treeKey = "";
+    this.preview = null;
+  }
+  dispose() {
+    this.group.traverse((o) => {
+      o.isInstancedMesh && o.dispose();
+      o.geometry && o.geometry.dispose();
+    });
+    this.scene.remove(this.group);
+  }
+  h(x, z) {
+    return this.world.terrain.heightAt(clamp(x, 0, VW - 0.01), clamp(z, 0, VL - 0.01));
+  }
+  put(mesh, i, x, y, z, rx, ry, rz, sx, sy, sz, col, order = "XYZ") {
+    if (i >= mesh.instanceMatrix.count) return;
+    this.eu.set(rx, ry, rz, order);
+    this.q.setFromEuler(this.eu);
+    this.v.set(x, y, z);
+    this.sc.set(sx, sy, sz);
+    this.m4.compose(this.v, this.q, this.sc);
+    mesh.setMatrixAt(i, this.m4);
+    if (col !== undefined) mesh.setColorAt(i, typeof col === "number" ? this.col.set(col) : col);
+  }
+  done(mesh, n) {
+    mesh.count = n;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+  update(clock, night, rain, dl, camera, focus) {
+    let w = this.world;
+    this.updateGrove(w, clock, camera, focus);
+    this.updateButterflies(w, clock, night, rain);
+    this.updateHerons(w, clock, night);
+    this.updateMist(w, clock, camera);
+  }
+
+  // -------------------------------------------------------------------------
+  // The memorial grove and its nurse logs
+  // -------------------------------------------------------------------------
+  groveTrees(w) {
+    let trees = [];
+    for (let r of w.res) if (r.kind === "grove") trees.push(r);
+    return trees;
+  }
+  updateGrove(w, clock, camera, focus) {
+    let trees = this.groveTrees(w),
+      g = w.grove,
+      logs = (g && g.logs) || [];
+    // what changes slowly (which trees, how big, their colours) is worked out now and then
+    let key = trees.length + ":" + (trees.length ? trees[trees.length - 1].id : 0) + ":" + logs.length + ":" + (logs.length ? logs[logs.length - 1].id : 0) + ":" + Math.floor(clock / 4) + ":" + (snowLevel(w) > 0.3 ? 1 : 0);
+    if (key !== this.treeKey) {
+      this.treeKey = key;
+      this.layoutGrove(w, trees, logs);
+    }
+    // crowns sway; those between you and the creekfolk you follow, or what you've come
+    // close to look at, are left out (so you can see the forest floor)
+    let rig = window.__creek && window.__creek.rig,
+      e = rig && (rig.follow || (rig.cur && rig.cur.dist < 20)) && camera && camera.position,
+      fy = focus ? this.h(focus.x, focus.z) + 0.5 : 0,
+      n = {};
+    for (let k of GROVE.kinds) n[k] = 0;
+    for (let t of this.drawn) {
+      let K = this.kinds[t.kind],
+        faded = false;
+      if (e && focus && !t.sapling) {
+        let cy = t.y + 1.8 * t.sy,
+          dx = focus.x - e.x,
+          dy = fy - e.y,
+          dz = focus.z - e.z,
+          L = dx * dx + dy * dy + dz * dz,
+          m = clamp(((t.x - e.x) * dx + (cy - e.y) * dy + (t.z - e.z) * dz) / L, 0, 1),
+          bx = e.x + dx * m - t.x,
+          by = e.y + dy * m - cy,
+          bz = e.z + dz * m - t.z,
+          R = 1.5 * t.sx,
+          inside = (t.x - e.x) ** 2 + (cy - e.y) ** 2 + (t.z - e.z) ** 2 < R * R;
+        faded = inside || (m > 0.02 && m < 0.98 && bx * bx + by * by + bz * bz < R * R);
+      }
+      let sway = (0.025 / Math.sqrt(t.sy)) * (w.weather.rain > 1 ? 2.2 : 1),
+        rz = Math.sin(clock * 0.9 + t.phase) * sway,
+        rx = Math.cos(clock * 0.7 + t.phase) * sway * 0.6;
+      if (faded) continue;
+      this.put(K.crown, n[t.kind]++, t.x, t.y, t.z, rx, t.ry, rz, t.sx * t.cs, t.sy * t.cs, t.sx * t.cs, t.leaf);
+    }
+    for (let k of GROVE.kinds) this.done(this.kinds[k].crown, n[k]);
+  }
+  layoutGrove(w, trees, logs) {
+    let s = seasonAt(w),
+      snow = snowLevel(w),
+      deciduous = { oak: 1, birch: 1, willow: 0.5, pine: 0 },
+      pv = null;
+    if (trees.some((t) => !t.tk)) {
+      // a grove from before 3C, until the first life check gives its trees their kinds
+      if (!this.preview || this.preview.n !== trees.length) this.preview = { n: trees.length, map: groveKindsPreview(w) };
+      pv = this.preview.map;
+    }
+    this.drawn = [];
+    let nt = {},
+      ns = 0;
+    for (let k of GROVE.kinds) nt[k] = 0;
+    let tree = (x, zz, kind, size, id, sapling) => {
+      let sx = Math.pow(size, 0.6), // old trees grow tall more than wide
+        sy = size,
+        jit = hash01(id * 3 + 1),
+        leaf = groveSeasonColor(kind, s, jit, new wt()),
+        cs = 1;
+      leaf.multiplyScalar(0.9 + 0.18 * hash01(id * 5 + 2));
+      if (s.name === "winter" && deciduous[kind]) cs = 1 - 0.18 * deciduous[kind];
+      if (snow > 0.3) leaf.lerp(this.col2.set(0xf2f2ee), 0.55 * snow * (kind === "pine" ? 1 : 0.7));
+      let y = this.h(x, zz) - 0.05,
+        ry = hash01(id * 7) * 6.28;
+      this.put(this.kinds[kind].trunk, nt[kind]++, x, y, zz, 0, ry, 0, sx, sy, sx, 0xffffff);
+      this.drawn.push({ x, y, z: zz, sx, sy, ry, kind, leaf, cs, phase: hash01(id * 7 + 3) * 6.28, sapling });
+      return { sx, ry };
+    };
+    for (let t of trees) {
+      let kind = t.tk || (pv && pv.get(t.id)) || "oak",
+        size = groveSize(w, t),
+        r = tree(t.x, t.z, kind, size, t.id, false);
+      if (ns < this.stones.instanceMatrix.count) {
+        let a = r.ry + 0.9,
+          d = 0.3 + 0.2 * r.sx,
+          x = t.x + Math.cos(a) * d,
+          zz = t.z + Math.sin(a) * d;
+        this.put(this.stones, ns++, x, this.h(x, zz), zz, 0, a, 0, 1, 1, 1, PALETTE.stone2);
+      }
+    }
+    // nurse logs: they sink and soften as they rot, moss spreads, ferns and young trees grow
+    let nl = 0,
+      nm = 0,
+      nf = 0;
+    for (let l of logs) {
+      let d = groveLogDecay(w, l),
+        r = l.r * (1 - 0.35 * d) * (d > 0.85 ? 1 - (d - 0.85) / 0.15 * 0.6 : 1),
+        cx = Math.cos(l.rot),
+        cz = Math.sin(l.rot),
+        h0 = this.h(l.x, l.z),
+        h1 = this.h(l.x + cx * l.len, l.z + cz * l.len),
+        slope = Math.atan2(h1 - h0, l.len),
+        y0 = h0 + r * (0.85 - 0.6 * d),
+        bark = this.col.set(GROVE_BARK[l.tk] || GROVE_BARK.oak).lerp(this.col2.set(0x4a5a30), 0.25 + 0.5 * d);
+      this.put(this.logs, nl++, l.x, y0, l.z, 0, -l.rot, slope, l.len, r, r, bark);
+      let top = (u) => ({ x: l.x + cx * u * l.len, y: y0 + Math.sin(slope) * u * l.len + r * 0.85, z: l.z + cz * u * l.len }),
+        mossN = Math.min(10, 3 + Math.floor(d * 8));
+      for (let i = 0; i < mossN; i++) {
+        let u = 0.08 + 0.84 * hash01(l.id * 11 + i),
+          p = top(u);
+        this.put(this.moss, nm++, p.x, p.y, p.z, 0, hash01(l.id + i * 3) * 6.28, 0, (0.9 + hash01(l.id * 3 + i)) * Math.max(0.7, r * 2.2), 1, 1 + hash01(l.id * 5 + i), i % 3 ? 0x5e8c3a : 0x7a9a44);
+      }
+      for (let i = 0; i < Math.min(5, 2 + Math.floor(d * 4)); i++) {
+        let u = 0.1 + 0.8 * hash01(l.id * 13 + i),
+          side = i % 2 ? 1 : -1,
+          off = r + 0.25 + 0.25 * hash01(l.id * 17 + i),
+          x = l.x + cx * u * l.len - cz * off * side,
+          zz = l.z + cz * u * l.len + cx * off * side;
+        this.put(this.ferns, nf++, x, this.h(x, zz), zz, 0, hash01(l.id + i) * 6.28, 0, 0.7 + 0.5 * d + 0.3 * hash01(l.id * 19 + i), 0.7 + 0.6 * d, 0.7 + 0.5 * d + 0.3 * hash01(l.id * 19 + i), i % 2 ? 0x4f8a3c : 0x63973f);
+      }
+      // a sapling or two growing out of the log itself
+      for (let i = 0; i < 1 + (hash01(l.id * 23) < 0.6 ? 1 : 0); i++) {
+        let u = 0.3 + 0.45 * hash01(l.id * 29 + i),
+          p = top(u),
+          kind = hash01(l.id * 31 + i) < 0.6 ? l.tk : GROVE.kinds[Math.floor(hash01(l.id * 37 + i) * 4)];
+        tree(p.x, p.z, kind, 0.12 + 0.3 * d + 0.06 * i, l.id * 3 + i, true);
+        let last = this.drawn[this.drawn.length - 1];
+        last.y = p.y - 0.05;
+        // move its trunk up onto the log too
+        this.put(this.kinds[kind].trunk, nt[kind] - 1, p.x, last.y, p.z, 0, last.ry, 0, last.sx, last.sy, last.sx, 0xffffff);
+      }
+    }
+    for (let k of GROVE.kinds) this.done(this.kinds[k].trunk, nt[k]);
+    this.done(this.stones, ns);
+    this.done(this.logs, nl);
+    this.done(this.moss, nm);
+    this.done(this.ferns, nf);
+  }
+
+  // -------------------------------------------------------------------------
+  // Butterflies on summer days, over the flowers and the green
+  // -------------------------------------------------------------------------
+  flyHomes(w) {
+    let f = w.fauna,
+      key = (f ? f.flowers.reduce((a, fl) => a + fl.patches.length, 0) : 0) + ":" + Math.floor(w.t / 3600);
+    if (key === this.flyKey) return this.flySpots;
+    this.flyKey = key;
+    let spots = [];
+    if (f) for (let fl of f.flowers) for (let p of fl.patches) spots.push({ x: p.x, z: p.z, r: p.r + 0.8 });
+    // and over green ground at the edge of the wetland
+    let c = w.creek && creekCells(w),
+      G = w.green;
+    if (c && G) {
+      let cand = [];
+      for (let k = 0; k < CELLS; k += 7) if (G[k] > 0.7 && c.d[k] > 1.5 && c.d[k] < 9 && !(w.wt && w.wt[k] > c.h[k])) cand.push(k);
+      // spread along the whole valley
+      for (let j = 0, step = Math.max(1, cand.length / 24); j < cand.length; j += step) {
+        let k = cand[Math.floor(j)];
+        spots.push({ x: (k % VW) + 0.5, z: ((k / VW) | 0) + 0.5, r: 2 });
+      }
+    }
+    this.flySpots = spots;
+    return spots;
+  }
+  updateButterflies(w, clock, night, rain) {
+    let s = seasonAt(w),
+      act = s.name === "summer" ? 1 : s.name === "spring" ? smoothstep(0.4, 1, s.progress) * 0.7 : s.name === "autumn" ? (1 - smoothstep(0, 0.35, s.progress)) * 0.6 : 0,
+      green = w.creek ? w.creek.greenNow || 0 : 0.5,
+      k = 0;
+    act *= clamp(1 - night * 2.5, 0, 1) * (rain > 0 ? 0 : 1) * (snowLevel(w) > 0 ? 0 : 1);
+    if (act > 0.02) {
+      let homes = this.flyHomes(w),
+        n = Math.min(64, Math.round(64 * act * (0.35 + 0.65 * green)));
+      // a few together over each of some of the patches
+      for (let i = 0; i < n && homes.length; i++) {
+        let hm = homes[Math.floor(hash01(Math.floor(i / 4) * 13 + 5) * homes.length) % homes.length],
+          a = 0.35 + 0.3 * hash01(i * 3),
+          b = 0.45 + 0.3 * hash01(i * 7),
+          ph = hash01(i * 11) * 6.28,
+          R = hm.r,
+          x = hm.x + Math.sin(clock * a + ph) * R + Math.sin(clock * 2.3 + i) * 0.15,
+          zz = hm.z + Math.cos(clock * b + ph * 1.3) * R,
+          vx = Math.cos(clock * a + ph) * a,
+          vz = -Math.sin(clock * b + ph * 1.3) * b,
+          y = this.h(x, zz) + 0.7 + 0.3 * Math.sin(clock * 1.7 + i) + 0.1 * Math.sin(clock * 5.1 + i * 2),
+          flap = 0.25 + 0.9 * Math.abs(Math.sin(clock * 16 + i * 1.7)),
+          head = Math.atan2(-vz, vx),
+          col = BUTTERFLY_COLOR[i % BUTTERFLY_COLOR.length];
+        if (i === 0) this.flyAt = hm; // (for tools/grove-shots.mjs)
+        this.put(this.wingL, k, x, y, zz, flap, head, 0, 1, 1, 1, col, "YXZ");
+        this.put(this.wingR, k, x, y, zz, -flap, head, 0, 1, 1, 1, col, "YXZ");
+        k++;
+      }
+    }
+    this.done(this.wingL, k);
+    this.done(this.wingR, k);
+  }
+
+  // -------------------------------------------------------------------------
+  // Herons standing in the shallows, once the wetland has grown
+  // -------------------------------------------------------------------------
+  heronMesh() {
+    let grey = 0x8f9aa8,
+      dark = 0x4e5866,
+      root = new Pe(),
+      body = new Et(
+        mergeParts([
+          part(yt(0.012, 0.012, 0.5, 3), 0x9a8a60, { x: 0.02, y: 0.25, z: 0.045 }),
+          part(yt(0.012, 0.012, 0.5, 3), 0x9a8a60, { x: -0.02, y: 0.25, z: -0.045 }),
+          part(Bn(0.15, 6, 5), grey, { y: 0.6, sx: 1.7, sz: 0.85, rz: 0.35 }),
+          part(lt(0.3, 0.06, 0.2), dark, { x: -0.12, y: 0.66, rz: 0.4 }),
+          part(ze(0.06, 0.2, 4), dark, { x: -0.32, y: 0.56, rz: Math.PI / 2 + 0.3 }),
+        ]),
+        he(),
+      ),
+      neck = new Pe(),
+      neckMesh = new Et(
+        mergeParts([
+          part(yt(0.028, 0.035, 0.34, 4), 0xd8dce0, { y: 0.17, rz: -0.25 }),
+          part(Bn(0.055, 5, 4), 0xe8ecee, { x: 0.05, y: 0.36 }),
+          part(lt(0.08, 0.015, 0.02), 0x202428, { x: -0.02, y: 0.39 }),
+          part(ze(0.018, 0.17, 4), 0xd8b040, { x: 0.17, y: 0.35, rz: -Math.PI / 2 }),
+        ]),
+        he(),
+      ),
+      wings = new Pe(),
+      wingL = new Et(mergeParts([part(lt(0.32, 0.02, 0.55), dark, { z: 0.3 })]), he()),
+      wingR = new Et(mergeParts([part(lt(0.32, 0.02, 0.55), dark, { z: -0.3 })]), he());
+    wings.position.set(0, 0.64, 0);
+    wings.add(wingL, wingR);
+    neck.position.set(0.18, 0.66, 0);
+    neck.add(neckMesh);
+    body.castShadow = neckMesh.castShadow = true;
+    wings.visible = false;
+    root.add(body, neck, wings);
+    this.group.add(root);
+    return { root, neck, wings, wingL, wingR, x: null, z: null, from: null, t0: 0 };
+  }
+  heronPlaces(w) {
+    let key = Math.floor(w.t / 1800) + ":" + (w.creek ? Math.round((w.creek.wetNow || 0) * 20) : 0);
+    if (key === this.heronKey) return this.heronSpots;
+    this.heronKey = key;
+    let wet = w.creek ? w.creek.wetNow || 0 : 0,
+      n = wet < 0.28 ? 0 : wet < 0.45 ? 1 : wet < 0.6 ? 2 : wet < 0.75 ? 3 : 4,
+      out = [];
+    if (n && w.wt) {
+      let c = creekCells(w),
+        cand = [];
+      for (let k = 0; k < CELLS; k++) {
+        if (!c.floor[k]) continue;
+        let d = w.wt[k] - c.h[k];
+        if (d > 0.03 && d < 0.3) cand.push(k);
+      }
+      let seed = Math.floor(w.t / 1800);
+      cand.sort((a, b) => hash01(a * 1.31 + seed * 7.7) - hash01(b * 1.31 + seed * 7.7));
+      for (let k of cand) {
+        let x = (k % VW) + 0.5,
+          zz = ((k / VW) | 0) + 0.5;
+        if (zz < 6 || zz > VL - 6 || out.some((o) => Math.hypot(o.x - x, o.z - zz) < 14)) continue;
+        out.push({ x, z: zz, y: w.wt[k], ry: hash01(k * 3.3) * 6.28 });
+        if (out.length >= n) break;
+      }
+    }
+    this.heronSpots = out;
+    return out;
+  }
+  updateHerons(w, clock, night) {
+    let spots = night > 0.6 ? [] : this.heronPlaces(w);
+    while (this.herons.length < spots.length) this.herons.push(this.heronMesh());
+    this.herons.forEach((hv, i) => {
+      let sp = spots[i];
+      hv.root.visible = !!sp;
+      if (!sp) {
+        hv.x = null;
+        return;
+      }
+      if (hv.x === null) (hv.x = sp.x), (hv.z = sp.z), (hv.y = sp.y), (hv.from = null);
+      // a new spot: fly there
+      if (hv.tx !== sp.x || hv.tz !== sp.z) {
+        if (hv.tx !== undefined) hv.from = { x: hv.x, z: hv.z, y: hv.y, t0: clock };
+        hv.tx = sp.x;
+        hv.tz = sp.z;
+        hv.ty = sp.y;
+      }
+      let x = sp.x,
+        zz = sp.z,
+        y = sp.y - 0.12,
+        flying = false,
+        ry = sp.ry + 0.4 * Math.sin(clock * 0.07 + i);
+      if (hv.from) {
+        let k = clamp((clock - hv.from.t0) / 9, 0, 1),
+          e = k * k * (3 - 2 * k);
+        x = hv.from.x + (sp.x - hv.from.x) * e;
+        zz = hv.from.z + (sp.z - hv.from.z) * e;
+        y = hv.from.y + (sp.y - hv.from.y) * e + Math.sin(k * Math.PI) * 5;
+        ry = Math.atan2(-(sp.z - hv.from.z), sp.x - hv.from.x);
+        flying = k < 1;
+        if (k >= 1) hv.from = null;
+      }
+      hv.x = x;
+      hv.z = zz;
+      hv.y = y;
+      hv.root.position.set(x, y, zz);
+      hv.root.rotation.y = ry;
+      hv.wings.visible = flying;
+      if (flying) (hv.wingL.rotation.x = Math.sin(clock * 6 + i) * 0.6), (hv.wingR.rotation.x = -hv.wingL.rotation.x);
+      // standing: still as a post, now and then a quick strike at a fish
+      let cyc = (clock + i * 3.7) % 11,
+        strike = cyc > 9.6 ? Math.sin(((cyc - 9.6) / 1.4) * Math.PI) : 0;
+      hv.neck.rotation.z = flying ? -0.9 : -1.3 * strike + 0.05 * Math.sin(clock * 0.5 + i);
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Mist over wet ground at dawn: more in the wet season, more as the wetland grows
+  // -------------------------------------------------------------------------
+  updateMist(w, clock, camera) {
+    let p = dayPhase(w.t),
+      dawn = smoothstep(0.12, 0.19, p) * (1 - smoothstep(0.27, 0.37, p)),
+      s = seasonAt(w),
+      wet = w.creek ? w.creek.wetNow || 0 : 0,
+      amount = dawn * (0.35 + 0.65 * s.wet) * (0.2 + 0.8 * Math.min(1, wet / 0.6)) * (w.weather.rain > 1 ? 0.4 : 1);
+    if (amount < 0.02 || !camera || !w.wet) {
+      this.mist.visible = false;
+      return;
+    }
+    this.mist.visible = true;
+    let key = Math.floor(w.t / 3600) + ":" + Math.round(wet * 30);
+    if (key !== this.mistKey) {
+      this.mistKey = key;
+      let c = creekCells(w),
+        cand = [];
+      for (let k = 0; k < CELLS; k++) if (c.floor[k] && (w.wet[k] > 0.35 || (w.wt && w.wt[k] > c.h[k])) && hash01(k * 0.731) < 0.3) cand.push(k);
+      // spread along the whole floor: every so many, up to what the mesh holds
+      let step = Math.max(1, cand.length / 160),
+        spots = [];
+      for (let j = 0; j < cand.length && spots.length < 160; j += step) {
+        let k = cand[Math.floor(j)];
+        spots.push({ x: (k % VW) + hash01(k * 3.1), z: ((k / VW) | 0) + hash01(k * 5.3), y: Math.max(c.h[k], w.wt ? w.wt[k] : 0), s: 0.7 + 0.6 * hash01(k * 1.7), ph: hash01(k * 2.9) * 6.28 });
+      }
+      this.mistSpots = spots;
+    }
+    let n = 0,
+      q = camera.quaternion;
+    for (let m of this.mistSpots) {
+      let dx = Math.sin(clock * 0.05 + m.ph) * 1.2;
+      this.v.set(m.x + dx, m.y + 0.45 + 0.15 * Math.sin(clock * 0.11 + m.ph), m.z);
+      this.sc.set(6.5 * m.s, 2.6 * m.s, 1);
+      this.m4.compose(this.v, q, this.sc);
+      this.mist.setMatrixAt(n++, this.m4);
+    }
+    this.done(this.mist, n);
+    // in the low sun the mist glows a little warm
+    this.mistMat.opacity = 0.42 * amount;
+    this.mistMat.color.set(0xf4f6f8).lerp(this.col2.set(0xffe8d0), 0.5 * (1 - smoothstep(0.2, 0.3, p)));
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
+(function () {
+  // the memorial trees are drawn by LifeView, all together
+  let makeView = ResourceView.prototype.makeView,
+    sig = ResourceView.prototype.sig;
+  ResourceView.prototype.makeView = function (t) {
+    if (t.kind === "grove") return { obj: new Pe(), crown: null, phase: 0 };
+    return makeView.call(this, t);
+  };
+  ResourceView.prototype.sig = function (t) {
+    return t.kind === "grove" ? "grove" : sig.call(this, t);
+  };
+  // LifeView comes and goes with BeliefView
+  let update = BeliefView.prototype.update,
+    dispose = BeliefView.prototype.dispose,
+    goats = BeliefView.prototype.updateGoats;
+  BeliefView.prototype.update = function (clock, night, rain, dl, camera, focus) {
+    update.call(this, clock, night, rain, dl, camera, focus);
+    if (!this.life) {
+      this.life = new LifeView(this.world, this.scene);
+      if (window.__creek) window.__creek.life = this.life; // for tools/grove-shots.mjs
+    }
+    this.life.update(clock, night, rain, dl, camera, focus);
+  };
+  BeliefView.prototype.dispose = function () {
+    if (this.life) this.life.dispose();
+    dispose.call(this);
+  };
+  // kids are small, and skip about
+  BeliefView.prototype.updateGoats = function (w, f, clock) {
+    goats.call(this, w, f, clock);
+    for (let g of (f && f.goats) || []) {
+      let v = this.goats.get(g.id);
+      if (!v) continue;
+      let age = (w.t - (g.born || 0)) / DAY_S,
+        kid = g.mom && age < GOATS.kidDays,
+        k = kid ? 0.45 + 0.55 * smoothstep(0, GOATS.kidDays, age) : 1;
+      if (Math.abs(v.obj.scale.x - k) > 1e-3) v.obj.scale.setScalar(k);
+      if (kid) v.mesh.position.y += Math.max(0, Math.sin(clock * 5 + g.id * 1.7)) * 0.07;
+    }
+  };
+})();
+
+// The panel for someone who has passed: which tree grows for them, or that it fell.
+(function () {
+  let gone = goneHTML;
+  goneHTML = function (hud, w, id) {
+    let html = gone(hud, w, id),
+      r = w.lineage && w.lineage[id];
+    if (!r || r.how === "downstream" || r.tree == null) return html;
+    let t = w.byId[r.tree],
+      kind = GROVE_WORDS[(t && t.tk) || r.tk || "oak"] || GROVE_WORDS.oak,
+      size = t && t.kind === "grove" ? groveSize(w, t) : 0,
+      lying = w.grove && (w.grove.logs || []).some((l) => l.id === r.tree),
+      line =
+        t && t.kind === "grove"
+          ? `${size > 3 ? "A great" : size > 1.6 ? "A tall" : size > 0.8 ? "A young" : "A little"} ${kind[0]} grows for them in the grove.`
+          : lying
+            ? `Their ${kind[0]} in the grove has fallen; moss, ferns and young trees grow on it now.`
+            : `Their ${kind[0]} in the grove fell long ago and has gone back to the soil; young trees grow where it stood.`;
+    return html.replace("A tree grows for them in the grove.", escapeHtml(line));
+  };
+})();
+
+// The village panel's Land tab: the grove and the goats, in plain words.
+function groveCap(s) {
+  return s[0].toUpperCase() + s.slice(1);
+}
+function groveLandHTML(w) {
+  let trees = w.res.filter((r) => r.kind === "grove"),
+    g = w.grove,
+    h = "";
+  if (trees.length) {
+    let pv = trees.some((t) => !t.tk) ? groveKindsPreview(w) : null,
+      kindOf = (t) => t.tk || (pv && pv.get(t.id)) || "oak",
+      count = {};
+    for (let t of trees) count[kindOf(t)] = (count[kindOf(t)] || 0) + 1;
+    let ks = Object.keys(count).sort((a, b) => count[b] - count[a]),
+      share = (k) => count[k] / trees.length,
+      words = ks.map((k, i) => (i === 0 && share(k) > 0.45 ? `mostly ${GROVE_WORDS[k][1]}` : share(k) < 0.12 ? `a few ${GROVE_WORDS[k][1]}` : GROVE_WORDS[k][1])),
+      list = words.length > 1 ? words.slice(0, -1).join(", ") + " and " + words[words.length - 1] : words[0],
+      oldest = trees.reduce((a, t) => (t.planted < a.planted ? t : a), trees[0]),
+      first5 = g && (g.founders || []).includes(oldest.who),
+      size = groveSize(w, oldest),
+      logs = (g && g.logs) || [];
+    h += `<h4>The memorial grove</h4><p>${trees.length < 20 ? `${groveCap(numberWords(trees.length))} ${trees.length === 1 ? "tree stands" : "trees stand"}` : `About ${numberWords(Math.round(trees.length / 10) * 10)} trees stand`} in the grove, one for each creekfolk who passed on in the last months: ${escapeHtml(list)}. A tree takes after a parent's tree, or what they loved, and is planted near the family's, so families grow together.</p>`;
+    h += `<p class="muted">The oldest is the ${size > 3 ? "great" : size > 1.6 ? "tall" : "young"} ${GROVE_WORDS[kindOf(oldest)][0]} planted for ${escapeHtml(oldest.name)}${first5 ? ", one of the first five" : ""}.`;
+    if (logs.length) h += ` ${logs.length === 1 ? "One old tree lies fallen" : `${groveCap(numberWords(logs.length))} old trees lie fallen`} among the others, with moss, ferns and young trees growing on ${logs.length === 1 ? "it" : "them"}.`;
+    h += `</p>`;
+  }
+  let f = w.fauna;
+  if (f && f.goats && f.goats.length) {
+    let kids = f.goats.filter((k) => k.mom && (w.t - k.born) / DAY_S < GOATS.kidDays),
+      homes = Object.keys(f.blankets || {}).length;
+    h += `<h4>The goats</h4><p>${f.goats.length === 1 ? "One goat grazes" : `${groveCap(numberWords(f.goats.length))} goats graze`} in the pasture${kids.length ? `, among them ${kids.length === 1 ? `a kid, ${escapeHtml(kids[0].name)}, who follows its mother everywhere` : `${numberWords(kids.length)} kids who follow their mothers everywhere`}` : ""}. The creekfolk brush them for company, and for their wool.</p>`;
+    if (homes) h += `<p class="muted">The wool has been spun and woven into warm blankets for ${homes === 1 ? "one home" : numberWords(homes) + " homes"}. Winter nights are easier there.</p>`;
+  }
+  return h;
+}
+(function () {
+  let land = villageLandHTML;
+  villageLandHTML = function (w) {
+    return land(w) + groveLandHTML(w);
+  };
+})();
 
 // ==== src/view/soundscape.js ====
 // Phase 3C: the valley sounds as healthy as it is. Owner: helper "sound".

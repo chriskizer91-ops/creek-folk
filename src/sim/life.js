@@ -133,6 +133,7 @@ function lifeTick(w) {
   giftTick(w); // gifts that stopped, found objects (gift.js)
   templeTick(w); // BELIEF: the temple, the great project, the spring (temple.js)
   lifeTick3C(w); // 3C: beavers, the sky calendar, the Returning (returning.js)
+  groveTick(w); // 3C: grove trees fall and become nurse logs; goats' kids; wool blankets (grove.js)
   w.popLog = w.popLog || [];
   if (!w.popLog.length || t - w.popLog[w.popLog.length - 1].t >= DAY_S / 4) {
     let s = stageCounts(w);
@@ -439,7 +440,7 @@ function passOn(w, c) {
   logEvent(
     w,
     3,
-    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}. A young tree was planted for them in the grove.${offer}`,
+    `${c.name} passed on peacefully${words}. They lived ${Math.round(age)} days${kids ? ` and leave ${kids} ${kids === 1 ? "child" : "children"}` : ""}.${groveWords(w, tree)}${offer}`, // 3C: which tree, and beside whose
     [c.id, ...near.map((o) => o.id)],
     c.farewell || c,
     "passing",
@@ -473,34 +474,10 @@ function grovePlace(w) {
   return w.grove;
 }
 
+// 3C: the tree's kind follows a parent's tree or what they loved, and it is planted beside
+// the family's trees; it stays off the temple's ground and the Hall's (grove.js, grovePlant).
 function groveTree(w, c) {
-  let g = grovePlace(w);
-  // Trees spiral out from the center, a little apart, family near family.
-  for (let k = 0; k < 60; k++) {
-    let n = g.n++,
-      a = n * 2.39996,
-      r = 0.7 * Math.sqrt(n + 0.5);
-    let x = g.x + Math.cos(a) * r,
-      z = g.z + Math.sin(a) * r;
-    if (!w.terrain.walkable(x, z)) continue;
-    if (w.givingPlace && Math.hypot(x - w.givingPlace.x, z - w.givingPlace.z) < TEMPLE_ROOM) continue; // BELIEF: the temple's ground stays clear
-    let hall = w.ancestors && w.byId[w.ancestors.sid];
-    if (hall && Math.hypot(x - hall.x, z - hall.z) < 6.5) continue; // ... and the Hall of the Ancestors'
-    let tree = register(w, {
-      id: w.nextId++,
-      kind: "grove",
-      x: +x.toFixed(2),
-      z: +z.toFixed(2),
-      side: w.terrain.side(x, z),
-      who: c.id,
-      name: c.name,
-      planted: Math.round(w.t),
-      hue: c.look.hue,
-    });
-    w.res.push(tree);
-    return tree;
-  }
-  return null;
+  return grovePlant(w, c);
 }
 
 // ---------------------------------------------------------------------------
@@ -718,6 +695,7 @@ function stageSpeed(c) {
 }
 
 // How grown a memorial tree is: a sapling, a young tree, then a full tree after about six weeks.
+// (3C: the grove is drawn by life-view.js from groveSize, which keeps growing all year.)
 function groveStage(w, tree) {
   let d = (w.t - (tree.planted || 0)) / DAY_S;
   return d < 6 ? 1 : d < 40 ? 2 : 3;
