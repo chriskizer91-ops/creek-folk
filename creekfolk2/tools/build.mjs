@@ -45,6 +45,9 @@ export const SIM_FILES = [
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it
 ];
 const VENDOR_FILES = ['vendor/three-r186.js'];
+// What the Water Brings' renderer, ported to r186 (docs/R186-PORT.md). These hang their names on
+// window and read window.THREE, so the page sets that first.
+const LOOK_FILES = ['src/look/core.js', 'src/look/skin.js', 'src/look/king3.js', 'src/look/toon.js', 'src/look/toon2.js', 'src/look/pixel3d.js'];
 const VIEW_FILES = [
   'src/view/clock.js',    // the page's clock (the player's correction, the dev offset)
   'src/view/vworld.js',   // the page's copy of the valley, as the worker describes it
@@ -52,7 +55,12 @@ const VIEW_FILES = [
   'src/view/sheets.js',   // the village and mind sheets
   'src/view/hud.js',      // the interface
   'src/view/dev.js',      // the developer menu
-  'src/view/mapview.js',  // the valley from above, on a 2D canvas
+  'src/view/mapview.js',  // the valley from above, on a 2D canvas (without WebGL)
+  'src/view/look-glue.js', // how the view uses the ported renderer (colour, light units)
+  'src/view/sprites.js',  // creekfolk as small pixel sprites, for the middle of the zoom
+  'src/view/valley3d.js', // the valley in 3D, drawn from the simulation
+  'src/view/folk3d.js',   // creekfolk close up, on the shared rig
+  'src/view/view3d.js',   // the 3D view: camera, light, the zoom from dots to faces
   'src/view/app.js',      // the worker, the drawing loop
   'src/view/boot.js',     // starts it
 ];
@@ -89,7 +97,7 @@ if (VIEW_FILES.length) {
   const safe = (s) => s.replace(/<\/script/gi, '<\\/script');
   for (const devBuild of [false, true]) {
     const worker = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${read('src/sim/cf2-worker.js')}\n})();`);
-    const main = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${join(VENDOR_FILES)}\n${join(VIEW_FILES)}\n})();`);
+    const main = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${join(VENDOR_FILES)}\nwindow.THREE = THREE;\n${join(LOOK_FILES)}\n${join(VIEW_FILES)}\n})();`);
     const title = devBuild ? 'Creekfolk 2 (dev)' : 'Creekfolk 2';
     const html =
       head.replace('<title>Creekfolk 2</title>', `<title>${title}</title>`) +

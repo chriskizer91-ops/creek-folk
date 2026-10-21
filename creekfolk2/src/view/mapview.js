@@ -239,6 +239,3 @@ var MapView = class {
   }
 };
 
-function makeRenderer(app, canvas) {
-  return new MapView(app, canvas);
-}

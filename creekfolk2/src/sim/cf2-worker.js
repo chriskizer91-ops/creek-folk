@@ -233,6 +233,8 @@ function cwSendState(full, heavy = true) {
       levels: cr.nodes.map((n) => [n.wl, n.q, n.g]),
       ponds: cr._pondNow ? Array.from(cr._pondNow) : null,
       br: cr.br,
+      dams: cr.dams,
+      soil: cr.soil,
       wetNow: cr.wetNow,
       wt: w.wt.slice(),
       green: w.green.slice(),

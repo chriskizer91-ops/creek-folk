@@ -91,6 +91,8 @@ var VWorld = class {
         });
       this.ponds = W.ponds;
       this.br = W.br;
+      if (W.dams) this.dams = W.dams;
+      this.soil = W.soil;
       this.wetNow = W.wetNow;
       this.flood = W.flood;
       this.grids = { wt: W.wt, green: W.green, wet: W.wet, wear: W.wear };
@@ -117,6 +119,10 @@ var VWorld = class {
   }
   list(kind) {
     return this.ent[kind];
+  }
+  // The season now ("spring" .. "winter"), for the drawing.
+  get season() {
+    return this.cycle ? seasonAt(this.w).name : "spring";
   }
   // What the sim's calendar functions need from a world.
   get w() {
