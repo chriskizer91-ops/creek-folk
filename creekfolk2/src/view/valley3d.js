@@ -278,10 +278,15 @@ var CF2Valley = (function () {
     function cr(p0, p1, p2, p3, t) {
       return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
     }
+    // past the valley the simulation's hills keep rising without end; drawn, they round off
+    // into wooded ridges a few tens of metres high (inside the valley they are never this high)
+    function hillCap(h) {
+      return h < 32 ? h : 32 + 14 * (1 - Math.exp(-(h - 32) / 14));
+    }
     function height(x, z) {
       if (x < 1 || z < 1 || x > VW - 1 || z > VL - 1) {
         if (x >= 0 && z >= 0 && x <= VW && z <= VL) return T.heightAt(x, z);
-        return T.heightRaw(x, z);
+        return hillCap(T.heightRaw(x, z));
       }
       var h = H(),
         ix = Math.floor(x),
@@ -299,43 +304,88 @@ var CF2Valley = (function () {
     }
     W.height = height;
 
-    // what the ground is at (x, z), from the simulation's state
+    // what the ground is at (x, z), from the simulation's state. The simulation's grids hold a
+    // metre to a cell; read cell by cell they draw the land in squares. Read smoothly between
+    // cells, with a little wandering noise on every edge, the same state draws as patches,
+    // drifts and shores.
     var G = () => vw.grids,
-      soilWet = () => (vw.soil != null ? vw.soil : 0.7);
+      soilWet = () => (vw.soil != null ? vw.soil : 0.7),
+      NZ = T.noise;
     function nodeAt(z) {
       var ns = vw.nodes,
         f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
         i = Math.floor(f);
       return ns[f - i < 0.5 ? i : i + 1];
     }
-    function noiseN(x, z) {
-      return Math.sin(x * 0.37 + 1.3) * Math.cos(z * 0.41 - 0.6) + 0.6 * Math.sin(x * 0.11 - z * 0.19);
+    // the creek's levels at z, between its points
+    var NL = { wl: 0, bed: 0, bz: 0, bw: 0, veg: 0 };
+    function levelsAt(z) {
+      var ns = vw.nodes,
+        f = clamp((z - CREEK.z0) / CREEK.ds, 0, ns.length - 1.0001),
+        i = Math.floor(f),
+        t = f - i,
+        a = ns[i],
+        b = ns[i + 1];
+      NL.wl = a.wl + (b.wl - a.wl) * t;
+      NL.bed = a.bed + (b.bed - a.bed) * t;
+      NL.bz = a.bz + (b.bz - a.bz) * t;
+      NL.bw = t < 0.5 ? a.bw : b.bw;
+      NL.veg = a.veg + (b.veg - a.veg) * t;
+      return NL;
     }
+    // a grid of cells (VW x VL), read between cell centres
+    function samp(a, x, z) {
+      var fx = clamp(x - 0.5, 0, VW - 1.0001),
+        fz = clamp(z - 0.5, 0, VL - 1.0001),
+        i = Math.floor(fx),
+        j = Math.floor(fz),
+        u = fx - i,
+        v = fz - j,
+        k = j * VW + i;
+      return (a[k] + (a[k + 1] - a[k]) * u) * (1 - v) + (a[k + VW] + (a[k + VW + 1] - a[k + VW]) * u) * v;
+    }
+    // a grid of vertices ((VW + 1) x (VL + 1)), read between them
+    function sampV(a, x, z) {
+      var fx = clamp(x, 0, VW - 0.0001),
+        fz = clamp(z, 0, VL - 0.0001),
+        i = Math.floor(fx),
+        j = Math.floor(fz),
+        u = fx - i,
+        v = fz - j,
+        k = j * N1 + i;
+      return (a[k] + (a[k + 1] - a[k]) * u) * (1 - v) + (a[k + N1] + (a[k + N1 + 1] - a[k + N1]) * u) * v;
+    }
+    // wandering noise, -1..1: broad patches, and a finer grain for their edges
+    function blobN(x, z) {
+      return 2 * NZ.fbm(x * 0.09 + 31, z * 0.09 + 17, 3) - 1;
+    }
+    function fineN(x, z) {
+      return 2 * NZ.get(x * 0.9 + 5.5, z * 0.9 + 9.5) - 1;
+    }
+    // the woods on the hills round the rim, where nobody walks: 0 open .. 1 deep in them
+    function woodsAt(x, z) {
+      var r = T.valleyR(x, z);
+      if (r < 0.88) return 0;
+      return sst(0.88, 1.0, r) * sst(0.4, 0.6, NZ.fbm(x * 0.028 + 3, z * 0.028 + 71, 2));
+    }
+    W.woodsAt = woodsAt;
     function grassBy(gr, x, z) {
-      // green, straw, dust: where the ground stands between two, a fine dither of both, so
-      // the change reads as pixels rather than blocks
-      var d = (hash2(Math.floor(x * 3), Math.floor(z * 3)) % 1000) / 1000 - 0.5,
-        n = noiseN(x * 0.5, z * 0.5),
-        g = gr + 0.1 * d + 0.06 * n;
-      if (g > 0.66) return n > 1.0 ? TI.grassL : n < -1.1 ? TI.grassD : TI.grass;
-      if (g > 0.42) return TI.strawL;
-      if (g > 0.24) return TI.straw;
+      // green, straw, dust: patches with ragged edges, never squares
+      var g = gr + 0.1 * blobN(x, z) + 0.05 * fineN(x, z);
+      if (g > 0.66) {
+        var v = NZ.get(x * 0.21 + 50, z * 0.21 + 50) + 0.1 * fineN(x * 1.3, z * 1.3);
+        return v > 0.8 && x > -2 && x < VW + 2 ? TI.grassL : v < 0.17 ? TI.grassD : TI.grass;
+      }
+      if (g > 0.44) return TI.strawL;
+      if (g > 0.26) return TI.straw;
       return TI.dust;
     }
     function typeAt(x, z, h, slope) {
-      var inside = x >= 0 && z >= 0 && x < VW && z < VL;
-      if (!inside) {
-        // beyond the valley: the hills dry out with the topsoil, like the terraces inside
-        if (T.bluffAt(x, z) > 0.06 && T.bluffAt(x, z) < 0.97 && slope > 0.7) return Math.floor(h * 1.45) % 3 === 1 ? TI.limeD : TI.lime;
-        if (slope > 1.6) return TI.limeD;
-        var gh = grassBy(soilWet(), x, z);
-        return gh === TI.grass ? TI.grassD : gh;
-      }
-      var vi = Math.round(z) * N1 + Math.round(x),
-        k = Math.floor(z) * VW + Math.floor(x),
+      var inside = x >= 0 && z >= 0 && x < VW && z < VL,
         g = G(),
         ov = W.overlay;
-      if (ov && g) {
+      if (ov && g && inside) {
+        var k = Math.floor(z) * VW + Math.floor(x);
         if (ov === "wet") return g.wet[k] > 0.66 ? TI.ovD : g.wet[k] > 0.35 ? TI.ovC : g.wet[k] > 0.05 ? TI.ovB : TI.ovA;
         if (ov === "wear") return g.wear[k] > 6 ? TI.ovE : g.wear[k] > 2 ? TI.ovF : g.wear[k] > 0.5 ? TI.ovB : TI.ovA;
         if (ov === "stage" && T.floorWeight(x, z) > 0.5) {
@@ -344,32 +394,50 @@ var CF2Valley = (function () {
         }
         if (ov === "cap" && T.floorWeight(x, z) > 0.5) return g.green[k] > 0.66 ? TI.ovG : g.green[k] > 0.33 ? TI.ovF : TI.ovE;
       }
-      var rock = T.rock[vi];
-      if (rock === 1 && slope > 0.5) return Math.floor(h * 1.45 + 0.15 * Math.sin(x * 0.5)) % 3 === 1 ? TI.limeD : TI.lime;
-      if (rock === 2) return TI.limeBed;
-      // in the creek's trench
-      if (T.cut[vi] > 0.06 && vw.nodes) {
-        var n = nodeAt(z),
-          wl = n.wl;
-        if (h < wl - 0.02) return TI.bed;
-        if (h < n.bed + 0.1) return n.q > 2e-5 || wl > n.bed + 0.01 ? TI.gravel : TI.gravel;
+      // the bluff's face, and any ground as steep: limestone in layers
+      var bl = T.bluffAt(x, z);
+      if ((bl > 0.03 && slope > 0.55) || (!inside && slope > 1.5)) {
+        if (slope < 0.9) return TI.limeD;
+        // in layers where the cells are fine enough to show them; plain rock from farther off
+        return CELL > 0.6 || Math.floor(h * 1.45 + 0.15 * Math.sin(x * 0.5 + z * 0.23)) % 3 !== 1 ? TI.lime : TI.limeD;
+      }
+      var wd = woodsAt(x, z);
+      if (!inside) {
+        // beyond the valley: the hills, green or dry with the topsoil, dark under the woods
+        if (wd > 0.5) return fineN(x * 0.7, z * 0.7) > 0.35 ? TI.moss : TI.grassD;
+        return grassBy(soilWet(), x, z);
+      }
+      // in the creek's trench: the bed under the water, gravel at its foot and on the bars,
+      // the bench, bare mud and clay up the banks until plants hold them
+      if (vw.nodes && sampV(T.cut, x, z) > 0.05) {
+        var n = levelsAt(z);
+        if (Math.abs(z - T.zLedge) < 0.9 + 0.35 * fineN(x * 1.5, z) && h < n.wl + 0.15) return TI.limeBed;
+        if (h < n.wl - 0.02) return TI.bed;
+        if (h < n.bed + 0.1 + 0.03 * fineN(x * 2, z * 2)) return TI.gravel;
         if (n.bw > 0.05 && Math.abs(h - n.bz) < 0.08) return n.veg > 0.5 ? TI.grassD : TI.gravel;
         return n.veg > 0.62 ? TI.grassD : slope > 0.6 ? TI.clay : TI.mud;
       }
-      // in a branch's channel
-      if (T.brCut[vi] > 0.08) {
+      // in a branch's channel: the Dry Fork's pale bed, the spring's moss and gravel
+      var bc = sampV(T.brCut, x, z);
+      if (bc > 0.08) {
         var sp = T.branches.spring.head;
-        if (Math.hypot(x - sp.x, z - sp.z) < 4) return TI.moss;
-        return T.brCut[vi] > 0.25 ? TI.gravel : TI.moss;
+        if (Math.hypot(x - sp.x, z - sp.z) < 4 + 0.6 * fineN(x, z)) return TI.moss;
+        var dry = T.branches.dry,
+          dd = bc > 0.15 ? cf2BranchDist(dry, x, z) : null;
+        if (dd && dd.o < dry.HW[dd.i] + 0.6) return dd.o < dry.HW[dd.i] + 0.1 ? TI.limeBed : TI.lime;
+        return bc > 0.25 ? TI.gravel : TI.moss;
       }
       if (!g) return TI.grass;
-      if (g.wear[k] > 5) return TI.path;
-      if (g.wear[k] > 2.2) return TI.pathE;
-      if (g.wt[k] > h + 0.02) return TI.mud; // under standing water (drawn over it)
-      if (g.wet[k] > 0.55) return (hash2(Math.floor(x * 2), Math.floor(z * 2)) & 7) < 2 ? TI.mud : TI.grassD;
-      if (g.wet[k] > 0.25) return TI.marsh;
-      if (slope > 1.1) return TI.clay;
-      return grassBy(g.green[k], x, z);
+      var wear = samp(g.wear, x, z) * (1 + 0.22 * fineN(x * 1.6, z * 1.6));
+      if (wear > 5) return TI.path;
+      if (wear > 2.2) return TI.pathE;
+      if (samp(g.wt, x, z) > h + 0.02) return TI.mud; // under standing water (drawn over it)
+      var wet = samp(g.wet, x, z) + 0.07 * blobN(x * 2.2, z * 2.2) + 0.04 * fineN(x, z);
+      if (wet > 0.55) return fineN(x * 1.4 + 3, z * 1.4) < -0.4 ? TI.mud : TI.grassD;
+      if (wet > 0.25) return TI.marsh;
+      if (slope > 1.1) return T.valleyR(x, z) > 0.88 ? (slope > 1.4 ? TI.limeD : TI.grassD) : TI.clay;
+      if (wd > 0.5) return fineN(x * 0.7, z * 0.7) > 0.35 ? TI.moss : TI.grassD;
+      return grassBy(samp(g.green, x, z), x, z);
     }
 
     // ---- ground tiles ----------------------------------------------------------------
@@ -383,7 +451,9 @@ var CF2Valley = (function () {
         TIL.push({ i: ti, j: tj, x0, z0, inner, far: null, near: null, job: null, key: "", thingsKey: "", things: null });
       }
     W.tiles = TIL;
+    var CELL = 1; // the size of the cells being typed now (layers of rock show only in fine ones)
     function groundMesh(Tl, cs) {
+      CELL = cs;
       var n = Math.round(TILE / cs),
         N = n + 3,
         Hh = new Float32Array(N * N),
@@ -584,7 +654,7 @@ var CF2Valley = (function () {
           var k = cz * VW + cx,
             vi = cz * N1 + cx,
             hc = 0.25 * (T.h[vi] + T.h[vi + 1] + T.h[vi + N1] + T.h[vi + N1 + 1]);
-          if (g.wt[k] > hc + 0.01 && !(T.cut[vi] > 0.1 && g.wt[k] < T.fpAt(cz + 0.5) - 0.02)) (wetC[j * n + i] = 1), (any = true);
+          if (g.wt[k] > hc + 0.01 && !(T.cut[vi] > 0.1 && g.wt[k] < T.fpAt(cz + 0.5) - 0.02) && !(T.brCut[vi] > 0.1)) (wetC[j * n + i] = 1), (any = true);
         }
       if (!any) return;
       var pos = [],
@@ -911,15 +981,70 @@ var CF2Valley = (function () {
     (function () {
       var R = rnd(hash2(VW, VL) ^ (String(vw.seed).length * 977)),
         id = -1;
-      for (var q = 0; q < 2600; q++) {
-        var x = -60 + R() * (VW + 120),
-          z = -60 + R() * (VL + 120),
-          r = T.valleyR(x, z);
-        if (r < 0.93 || Math.abs(x - T.creekX(z)) < 6) continue;
-        if (T.bluffAt(x, z) > 0.05 && T.bluffAt(x, z) < 0.95) continue;
-        if (q % 3 === 0 && R() < 0.4) continue;
-        var k = R();
-        SCENERY.push({ id: id--, kind: "tree", variant: k < 0.4 ? "pine" : k < 0.75 ? "oak" : k < 0.88 ? "elm" : "birch", x, z });
+      for (var q = 0; q < 5200; q++) {
+        var x = -120 + R() * (VW + 240),
+          z = -90 + R() * (VL + 180),
+          r = T.valleyR(x, z),
+          wd = woodsAt(x, z);
+        if (r < 0.92 || Math.abs(x - T.creekX(z)) < 6) continue;
+        if (T.bluffAt(x, z) > 0.03 && T.bluffAt(x, z) < 0.985) continue;
+        if (R() > 0.1 + 0.9 * wd) continue;
+        // pines and oaks deep in the woods, elms and pale birches at their edges and in the open
+        var k = R() + 0.35 * (1 - wd);
+        SCENERY.push({ id: id--, kind: "tree", variant: k < 0.42 ? "pine" : k < 0.85 ? "oak" : k < 1.08 ? "elm" : "birch", x, z });
+      }
+    })();
+    // the bluff (What the Water Brings' way): slabs of limestone standing out of its face and
+    // blocks fallen at its foot; and the ledge across the creek, where the cutting-down stopped
+    var ROCKS = [];
+    (function () {
+      var R = rnd(hash2(VL, 77) ^ 0x5bd1),
+        prev = null;
+      for (var z = 54; z < 216; z += 0.8) {
+        var ax = T.axisX(z),
+          hw = T.halfWAt(z),
+          xf = null,
+          xt = null;
+        for (var x = ax + 0.72 * hw; x < ax + 1.0 * hw; x += 0.2) {
+          var b = T.bluffAt(x, z);
+          if (xf == null && b > 0.05) xf = x;
+          if (xf != null && b > 0.95) {
+            xt = x;
+            break;
+          }
+        }
+        if (xf == null || xt == null) {
+          prev = null;
+          continue;
+        }
+        var foot = height(xf - 0.3, z),
+          top = height(xt + 0.3, z),
+          H = top - foot,
+          yaw = prev == null ? 0 : -Math.atan2(xf - prev, 0.8);
+        prev = xf;
+        if (H < 1.5) continue;
+        if (R() < 0.6) {
+          var f = 0.12 + R() * 0.8;
+          ROCKS.push({ x: xf + f * (xt - xf) - 0.2, y: foot + f * H, z, w: 0.8 + R() * 1.6, h: 0.16 + R() * 0.16, d: 0.5 + R() * 0.5, yaw, rz: (R() - 0.5) * 0.12, key: R() < 0.5 ? "limeD" : "lime", slab: true });
+        }
+        if (R() < 0.28) {
+          var o = 0.3 + R() * 1.2,
+            r = 0.22 + R() * 0.42;
+          ROCKS.push({ x: xf - o, y: height(xf - o, z), z: z + (R() - 0.5) * 0.6, r, key: R() < 0.6 ? "lime" : "limeD", rx: R() * 3, ry: R() * 3 });
+        }
+      }
+      // the ledge: a lip of pale rock across the bed, and its broken edges up both banks
+      if (vw.nodes) {
+        var zl = T.zLedge,
+          i = creekNodeIndex(zl),
+          n = vw.nodes[i],
+          cx = T.creekX(zl),
+          wv = 0.5 * creekTopWidth(n);
+        for (var u = -wv - 0.6; u <= wv + 0.6; u += 0.45) {
+          var lx = cx + u,
+            ly = Math.max(n.bed, height(lx, zl));
+          ROCKS.push({ x: lx, y: ly - 0.06, z: zl + (R() - 0.5) * 0.3, w: 0.55, h: 0.18, d: 0.5 + R() * 0.4, yaw: (R() - 0.5) * 0.3, rz: (R() - 0.5) * 0.1, key: R() < 0.5 ? "limeBed" : "lime", slab: true });
+        }
       }
     })();
     function tileOf(x, z) {
@@ -1165,8 +1290,10 @@ var CF2Valley = (function () {
 
     // ---- structures ---------------------------------------------------------------
     // Homes, stores, gardens and the rest at the size the simulation gives them, level by
-    // level; dams as real beaver dam analogs: willow posts a metre tall across the creek,
-    // branches woven between them, mud and stones packed on the upstream face.
+    // level, and while a level is being built it shows how far the work has got: walls rise,
+    // then the roof goes on. (show runs from 0 to the number of levels: between n - 1 and n,
+    // level n is going up.) Dams are beaver dam analogs: willow posts a metre tall across the
+    // creek, branches woven between them, mud and stones packed on the upstream face.
     function addStructure(B, s, far) {
       var def = STRUCTURES[s.kind] || {},
         R = rnd(s.id * 31 + 7),
@@ -1176,112 +1303,285 @@ var CF2Valley = (function () {
         bl = s.building,
         progress = bl ? clamp((bl.stage + (bl.labor || 0) / Math.max(1, stageLaborNeeded(s) || 1)) / Math.max(1, (levelDef(s, bl.level) || { stages: [1] }).stages.length), 0, 1) : 1,
         show = Math.max(lv, bl ? bl.level + progress * 0.999 : 0),
-        rot = s.rot || 0;
+        rot = s.rot || 0,
+        seg = far ? 7 : 14,
+        q,
+        a;
+      // how far level n has got: 0 not started .. 1 done
+      var up = (n) => clamp(show - (n - 1), 0, 1);
       if (s.kind === "dam") return addDam(B, s, far);
-      if (s.kind === "home") {
-        if (show <= 0.05) return;
-        if (show < 1.5) {
-          // a nest: a ring of branches and a bed of reeds
-          for (var q = 0; q < (far ? 4 : 10); q++) {
-            var a = (q / 10) * 6.28;
-            B.add("wood|f", bake(cyl(0.05, 0.06, 1.2, 4), s.x + Math.cos(a) * rad * 0.6, h0 + 0.12, s.z + Math.sin(a) * rad * 0.6, 0, -a, Math.PI / 2));
-          }
-          B.add("thatch|f", bake(cyl(rad * 0.55, rad * 0.6, 0.12, 8), s.x, h0 + 0.06, s.z));
-          if (show >= 1.0) for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.05, 0.06, 2.0, 4), s.x + Math.cos(q * 1.57 + rot) * rad * 0.7, h0 + 1, s.z + Math.sin(q * 1.57 + rot) * rad * 0.7));
-          if (show >= 1.4) B.add("thatch|f", bake(new THREE.ConeGeometry(rad * 0.95, 1.1, far ? 5 : 8), s.x, h0 + 2.3, s.z));
-          return;
-        }
-        // a hut: round mud walls, a thatched or tiled roof, a door facing its way
-        var wallH = 1.7,
-          wr = rad * 0.82;
-        B.add("mudwall|f", bake(cyl(wr * 0.95, wr, wallH, far ? 6 : 12), s.x, h0 + wallH / 2, s.z));
-        B.add((lv >= 4 || show >= 4 ? "tile" : "thatch") + "|f", bake(new THREE.ConeGeometry(wr * 1.25, 1.6, far ? 6 : 12), s.x, h0 + wallH + 0.75, s.z));
-        if (!far) {
-          var dx = Math.sin(rot) * wr,
-            dz = Math.cos(rot) * wr;
-          B.add("wood|f", bake(box(0.75, 1.25, 0.12), s.x + dx * 1.01, h0 + 0.62, s.z + dz * 1.01, 0, rot, 0));
-        }
-        if (show >= 5 && !far) B.add("wood|f", bake(cyl(wr + 0.3, wr + 0.3, 0.2, 12), s.x, h0 + 0.1, s.z));
-        if (show >= 6) B.add("mudwall|f", bake(cyl(wr * 0.6, wr * 0.65, wallH * 0.85, far ? 6 : 10), s.x + Math.cos(rot + 1.6) * wr * 1.3, h0 + wallH * 0.42, s.z + Math.sin(rot + 1.6) * wr * 1.3));
-        return;
-      }
+      if (s.kind === "home") return addHome(B, s, far, show, up, R, rad, h0, rot, seg);
       if (s.kind === "garden") {
-        // beds of dark soil, more of them as it grows, with rows of green when planted
-        var beds = clamp(Math.ceil(show), 1, 4);
-        for (q = 0; q < beds; q++) {
-          var bx = s.x + ((q % 2) - 0.5) * rad * 0.9,
-            bz = s.z + (Math.floor(q / 2) - 0.5) * rad * 0.9;
-          B.add("soil|f", bake(box(rad * 0.8, 0.14, rad * 0.8), bx, height(bx, bz) + 0.05, bz));
-          if (!far && (s.grow || s.amt || show >= 1)) for (var rw = 0; rw < 4; rw++) B.add("grass|f", bake(box(rad * 0.7, 0.16, 0.12), bx, height(bx, bz) + 0.16, bz - rad * 0.3 + rw * rad * 0.2));
+        // beds of dark soil in wooden edging, planted in rows; a compost heap, a channel from
+        // the water, a nursery of seedlings, a third bed
+        var beds = s.beds || [],
+          nb = show >= 5.05 ? 3 : show >= 1.05 ? 2 : 1;
+        for (q = 0; q < nb; q++) {
+          var bx = s.x + (q - (nb - 1) / 2) * rad * 0.62,
+            bz = s.z,
+            bh = height(bx, bz),
+            bw = rad * 0.5,
+            bd = rad * 1.3,
+            f = q === 0 ? up(1) : q === 1 ? up(2) : up(6);
+          if (f <= 0) continue;
+          B.add("soil|f", bake(box(bw, 0.16, bd * f), bx, bh + 0.05, bz - bd * (1 - f) * 0.5, 0, rot, 0));
+          if (!far && f >= 1) {
+            for (var e = -1; e <= 1; e += 2) B.add("wood|f", bake(box(0.07, 0.2, bd + 0.07), bx + e * (bw / 2 + 0.03), bh + 0.07, bz, 0, rot, 0));
+            var bed = beds[q],
+              grow = !bed ? 0 : bed.state === "ready" ? 1 : bed.state === "growing" ? 0.25 + 0.6 * (bed.grow || 0) : 0;
+            if (grow > 0)
+              for (var rw = 0; rw < 4; rw++)
+                for (var pl = 0; pl < 5; pl++) {
+                  var pz = bz - bd * 0.4 + pl * bd * 0.2,
+                    pxx = bx - bw * 0.3 + rw * bw * 0.2;
+                  B.add((bed.state === "ready" && (rw + pl) % 3 === 0 ? "fyel" : "grass") + "|f", bake(new THREE.IcosahedronGeometry(0.07 + 0.08 * grow, 0), pxx, bh + 0.14 + 0.06 * grow, pz, R() * 3, R() * 3, 0, 1, 0.8 + grow, 1));
+                }
+          }
         }
+        if (show > 2.05) {
+          var cx2 = s.x + Math.cos(rot) * rad * 0.95,
+            cz2 = s.z - Math.sin(rot) * rad * 0.95;
+          B.add("mud|f", bake(new THREE.SphereGeometry(0.42, far ? 5 : 8, 4, 0, 6.28, 0, Math.PI / 2), cx2, height(cx2, cz2), cz2, 0, 0, 0, 1, 0.55 + 0.35 * up(3), 1));
+          if (!far && show >= 3) for (q = 0; q < 6; q++) B.add("weave|f", bake(box(0.06, 0.4, 0.06), cx2 + Math.cos(q * 1.05) * 0.5, height(cx2, cz2) + 0.18, cz2 + Math.sin(q * 1.05) * 0.5));
+        }
+        if (show > 3.05 && !far) {
+          var len = rad * 1.6 * up(4);
+          B.add("bed|f", bake(box(0.22, 0.05, len), s.x - Math.cos(rot) * rad * 0.95, h0 + 0.01, s.z + Math.sin(rot) * rad * 0.95 - (rad * 1.6 - len) / 2, 0, rot, 0));
+        }
+        if (show > 4.05 && !far)
+          for (q = 0; q < Math.ceil(6 * up(5)); q++) {
+            var nx = s.x + (q - 2.5) * 0.3,
+              nz = s.z + rad * 0.95;
+            B.add("clay|f", bake(cyl(0.08, 0.06, 0.12, 6), nx, height(nx, nz) + 0.06, nz));
+            B.add("grass|f", bake(new THREE.IcosahedronGeometry(0.08, 0), nx, height(nx, nz) + 0.2, nz, 0, R() * 3, 0, 1, 1.3, 1));
+          }
         return;
       }
       if (s.kind === "store") {
-        if (show >= 1.5)
-          for (q = 0; q < Math.min(6, Math.ceil(show * 1.5)); q++) {
-            var a2 = (q / 6) * 6.28;
-            B.add("weave|f", bake(cyl(0.35, 0.3, 0.6, far ? 5 : 8), s.x + Math.cos(a2) * rad * 0.45, h0 + 0.3, s.z + Math.sin(a2) * rad * 0.45));
-          }
-        if (show >= 2.5) {
-          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.07, 0.08, 2.2, 5), s.x + Math.cos(q * 1.57 + 0.78) * rad * 0.8, h0 + 1.1, s.z + Math.sin(q * 1.57 + 0.78) * rad * 0.8));
-          B.add((show >= 3.5 ? "tile" : "thatch") + "|f", bake(new THREE.ConeGeometry(rad * 1.25, 1.0, 4), s.x, h0 + 2.6, s.z, 0, 0.78, 0));
+        // a cleared ring of stakes, woven bins, a roof over them on posts, then a granary up
+        // on legs with its own cone of thatch
+        if (!far) for (q = 0; q < Math.ceil(8 * up(1)); q++) B.add("post|f", bake(cyl(0.03, 0.04, 0.5, 4), s.x + Math.cos(q * 0.785) * rad * 0.9, h0 + 0.2, s.z + Math.sin(q * 0.785) * rad * 0.9));
+        for (q = 0; q < Math.ceil(5 * up(2)); q++) {
+          a = (q / 5) * 6.28 + 0.3;
+          B.add("weave|f", bake(cyl(0.33, 0.27, 0.62, far ? 5 : 9), s.x + Math.cos(a) * rad * 0.42, h0 + 0.31, s.z + Math.sin(a) * rad * 0.42));
+          if (!far) B.add("thatch|f", bake(cyl(0.3, 0.33, 0.06, 9), s.x + Math.cos(a) * rad * 0.42, h0 + 0.64, s.z + Math.sin(a) * rad * 0.42));
+        }
+        if (show > 2.05) {
+          var ph = 2.0 * up(3);
+          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.07, 0.08, ph, 5), s.x + Math.cos(q * 1.57 + 0.78) * rad * 0.8, h0 + ph / 2, s.z + Math.sin(q * 1.57 + 0.78) * rad * 0.8));
+          if (show >= 2.75) B.add((show >= 4 ? "tile" : "thatch") + "|f", bake(new THREE.ConeGeometry(rad * 1.2, 1.1, 4), s.x, h0 + 2.5, s.z, 0, 0.78, 0));
+        }
+        if (show > 3.05) {
+          // the granary
+          var gx = s.x - Math.sin(rot) * rad * 1.15,
+            gz = s.z - Math.cos(rot) * rad * 1.15,
+            gh = height(gx, gz),
+            fg = up(4);
+          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.06, 0.07, 0.7, 5), gx + Math.cos(q * 1.57) * 0.55, gh + 0.35, gz + Math.sin(q * 1.57) * 0.55));
+          B.add("stone|f", bake(cyl(0.75, 0.75, 0.1, seg), gx, gh + 0.72, gz));
+          if (fg > 0.3) B.add("mudwall|f", bake(cyl(0.68, 0.62, 1.0 * fg, seg), gx, gh + 0.77 + 0.5 * fg, gz));
+          if (fg >= 1) B.add("thatch|f", bake(new THREE.ConeGeometry(0.95, 1.1, seg), gx, gh + 2.3, gz));
         }
         return;
       }
       if (s.kind === "meeting") {
+        // the meeting stone, logs to sit on round it, lanterns on posts, then an open hall:
+        // a ring of posts under one great roof (no walls, so it's still the meeting place)
         B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.7, far ? 0 : 1), s.x, h0 + 0.35, s.z, 0, 0, 0, 1.2, 0.7, 1));
-        if (show >= 1.5) for (q = 0; q < 6; q++) B.add("wood|f", bake(cyl(0.2, 0.22, 1.5, 6), s.x + Math.cos(q * 1.05) * rad * 0.75, h0 + 0.2, s.z + Math.sin(q * 1.05) * rad * 0.75, 0, -q * 1.05, Math.PI / 2));
-        if (show >= 2.5 && !far) for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.05, 0.05, 1.6, 4), s.x + Math.cos(q * 1.57 + 0.4) * rad * 0.95, h0 + 0.8, s.z + Math.sin(q * 1.57 + 0.4) * rad * 0.95));
-        if (show >= 3.5) {
-          B.add("mudwall|f", bake(cyl(rad * 0.95, rad, 2.0, far ? 6 : 14), s.x, h0 + 1.0, s.z));
-          B.add("tile|f", bake(new THREE.ConeGeometry(rad * 1.25, 1.8, far ? 6 : 14), s.x, h0 + 2.9, s.z));
+        for (q = 0; q < Math.ceil(6 * up(2)); q++) B.add("wood|f", bake(cyl(0.2, 0.22, 1.5, 6), s.x + Math.cos(q * 1.05) * rad * 0.75, h0 + 0.2, s.z + Math.sin(q * 1.05) * rad * 0.75, 0, -q * 1.05, Math.PI / 2));
+        if (show > 2.05)
+          for (q = 0; q < Math.ceil(4 * up(3)); q++) {
+            var lx = s.x + Math.cos(q * 1.57 + 0.4) * rad * 0.98,
+              lz = s.z + Math.sin(q * 1.57 + 0.4) * rad * 0.98;
+            B.add("post|f", bake(cyl(0.05, 0.05, 1.6, 4), lx, h0 + 0.8, lz));
+            if (!far) B.add("glow|g", bake(box(0.16, 0.18, 0.16), lx, h0 + 1.68, lz));
+          }
+        if (show > 3.05) {
+          var fh = up(4),
+            np = 8;
+          for (q = 0; q < np; q++) B.add("post|f", bake(cyl(0.09, 0.1, 2.3 * fh, 6), s.x + Math.cos((q / np) * 6.28) * rad * 0.92, h0 + 1.15 * fh, s.z + Math.sin((q / np) * 6.28) * rad * 0.92));
+          if (fh >= 1) {
+            var re = rad * 1.08;
+            B.add("thatch|f", bake(cyl(re * 0.64, re, 1.2, seg + 4), s.x, h0 + 2.85, s.z));
+            B.add("thatch|f", bake(cyl(re * 0.32, re * 0.68, 1.1, seg + 4), s.x, h0 + 3.85, s.z));
+            B.add("thatch|f", bake(new THREE.ConeGeometry(re * 0.36, 1.3, seg + 4), s.x, h0 + 4.95, s.z));
+            B.add("wood|f", bake(cyl(0.05, 0.1, 0.4, 6), s.x, h0 + 5.7, s.z));
+          }
         }
         return;
       }
       if (s.kind === "crossing") {
         // stepping stones, then a log bridge, then rails, across the creek
-        var e = s.ends || [
+        var en = s.ends || [
             { x: s.x - 2, z: s.z },
             { x: s.x + 2, z: s.z },
           ],
-          ax = e[0].x,
-          az = e[0].z,
-          bx2 = e[1].x,
-          bz2 = e[1].z,
-          len = Math.hypot(bx2 - ax, bz2 - az),
+          ax = en[0].x,
+          az = en[0].z,
+          bx2 = en[1].x,
+          bz2 = en[1].z,
+          ln = Math.hypot(bx2 - ax, bz2 - az),
           ang = Math.atan2(bx2 - ax, bz2 - az);
-        if (show < 1.5) {
-          for (q = 0; q <= 4; q++) {
-            var f = q / 4,
-              px2 = ax + (bx2 - ax) * f,
-              pz2 = az + (bz2 - az) * f;
-            B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.28, 0), px2, height(px2, pz2) + 0.12, pz2, 0, 0, 0, 1, 0.5, 1));
+        if (show < 2) {
+          var ns = Math.ceil(6 * up(1));
+          for (q = 0; q < ns; q++) {
+            var fq = (q + 0.5) / 6,
+              px2 = ax + (bx2 - ax) * fq,
+              pz2 = az + (bz2 - az) * fq;
+            B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.3, 0), px2, Math.max(height(px2, pz2), W.water(px2, pz2) || -9) + 0.04, pz2, R() * 3, R() * 3, 0, 1, 0.5, 1));
           }
-        } else {
+        }
+        if (show > 1.05) {
           var y2 = Math.max(height(ax, az), height(bx2, bz2)) + 0.2;
-          for (q = -1; q <= 1; q += 2) B.add("wood|f", bake(cyl(0.16, 0.18, len + 0.6, 6), (ax + bx2) / 2 + Math.cos(ang) * q * 0.22, y2, (az + bz2) / 2 - Math.sin(ang) * q * 0.22, Math.PI / 2, ang, 0));
-          if (show >= 2.5 && !far) for (q = -1; q <= 1; q += 2) B.add("wood|f", bake(box(0.06, 0.06, len), (ax + bx2) / 2 + Math.cos(ang) * q * 0.55, y2 + 0.8, (az + bz2) / 2 - Math.sin(ang) * q * 0.55, 0, ang, 0));
+          for (q = -1; q <= 1; q += 2) if (show >= 1.5 || q < 0) B.add("wood|f", bake(cyl(0.16, 0.18, ln + 0.6, 6), (ax + bx2) / 2 + Math.cos(ang) * q * 0.22, y2, (az + bz2) / 2 - Math.sin(ang) * q * 0.22, Math.PI / 2, ang, 0));
+          if (show > 2.05 && !far)
+            for (q = -1; q <= 1; q += 2) {
+              B.add("wood|f", bake(box(0.06, 0.06, ln * up(3)), (ax + bx2) / 2 + Math.cos(ang) * q * 0.55, y2 + 0.8, (az + bz2) / 2 - Math.sin(ang) * q * 0.55, 0, ang, 0));
+              for (var pq = 0; pq <= 2; pq++) {
+                var fp2 = pq / 2;
+                B.add("post|f", bake(box(0.06, 0.8, 0.06), ax + (bx2 - ax) * fp2 + Math.cos(ang) * q * 0.55, y2 + 0.4, az + (bz2 - az) * fp2 - Math.sin(ang) * q * 0.55));
+              }
+            }
         }
         return;
       }
-      // the rest (workshop, chimes, lookout, ...): a simple post-and-roof or cairn
       if (s.kind === "lookout") {
-        for (q = 0; q < 5; q++) B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.5 - q * 0.07, 0), s.x, h0 + 0.3 + q * 0.42, s.z, R() * 3, R() * 3, 0));
-        if (show >= 1.5) B.add("wood|f", bake(box(2.2, 0.15, 2.2), s.x, h0 + 2.6, s.z));
+        // a cairn of stones, then a platform on top of it
+        for (q = 0; q < Math.ceil(5 * up(1)); q++) B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.5 - q * 0.07, 0), s.x, h0 + 0.3 + q * 0.42, s.z, R() * 3, R() * 3, 0));
+        if (show > 1.05) {
+          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.05, 0.06, 2.6, 4), s.x + Math.cos(q * 1.57 + 0.78) * 0.95, h0 + 1.3, s.z + Math.sin(q * 1.57 + 0.78) * 0.95));
+          if (show >= 1.6) B.add("wood|f", bake(box(2.2, 0.15, 2.2), s.x, h0 + 2.6, s.z));
+        }
         return;
       }
       if (s.kind === "chimes") {
-        B.add("post|f", bake(box(0.1, 2, 0.1), s.x - 0.6, h0 + 1, s.z));
-        B.add("post|f", bake(box(0.1, 2, 0.1), s.x + 0.6, h0 + 1, s.z));
-        B.add("wood|f", bake(box(1.4, 0.1, 0.1), s.x, h0 + 2, s.z));
-        if (!far) for (q = 0; q < Math.ceil(show * 2); q++) B.add("stone|f", bake(box(0.08, 0.5, 0.04), s.x - 0.45 + q * 0.18, h0 + 1.6, s.z));
+        // a frame, then plates, pipes and bells hung from it
+        if (show > 0.05) {
+          B.add("post|f", bake(box(0.1, 2, 0.1), s.x - 0.7, h0 + 1, s.z, 0, rot, 0));
+          B.add("post|f", bake(box(0.1, 2, 0.1), s.x + 0.7, h0 + 1, s.z, 0, rot, 0));
+          B.add("wood|f", bake(box(1.6, 0.1, 0.1), s.x, h0 + 2, s.z, 0, rot, 0));
+        }
+        if (!far)
+          for (q = 0; q < 7; q++) {
+            var kq = show > 3.05 && q % 2 ? "bell" : show > 2.05 && q % 3 === 1 ? "pipe" : "plate";
+            if (q >= Math.ceil(7 * up(2)) && kq === "plate") continue;
+            var hx = s.x - 0.54 + q * 0.18;
+            if (kq === "plate") B.add("stone|f", bake(box(0.09, 0.32, 0.03), hx, h0 + 1.6, s.z, 0, rot, 0));
+            else if (kq === "pipe") B.add("wood|f", bake(cyl(0.03, 0.03, 0.55, 6), hx, h0 + 1.55, s.z));
+            else B.add("clay|f", bake(new THREE.ConeGeometry(0.08, 0.16, 8, 1, true), hx, h0 + 1.65, s.z));
+          }
         return;
       }
+      // the workshop and the rest: a bench, a drying rack, a roof on posts, then a tiled one
       if (show > 0.05) {
-        B.add("wood|f", bake(box(rad * 0.9, 0.8, rad * 0.45), s.x, h0 + 0.4, s.z, 0, rot, 0));
-        if (show >= 2.5) {
-          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.06, 0.07, 2.2, 5), s.x + Math.cos(q * 1.57 + 0.78) * rad * 0.8, h0 + 1.1, s.z + Math.sin(q * 1.57 + 0.78) * rad * 0.8));
-          B.add((show >= 3.5 ? "tile" : "thatch") + "|f", bake(new THREE.ConeGeometry(rad * 1.2, 0.9, 4), s.x, h0 + 2.5, s.z, 0, 0.78, 0));
+        B.add("wood|f", bake(box(rad * 0.9, 0.12, rad * 0.4), s.x, h0 + 0.72, s.z, 0, rot, 0));
+        if (!far) for (q = 0; q < 4; q++) B.add("post|f", bake(box(0.08, 0.7, 0.08), s.x + ((q & 1) - 0.5) * rad * 0.8, h0 + 0.35, s.z + ((q >> 1) - 0.5) * rad * 0.3, 0, rot, 0));
+        if (show > 1.05 && !far) {
+          var rx2 = s.x - Math.sin(rot) * rad * 0.7,
+            rz2 = s.z - Math.cos(rot) * rad * 0.7;
+          B.add("post|f", bake(box(0.07, 1.4, 0.07), rx2 - 0.6, h0 + 0.7, rz2, 0, rot, 0));
+          B.add("post|f", bake(box(0.07, 1.4, 0.07), rx2 + 0.6, h0 + 0.7, rz2, 0, rot, 0));
+          for (q = 0; q < Math.ceil(3 * up(2)); q++) B.add("wood|f", bake(box(1.3, 0.05, 0.05), rx2, h0 + 0.6 + q * 0.35, rz2, 0, rot, 0));
+        }
+        if (show > 2.05) {
+          var ph2 = 2.2 * up(3);
+          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.06, 0.07, ph2, 5), s.x + Math.cos(q * 1.57 + 0.78) * rad * 0.8, h0 + ph2 / 2, s.z + Math.sin(q * 1.57 + 0.78) * rad * 0.8));
+          if (show >= 2.75) B.add((show >= 3.6 ? "tile" : "thatch") + "|f", bake(new THREE.ConeGeometry(rad * 1.2, 1.0, 4), s.x, h0 + 2.6, s.z, 0, 0.78, 0));
+        }
+      }
+    }
+    // A home: a sleeping nest, a rain canopy over it on four posts, then a round mud hut with a
+    // steep roof of thatch in three courses (clay tiles later), a deck round it (the raised
+    // floor), and a smaller room on one side. A door with a frame, a window, a pot and a
+    // woodpile by the wall.
+    function addHome(B, s, far, show, up, R, rad, h0, rot, seg) {
+      if (show <= 0.05) return;
+      var wr = rad * 0.66,
+        dx = Math.sin(rot),
+        dz = Math.cos(rot),
+        q,
+        a,
+        wallH = 1.35 + R() * 0.2,
+        Hr = 2.15 + R() * 0.45,
+        re = wr + 0.38;
+      if (show < 3) {
+        var nb = far ? 6 : 12,
+          ring = show < 2.05 ? wr * 0.75 : wr * 0.45;
+        for (q = 0; q < Math.ceil(nb * up(1)); q++) {
+          a = (q / nb) * 6.28;
+          B.add("wood|f", bake(cyl(0.05, 0.06, 1.0, 4), s.x + Math.cos(a) * ring, h0 + 0.1, s.z + Math.sin(a) * ring, 0, -a, Math.PI / 2));
+        }
+        if (show >= 0.6) B.add("thatch|f", bake(cyl(ring * 0.95, ring, 0.14, seg), s.x, h0 + 0.07, s.z));
+        if (show > 1.05 && show < 2.6) {
+          var ph = 2.0 * clamp((show - 1) / 0.6, 0.15, 1);
+          for (q = 0; q < 4; q++) B.add("post|f", bake(cyl(0.05, 0.06, ph, 4), s.x + Math.cos(q * 1.57 + rot) * wr * 0.8, h0 + ph / 2, s.z + Math.sin(q * 1.57 + rot) * wr * 0.8));
+          if (show >= 1.75) B.add("thatch|f", bake(new THREE.ConeGeometry(wr * 1.15, 0.95, seg), s.x, h0 + 2.4, s.z));
+        }
+        if (show > 2.05) {
+          // the hut's walls going up round the nest
+          var fw = clamp((show - 2) / 0.85, 0.08, 1);
+          B.add("stone|f", bake(cyl(wr + 0.06, wr + 0.1, 0.28, seg), s.x, h0 + 0.1, s.z));
+          B.add("mudwall|f", bake(cyl(wr * 0.95, wr, wallH * fw, seg), s.x, h0 + 0.05 + (wallH * fw) / 2, s.z));
+        }
+        return;
+      }
+      var roofK = show >= 3.6 ? "tile" : "thatch";
+      // the deck round it (the raised floor), plank by plank
+      if (show > 4.05) {
+        var nd = far ? 8 : 22,
+          nk = Math.ceil(nd * up(5));
+        for (q = 0; q < nk; q++) {
+          a = (q / nd) * 6.28;
+          B.add("wood|f", bake(box(0.46, 0.1, 0.62), s.x + Math.cos(a) * (wr + 0.3), h0 + 0.18, s.z + Math.sin(a) * (wr + 0.3), 0, -a, 0));
+          if (!far && q % 3 === 0) B.add("post|f", bake(box(0.08, 0.2, 0.08), s.x + Math.cos(a) * (wr + 0.52), h0 + 0.06, s.z + Math.sin(a) * (wr + 0.52)));
+        }
+      }
+      // walls on a stone footing
+      B.add("stone|f", bake(cyl(wr + 0.06, wr + 0.1, 0.28, seg), s.x, h0 + 0.1, s.z));
+      B.add("mudwall|f", bake(cyl(wr * 0.95, wr, wallH, seg), s.x, h0 + 0.05 + wallH / 2, s.z));
+      // the roof: three courses stepping in to a knot at the top
+      var y0 = h0 + 0.05 + wallH;
+      B.add(roofK + "|f", bake(cyl(re * 0.66, re, Hr * 0.4, seg), s.x, y0 + Hr * 0.2 - 0.05, s.z));
+      B.add(roofK + "|f", bake(cyl(re * 0.36, re * 0.7, Hr * 0.36, seg), s.x, y0 + Hr * 0.58 - 0.1, s.z));
+      B.add(roofK + "|f", bake(new THREE.ConeGeometry(re * 0.4, Hr * 0.42, seg), s.x, y0 + Hr * 0.97 - 0.15, s.z));
+      if (!far) {
+        B.add("wood|f", bake(cyl(0.04, 0.08, 0.32, 6), s.x, y0 + Hr * 1.18 - 0.12, s.z));
+        // the door (dark inside, a frame of wood), a step, a window
+        var ox = s.x + dx * wr * 0.97,
+          oz = s.z + dz * wr * 0.97;
+        B.add("soil|f", bake(box(0.62, 1.12, 0.14), ox, h0 + 0.05 + 0.56, oz, 0, rot, 0));
+        B.add("wood|f", bake(box(0.08, 1.2, 0.18), ox + dz * 0.35, h0 + 0.65, oz - dx * 0.35, 0, rot, 0));
+        B.add("wood|f", bake(box(0.08, 1.2, 0.18), ox - dz * 0.35, h0 + 0.65, oz + dx * 0.35, 0, rot, 0));
+        B.add("wood|f", bake(box(0.82, 0.1, 0.2), ox, h0 + 1.25, oz, 0, rot, 0));
+        B.add("stone|f", bake(box(0.7, 0.1, 0.4), s.x + dx * (wr + 0.3), h0 + 0.03, s.z + dz * (wr + 0.3), 0, rot, 0));
+        var wa = rot + 1.75,
+          wx = s.x + Math.sin(wa) * wr * 0.97,
+          wz = s.z + Math.cos(wa) * wr * 0.97;
+        B.add("soil|f", bake(box(0.32, 0.28, 0.12), wx, h0 + 0.95, wz, 0, wa, 0));
+        B.add("wood|f", bake(box(0.42, 0.06, 0.18), wx, h0 + 0.79, wz, 0, wa, 0));
+        // a pot by the door, a woodpile against the wall
+        var pa = rot + 0.55;
+        B.add("clay|f", bake(cyl(0.15, 0.11, 0.3, 8), s.x + Math.sin(pa) * (wr + 0.25), h0 + 0.15, s.z + Math.cos(pa) * (wr + 0.25)));
+        var ka = rot - 1.3;
+        for (q = 0; q < 5; q++) {
+          var kx = s.x + Math.sin(ka) * (wr + 0.22),
+            kz = s.z + Math.cos(ka) * (wr + 0.22);
+          B.add("wood|f", bake(cyl(0.07, 0.07, 0.8, 6), kx, h0 + 0.08 + (q > 2 ? 0.13 : 0), kz, Math.PI / 2, ka + Math.PI / 2, 0, 1, 1, 1));
+        }
+      }
+      // the extra room on one side
+      if (show > 5.05) {
+        var ra = rot + 2.0,
+          rx = s.x + Math.sin(ra) * wr * 1.35,
+          rz = s.z + Math.cos(ra) * wr * 1.35,
+          rh = height(rx, rz),
+          r2 = wr * 0.58,
+          fr = up(6);
+        B.add("stone|f", bake(cyl(r2 + 0.05, r2 + 0.08, 0.24, seg), rx, rh + 0.08, rz));
+        B.add("mudwall|f", bake(cyl(r2 * 0.95, r2, wallH * 0.85 * fr, seg), rx, rh + 0.05 + (wallH * 0.85 * fr) / 2, rz));
+        if (fr >= 1) {
+          B.add(roofK + "|f", bake(cyl(r2 * 0.5, r2 + 0.35, Hr * 0.4, seg), rx, rh + wallH * 0.85 + Hr * 0.2, rz));
+          B.add(roofK + "|f", bake(new THREE.ConeGeometry(r2 * 0.55, Hr * 0.45, seg), rx, rh + wallH * 0.85 + Hr * 0.58, rz));
         }
       }
     }
@@ -1332,7 +1632,7 @@ var CF2Valley = (function () {
     function thingsKey(Tl) {
       var parts = [];
       for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.stage || r.size || ""));
-      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : ""));
+      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
       return parts.join("|");
     }
     function buildThings(Tl, far) {
@@ -1341,6 +1641,11 @@ var CF2Valley = (function () {
         det = W.detail;
       for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) addThing(B, r, det, far);
       for (var sc of SCENERY) if (tileOf(sc.x, sc.z) === Tl) addTree(B, sc, det, far);
+      for (var rk of ROCKS)
+        if (tileOf(rk.x, rk.z) === Tl) {
+          if (rk.slab) B.add(rk.key + "|f", bake(box(rk.d, rk.h, rk.w), rk.x, rk.y, rk.z, 0, rk.yaw, rk.rz));
+          else if (!far || rk.r > 0.4) B.add(rk.key + "|f", bake(new THREE.DodecahedronGeometry(rk.r, 0), rk.x, rk.y + rk.r * 0.3, rk.z, rk.rx, rk.ry, 0, 1, 0.7, 1));
+        }
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) addStructure(B, s, far);
       B.build(g, { noShadow: far });
       return g;
@@ -1351,7 +1656,7 @@ var CF2Valley = (function () {
     function farTile(Tl) {
       var g = new THREE.Group();
       g.name = "Far_" + Tl.i + "_" + Tl.j;
-      var land = groundMesh(Tl, Tl.inner ? 1 : 4);
+      var land = groundMesh(Tl, Tl.inner ? 1 : 2);
       land.receiveShadow = false;
       g.add(land);
       if (Tl.inner) {
@@ -1440,6 +1745,37 @@ var CF2Valley = (function () {
     W.ensure = function () {
       plan();
       while (JOBS.length) run(1e9);
+    };
+    // the water's surface at (x, z), or null where it is dry: the creek in its trench, water
+    // standing on the floor, the branches (for the creatures, the mist and the rain's rings)
+    W.water = function (x, z) {
+      if (vw.nodes && z > -24 && z < VL + 24) {
+        var f = clamp((z - CREEK.z0) / CREEK.ds, 0, vw.nodes.length - 1.0001),
+          i = Math.floor(f),
+          t = f - i,
+          a = vw.nodes[i],
+          b = vw.nodes[i + 1],
+          lerp = (k) => a[k] + (b[k] - a[k]) * t,
+          bed = lerp("bed"),
+          wl = lerp("wl");
+        if (wl > bed + 0.008) {
+          var n = { wb: lerp("wb"), m: lerp("m"), fp: lerp("fp"), bed, bw: lerp("bw"), bz: lerp("bz") };
+          if (Math.abs(x - T.creekX(z)) < 0.5 * creekWidthAt(n, wl - bed) && wl > height(x, z) + 0.01) return wl;
+        }
+      }
+      var g = G();
+      if (g && x >= 0 && z >= 0 && x < VW && z < VL) {
+        var k = Math.floor(z) * VW + Math.floor(x);
+        if (g.wt[k] > height(x, z) + 0.01) return g.wt[k];
+      }
+      if (vw.br)
+        for (var br of Object.values(T.branches)) {
+          var d = cf2BranchDist(br, x, z);
+          if (!d || d.o > br.HW[d.i] * 0.85) continue;
+          var ws = cf2BranchWater({ terrain: T, creek: { br: vw.br, flood: vw.flood }, t: vw.t }, br, d.i);
+          if (ws != null && ws > height(x, z) + 0.01) return ws;
+        }
+      return null;
     };
     W.CUT = CUT;
     W.setOverlay = function (o) {

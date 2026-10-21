@@ -321,7 +321,7 @@ var View3D = class {
       }
       if (f.model) f.model.root.visible = false;
       // the sprite: its frame from the camera's side of it and its step
-      let sh = creekSprites(c, folkFamilyHue(vw, c));
+      let sh = creekSprites(c);
       if (!f.sprite || f.sheet !== sh) {
         if (f.sprite) this.scene.remove(f.sprite), f.sprite.material.map.dispose(), f.sprite.material.dispose();
         let tex = new THREE.CanvasTexture(sh.canvas);
@@ -444,19 +444,8 @@ function cf2Look(h, st) {
 }
 
 // ---- dots: every creekfolk, from the air ------------------------------------------
-function folkFamilyHue(vw, c) {
-  return familyHue(vw, c) / 360;
-}
 function folkDotColour(vw, c) {
-  let seen = new Set(),
-    k = c;
-  while (k && k.parents && k.parents.length && !seen.has(k.id)) {
-    seen.add(k.id);
-    let p = vw.creature(k.parents[0]);
-    if (!p) break;
-    k = p;
-  }
-  return CF2_FUR[furIndex((k && k.look) || c.look)][2];
+  return familyColour(c);
 }
 var FolkDots = class {
   constructor(view) {

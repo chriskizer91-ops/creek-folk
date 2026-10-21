@@ -21,6 +21,46 @@ var Folk3D = (function () {
   var DIMS = { HIPS_Y: 0.44, THIGH_X: 0.1, THIGH_Y: 0.0, L1: 0.17, L2: 0.15, ANK: 0.12, NECK_Y: 0.36, NECK_Z: 0.0, HEAD_DY: 0.02, HEAD_DZ: 0.02, EYE_DY: 0.18, EYE_DZ: 0.12, SH_X: 0.17, SH_Y: 0.33, UA: 0.15, FA: 0.14, PALM: 0.07, HAND_SCALE: 1.0, behind: { L: [0.05, 0.09, -0.18], R: [-0.052, 0.105, -0.185] } };
   var REST = { spine: 0.04, neck: 0.12, head: -0.14, thighZ: 0.06, shinZ: -0.06 };
   var REST_ELDER = { spine: 0.2, neck: 0.26, head: -0.26, thighZ: 0.06, shinZ: -0.08 };
+  // Cloth in the family's pattern (sprites.js, clothOf): the line's dye, and the other parent's
+  // line's dye woven through it in a pattern laid out on the body (so it moves with them).
+  var PAT = {
+    stripes: "step(0.5, fract(q.y))",
+    rib: "step(0.5, fract(u * 1.4))",
+    check: "abs(step(0.5, fract(u)) - step(0.5, fract(q.y)))",
+    chevron: "step(0.5, fract(q.y + abs(fract(u) - 0.5)))",
+    zigzag: "step(0.62, fract(q.y * 1.3 + abs(fract(u * 1.6) - 0.5) * 1.6))",
+    knit: "step(0.55, fract(q.y * 1.6 - abs(fract(u * 2.2) - 0.5)))",
+    tweed: "step(0.74, pkHash(floor(vec2(u, q.y) * 2.0)))",
+  };
+  function clothMat(cl) {
+    var k = "cloth" + cl.pat + cl.dye + "." + cl.dye2;
+    if (mats[k]) return mats[k];
+    var A = CF2_DYE[cl.dye],
+      Bt = CF2_DYE[cl.dye2],
+      m = PKToon.rampMat(A[0], A[1], A[2]),
+      base = m.onBeforeCompile,
+      c2 = [PKCore.col(Bt[0]), PKCore.col(Bt[1]), PKCore.col(Bt[2])];
+    m.onBeforeCompile = function (sh, r) {
+      base.call(this, sh, r);
+      sh.uniforms.cD2 = { value: c2[0] };
+      sh.uniforms.cM2 = { value: c2[1] };
+      sh.uniforms.cL2 = { value: c2[2] };
+      sh.vertexShader = "varying vec3 vLoc;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vLoc = position;");
+      sh.fragmentShader =
+        "uniform vec3 cD2; uniform vec3 cM2; uniform vec3 cL2; varying vec3 vLoc;\n" +
+        sh.fragmentShader.replace(
+          "vec3 tone = (Lf + dth) < tD ? cD : ( (Lf + dth) < tL ? cM : cL );",
+          "vec3 q = vLoc * 22.0; float u = (q.x + q.z) * 0.8; float pat = " +
+            PAT[cl.pat] +
+            ";\n  vec3 tone = (Lf + dth) < tD ? mix(cD, cD2, pat) : ( (Lf + dth) < tL ? mix(cM, cM2, pat) : mix(cL, cL2, pat) );",
+        );
+    };
+    m.customProgramCacheKey = function () {
+      return "cf2-cloth-" + cl.pat;
+    };
+    m.name = "Folk_" + k;
+    return (mats[k] = m);
+  }
   function mesh(geo, mat) {
     var m = new THREE.Mesh(geo, mat);
     m.castShadow = true;
@@ -37,7 +77,7 @@ var Folk3D = (function () {
     return o;
   }
   function key(c) {
-    return `${furIndex(c.look || {})}|${c.stage}|${(c.look || {}).tail || 0}|${(c.look || {}).ear > 1.15 ? 1 : 0}`;
+    return `${furIndex(c.look || {})}|${c.stage}|${(c.look || {}).tail || 0}|${(c.look || {}).ear > 1.15 ? 1 : 0}|${clothOf(c).key}`;
   }
   function build(c, vw) {
     var look = c.look || {},
@@ -45,11 +85,10 @@ var Folk3D = (function () {
       child = c.stage === "child",
       furT = CF2_FUR[furIndex(look)].slice();
     if (elder) furT = [furT[0], furT[1], "#dcd8d0"];
-    var dye = CF2_DYE[Math.floor(((folkFamilyHue(vw, c) || 0) * 997) % CF2_DYE.length)],
-      fur = M(furT, "fur" + furIndex(look) + (elder ? "e" : "")),
+    var fur = M(furT, "fur" + furIndex(look) + (elder ? "e" : "")),
       furS = M([furT[0], furT[0], furT[1]], "furS" + furIndex(look) + (elder ? "e" : "")),
       belly = M(look.belly > 0.7 ? EXTRA.cream : [furT[1], furT[2], furT[2]], "belly" + (look.belly > 0.7 ? "c" : furIndex(look))),
-      cloth = M(dye, "dye" + dye[1]),
+      cloth = clothMat(clothOf(c)),
       ink = M(EXTRA.ink, "ink"),
       ear = M(EXTRA.ear, "ear"),
       nose = M(EXTRA.nose, "nose"),
@@ -81,8 +120,13 @@ var Folk3D = (function () {
     J.Spine.add(S);
     S.add(at(mesh(ell(0.2, 0.24, 0.17, 16), fur), 0, 0.17, 0));
     S.add(at(mesh(ell(0.14, 0.17, 0.08, 12), belly), 0, 0.14, 0.11));
+    // a scarf for everyone; a short cape over the shoulders for grown-ups (a longer shawl for elders)
     S.add(at(mesh(new THREE.TorusGeometry(0.15, 0.05, 6, 14), cloth), 0, 0.33, 0)).rotation.x = Math.PI / 2;
-    if (!child) S.add(at(mesh(new THREE.BoxGeometry(0.09, 0.16, 0.04), cloth), 0.06, 0.22, 0.16));
+    if (!child) {
+      var cape = new THREE.CylinderGeometry(0.13, elder ? 0.25 : 0.235, elder ? 0.2 : 0.15, 18, 2, true);
+      cape.scale(1, 1, 0.86);
+      S.add(at(mesh(cape, cloth), 0, elder ? 0.28 : 0.3, 0));
+    }
     var HP = new THREE.Group();
     J.Hips.add(HP);
     HP.add(at(mesh(ell(0.18, 0.12, 0.15, 12), fur), 0, 0.0, 0));

@@ -149,7 +149,32 @@ function cwSlow(w, c) {
     asleep: !!c.asleep,
     emote: c.emote || null,
     beyond: !!(c.beliefs && c.beliefs.beyond),
+    line: cwLine(w, c),
   };
+}
+// The two family lines a creekfolk comes from: the first parent's first parent's ... back to
+// a founder or a traveler, and the same up the second parent's side (from the lineage, so
+// lines outlive the ones who started them). The page dresses families by them.
+var CW_LINES = new Map();
+function cwLine(w, c) {
+  let got = CW_LINES.get(c.id);
+  if (got) return got;
+  let L = w.lineage || {},
+    root = (id) => {
+      for (let n = 0; n < 400; n++) {
+        let r = L[id],
+          p = r && r.parents && r.parents[0];
+        if (p == null || !L[p]) return id;
+        id = p;
+      }
+      return id;
+    },
+    ps = c.parents || [],
+    a = ps.length ? root(ps[0]) : c.id,
+    b = ps.length > 1 ? root(ps[1]) : a,
+    out = [a, b];
+  if (ps.length === 0 || L[ps[0]]) CW_LINES.set(c.id, out);
+  return out;
 }
 function cwAct(c) {
   let a = c.act;
@@ -319,6 +344,7 @@ function cwLoop() {
 
 function cwStart(w) {
   CW.world = w;
+  CW_LINES.clear();
   w.onLog = null;
   CW.gap = null;
   CW.catching = null;

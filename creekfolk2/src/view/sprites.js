@@ -40,6 +40,44 @@ var CF2_DYE = [
   ["#2e5a5a", "#427a7a", "#66a0a0"], // teal
   ["#8a8478", "#b4aea0", "#dad4c6"], // undyed
 ];
+// Cloth patterns (Decision 10): What the Water Brings' families of cloth, redrawn bold for the
+// pixel look. Each family line has its own pattern and dye, from whoever started it; a child
+// wears its first parent's line's pattern, in that line's dye with the other parent's line's
+// dye woven through it.
+var CF2_PATTERNS = ["stripes", "check", "chevron", "zigzag", "knit", "rib", "tweed"];
+function clothOf(c) {
+  let line = c.line || [c.id, c.id],
+    a = line[0],
+    b = line[1],
+    dye = a % CF2_DYE.length,
+    dye2 = b % CF2_DYE.length;
+  if (dye2 === dye) dye2 = dye === 7 ? 5 : 7; // one family on both sides: with undyed yarn
+  return { pat: CF2_PATTERNS[(a * 3 + 1) % CF2_PATTERNS.length], dye, dye2, key: `${a}.${dye2}` };
+}
+// a family's colour (dots from the air, the map): its dye
+function familyColour(c) {
+  return CF2_DYE[clothOf(c).dye][1];
+}
+// whether a cloth pixel (x, y) of a sprite is in the second colour
+function patAt(pat, x, y) {
+  switch (pat) {
+    case "stripes":
+      return y % 2 === 1;
+    case "rib":
+      return x % 2 === 1;
+    case "check":
+      return ((x >> 1) + y) % 2 === 1;
+    case "chevron":
+      return (Math.abs((x % 4) - 1.5) + 0.5 + y) % 3 < 1;
+    case "zigzag":
+      return (x + (y % 2)) % 3 === 0;
+    case "knit":
+      return y % 2 ? x % 3 !== 1 : x % 3 === 1;
+    case "tweed":
+      return ((x * 7 + y * 13) ^ (x * y)) % 5 === 0;
+  }
+  return false;
+}
 var CF2_SPRITE_EXTRA = ["#2a2420", "#f4ead8", "#e89a90", "#4a3a34", "#fff8e8", "#8a6a4a", "#5a4632"]; // ink, belly cream, inner ear, nose, glint, stick, stick shadow
 
 function furIndex(look) {
@@ -199,7 +237,7 @@ var SPRITE_CHILD = {
   ],
 };
 
-function cf2SpriteColours(c, vwFurHue) {
+function cf2SpriteColours(c, cloth) {
   let look = c.look || {},
     fur = CF2_FUR[furIndex(look)].slice(),
     elder = c.stage === "elder";
@@ -207,7 +245,7 @@ function cf2SpriteColours(c, vwFurHue) {
     // elders go grey at the muzzle and over the head: their fur's light tone turns pale
     fur = [fur[0], fur[1], "#dcd8d0"];
   }
-  let dye = CF2_DYE[Math.floor(((vwFurHue ?? look.hue ?? 0) * 997) % CF2_DYE.length)];
+  let dye = CF2_DYE[cloth.dye];
   return {
     k: CF2_SPRITE_EXTRA[0],
     f: fur[0],
@@ -229,12 +267,14 @@ function cf2SpriteColours(c, vwFurHue) {
 
 var spriteCache = new Map();
 // A creekfolk's sheet: 4 rows (down, up, right, left) x 3 frames (stand, step, step).
-function creekSprites(c, familyKey) {
+function creekSprites(c) {
   let child = c.stage === "child",
     T = child ? SPRITE_CHILD : SPRITE_ADULT,
-    key = `${c.id}|${c.stage}|${furIndex(c.look || {})}|${familyKey}|${(c.look || {}).belly > 0.7 ? 1 : 0}|${(c.look || {}).spots ? 1 : 0}`;
+    cloth = clothOf(c),
+    key = `${c.id}|${c.stage}|${furIndex(c.look || {})}|${cloth.key}|${(c.look || {}).belly > 0.7 ? 1 : 0}|${(c.look || {}).spots ? 1 : 0}`;
   if (spriteCache.has(key)) return spriteCache.get(key);
-  let col = cf2SpriteColours(c, familyKey),
+  let col = cf2SpriteColours(c, cloth),
+    alt = CF2_DYE[cloth.dye2],
     cv = document.createElement("canvas"),
     W = T.w,
     H = T.h;
@@ -247,7 +287,11 @@ function creekSprites(c, familyKey) {
         for (let x = 0; x < rows[y].length; x++) {
           let ch = rows[y][mirror ? rows[y].length - 1 - x : x];
           if (ch === ".") continue;
-          g.fillStyle = col[ch] || "#ff00ff";
+          // cloth in the family's pattern (pinned to the sprite's own pixels, mirrored or not)
+          if ((ch === "C" || ch === "P") && patAt(cloth.pat, mirror ? rows[y].length - 1 - x : x, y)) g.fillStyle = alt[1];
+          else if (ch === "P") g.fillStyle = col.C;
+          else if (ch === "c" && patAt(cloth.pat, x, y)) g.fillStyle = alt[0];
+          else g.fillStyle = col[ch] || "#ff00ff";
           g.fillRect(ox + x, oy + y, 1, 1);
         }
     };

@@ -5,19 +5,6 @@
 // isn't there. Drag to move, wheel or pinch to zoom, tap a dot to follow it.
 // ==========================================================================
 
-// A family's colour: the founders' fur hues, carried down (children take a parent's).
-function familyHue(vw, c) {
-  let seen = new Set(),
-    k = c;
-  while (k && k.parents && k.parents.length && !seen.has(k.id)) {
-    seen.add(k.id);
-    let p = vw.creature(k.parents[0]);
-    if (!p) break;
-    k = p;
-  }
-  return (k && k.look ? k.look.hue : c.look ? c.look.hue : 0) * 360;
-}
-
 var MapView = class {
   constructor(app, canvas) {
     this.app = app;
@@ -223,7 +210,7 @@ var MapView = class {
       let p = vw.posOf(c, t),
         [x, y] = this.toScreen(p.x, p.z),
         R = Math.max(2.2 * this.dpr, s * (c.stage === "child" ? 0.35 : 0.5));
-      g.fillStyle = `hsl(${familyHue(vw, c)} 60% ${c.stage === "elder" ? 78 : 58}%)`;
+      g.fillStyle = familyColour(c);
       g.strokeStyle = c.id === this.followed ? "#fff6d0" : "#1b1a18";
       g.lineWidth = c.id === this.followed ? 2.5 * this.dpr : 1 * this.dpr;
       g.beginPath();
