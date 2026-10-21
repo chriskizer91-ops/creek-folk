@@ -229,7 +229,8 @@ var CF2Life = (function () {
     var MR = 28,
       MN = 2 * MR,
       map = { x0: -1e6, z0: -1e6, ok: false, wv: -1, cv: -1 },
-      building = null;
+      building = null,
+      placesDue = false;
     function wantMap(x, z) {
       var off = (M) => Math.max(Math.abs(x - (M.x0 + MR)), Math.abs(z - (M.z0 + MR))),
         fresh = (M) => M.wv === vw.waterV && M.cv === vw.creekV;
@@ -262,7 +263,7 @@ var CF2Life = (function () {
         }
         B.j++;
       }
-      if (B.j >= MN) (map = B), (building = null), findPlaces();
+      if (B.j >= MN) (map = B), (building = null), (placesDue = true); // looked for on the next frame, not this one
     }
     function cellOf(x, z) {
       var i = Math.floor(x - map.x0),
@@ -887,14 +888,15 @@ var CF2Life = (function () {
         mid = ppm >= 7, // teal and turtles
         big = ppm >= 3; // the heron
       folkNow(t);
-      if (mid) {
+      if (placesDue) (placesDue = false), findPlaces();
+      else if (mid) {
         wantMap(V.x, V.z);
         if (building) buildMap(map.ok ? 1.2 : 4);
       }
-      counts.settled = !mid || (map.ok && !building);
+      counts.settled = !mid || (map.ok && !building && !placesDue);
       // the season moves on slowly: look again for places every valley day or so
       var sDay = Math.floor(valleyDays(vw.w));
-      if (map.ok && sDay !== lastSeason) (lastSeason = sDay), findPlaces();
+      if (map.ok && sDay !== lastSeason) (lastSeason = sDay), (placesDue = true);
       if (vw.waterV !== hsV) heronSpots();
       var hour = cf2Hour(t),
         wx = vw.weather ? vw.weather.state : "clear",
