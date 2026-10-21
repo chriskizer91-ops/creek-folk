@@ -23,6 +23,7 @@ if (process.argv[2] === "--child") {
   const w = S.newValley(seed, { calStart, tzMin: 300 });
   const t0 = Date.now();
   const weeks = [];
+  const saves = [];
   const D = 86400;
   let lastErr = 0;
   // A simulated player. GIFTS=regular (twice a day, choosing what's needed most),
@@ -78,6 +79,11 @@ if (process.argv[2] === "--child") {
       answered: w.stats.answered || 0,
       spring: w.spring && w.spring.found ? +(w.spring.found / D).toFixed(1) : null,
       beyond: w.creatures.filter((c) => c.beliefs && c.beliefs.beyond).map((c) => c.name),
+      // Phase 3C
+      beavers: w.beavers ? w.beavers.list.length : 0,
+      returnings: w.returning ? w.returning.count : 0,
+      pathParts: w.returning ? w.returning.parts : 0,
+      fishRuns: w.returning ? w.returning.fishRuns : 0,
     };
   };
   for (let d = 1; d <= days; d++) {
@@ -125,7 +131,11 @@ if (process.argv[2] === "--child") {
       fs.mkdirSync(path.join(__dirname, "../runs/worlds"), { recursive: true });
       fs.writeFileSync(path.join(__dirname, `../runs/worlds/${process.env.SAVE_PREFIX || ""}${seed}-day${d}.json`), S.saveWorld(w));
     }
-    if (d % +(process.env.EVERY || 30) === 0) process.send({ type: "progress", seed, day: d, pop: w.creatures.length, ms: Date.now() - t0, creek: creekRow() });
+    if (d % +(process.env.EVERY || 30) === 0) {
+      const kb = Math.round(S.saveWorld(w).length / 1024); // 3C: does the save stay flat?
+      saves.push({ day: d, kb, heapMB: Math.round(process.memoryUsage().heapUsed / 1048576), ms: Date.now() - t0 });
+      process.send({ type: "progress", seed, day: d, pop: w.creatures.length, ms: Date.now() - t0, kb, creek: creekRow() });
+    }
     if ((w.stats.errors || 0) > lastErr) lastErr = w.stats.errors;
   }
   const firsts = {};
@@ -163,6 +173,14 @@ if (process.argv[2] === "--child") {
     great: (() => {
       const g = (x) => x && { started: +(x.started / D).toFixed(1), parts: x.parts, state: x.state, stages: x.stageTimes.map((t) => +(t / D).toFixed(1)), done: x.done ? +(x.done / D).toFixed(1) : null, made: x.made, partDays: x.partTimes.map((t) => +(t / D).toFixed(1)) };
       return { temple: g(w.temple), ancestors: g(w.ancestors), spring: w.spring && w.spring.found ? +(w.spring.found / D).toFixed(1) : null, springHeard: w.spring && w.spring.heard ? +(w.spring.heard / D).toFixed(1) : null, givingPlace: !!w.givingPlace, firstBeliever: w.firstBelieverAt != null ? w.firstBelieverAt / D : null, believers: S.believers(w).length, alive: w.creatures.filter((c) => !c.visitor).length, offerings: (w.offerings || {}).total || 0, requests: w.stats.requests || 0, answered: w.stats.answered || 0, beyond: (w.beyondEver || []).map((b) => `${b.name}@${(b.t / D).toFixed(0)}${b.from ? "<" + b.from : ""}`), fauna: w.fauna ? { flowers: w.fauna.flowers.map((f) => f.kind), fruits: w.fauna.fruits, birds: w.fauna.birds, fish: w.fauna.fish, goats: w.fauna.goats.length, hives: w.fauna.hives.length } : null, giftKinds: w.giftKinds || {} };
+    })(),
+    saves,
+    threeC: (() => {
+      const R = w.returning || {},
+        B = w.beavers,
+        K = w.skycal,
+        d = (t) => (t ? +(t / D).toFixed(1) : null);
+      return { beaversDay: B ? d(B.arrived) : null, beavers: B ? B.list.length : 0, beaverRaised: B ? B.raised : 0, beaverMended: B ? B.mended : 0, beaverSmall: B ? B.small.length : 0, skycalStart: K ? d(K.started) : null, skycalDone: K ? d(K.done) : null, skycalGatherings: K ? K.gatherings : 0, pathStart: d(R.pathStarted), pathDone: d(R.pathDone), firstReturning: d(R.first), returnings: R.count || 0, lanterns: R.lanterns || 0, verses: R.verseCount || 0, lastVerses: (R.verses || []).slice(-3).map((v) => v.text), fishRuns: R.fishRuns || 0, returnees: w.stats.returnees || 0, legends: w.stats.legends || 0, driestByYear: (w.creek.driest || []).map((x) => +x.wet.toFixed(2)) };
     })(),
     knowledge: Object.fromEntries(["mud", "planting", "clay", "glowcap", "tools", "dams", "downstream"].map((k) => [k, w.creatures.filter((c) => c.know[k]).length])),
     structures: w.structures.map((s) => s.kind + ":" + s.level).sort().join(" "),
@@ -203,7 +221,7 @@ function next() {
   running++;
   const ch = fork(__filename, ["--child", seed, String(days), start]);
   ch.on("message", (m) => {
-    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s)${m.creek ? ` | creek: wet now ${(m.creek.wet * 100).toFixed(0)}%, at the driest ${m.creek.driest == null ? "-" : (m.creek.driest * 100).toFixed(0) + "%"}, trench ${m.creek.trench}m, dams ${m.creek.dams}, raised ${m.creek.raises}, feed ${m.creek.feed}, bumpy ${m.creek.bump.bed}/${m.creek.bump.floor}, downstream-knowers ${m.creek.downstream}` : ""}${m.creek ? ` | believe ${m.creek.believers}/${m.creek.alive}${m.creek.temple ? `, temple ${m.creek.temple.parts}/36 ${m.creek.temple.state} pace ${m.creek.temple.pace}` : ""}${m.creek.ancestors ? `, ancestors ${m.creek.ancestors.parts}/36` : ""}, offerings ${m.creek.offerings}, asked ${m.creek.requests} answered ${m.creek.answered}${m.creek.spring ? `, spring found day ${m.creek.spring}` : ""}${m.creek.beyond.length ? `, beyond: ${m.creek.beyond.join(",")}` : ""}` : ""}`);
+    if (m.type === "progress") console.log(`  ${m.seed} day ${m.day}: ${m.pop} creekfolk (${(m.ms / 1000).toFixed(0)} s, save ${m.kb} KB)${m.creek ? ` | creek: wet now ${(m.creek.wet * 100).toFixed(0)}%, at the driest ${m.creek.driest == null ? "-" : (m.creek.driest * 100).toFixed(0) + "%"}, trench ${m.creek.trench}m, dams ${m.creek.dams}, raised ${m.creek.raises}, feed ${m.creek.feed}, bumpy ${m.creek.bump.bed}/${m.creek.bump.floor}, downstream-knowers ${m.creek.downstream}` : ""}${m.creek ? ` | believe ${m.creek.believers}/${m.creek.alive}${m.creek.temple ? `, temple ${m.creek.temple.parts}/36 ${m.creek.temple.state} pace ${m.creek.temple.pace}` : ""}${m.creek.ancestors ? `, ancestors ${m.creek.ancestors.parts}/36` : ""}, offerings ${m.creek.offerings}, asked ${m.creek.requests} answered ${m.creek.answered}${m.creek.spring ? `, spring found day ${m.creek.spring}` : ""}${m.creek.beyond.length ? `, beyond: ${m.creek.beyond.join(",")}` : ""}${m.creek.beavers ? `, beavers ${m.creek.beavers}` : ""}${m.creek.pathParts ? `, path ${m.creek.pathParts}/12` : ""}${m.creek.returnings ? `, Returnings ${m.creek.returnings}` : ""}${m.creek.fishRuns ? `, fish runs ${m.creek.fishRuns}` : ""}` : ""}`);
     if (m.type === "done") results.push(m.out);
   });
   ch.on("exit", (code) => {
@@ -237,6 +255,8 @@ function finish() {
       a = g.ancestors;
     console.log(`  ${r.seed} belief: first believer day ${g.firstBeliever ? g.firstBeliever.toFixed(1) : "-"}, believe ${g.believers}/${g.alive}, asked ${g.requests} answered ${g.answered}, offerings ${g.offerings}, spring heard ${g.springHeard ?? "-"} found ${g.spring ?? "-"}, beyond ${g.beyond.join(" ") || "-"}`);
     if (t) console.log(`  ${r.seed} temple: started day ${t.started}, ${t.parts}/36 parts, ${t.state}; stages done ${t.stages.join(", ") || "-"}${t.done ? `; finished day ${t.done} (month ${(t.done / 30).toFixed(1)})` : ""}; made do ${t.made}`);
+    const c = r.threeC;
+    if (c) console.log(`  ${r.seed} 3C: beavers came day ${c.beaversDay ?? "-"} (${c.beavers} now; dams built up ${c.beaverRaised}, mended ${c.beaverMended}, side dams ${c.beaverSmall}); sky stones day ${c.skycalStart ?? "-"} to ${c.skycalDone ?? "-"} (${c.skycalGatherings} midwinter mornings); path ${c.pathStart ?? "-"} to ${c.pathDone ?? "-"}; first Returning day ${c.firstReturning ?? "-"}${c.firstReturning ? ` (month ${Math.floor(c.firstReturning / 30) + 1})` : ""}, Returnings ${c.returnings}, lanterns ${c.lanterns}, verses ${c.verses}, fish runs ${c.fishRuns}; came home to stay ${c.returnees}; legends ${c.legends}\n  ${r.seed} saves: ${(r.saves || []).map((x) => `d${x.day} ${x.kb}KB/${x.heapMB}MB`).join(" ")}\n  ${r.seed} wet at the driest by valley year: ${c.driestByYear.filter((_, i) => i % 5 === 4).join(" ")}`);
     if (a) console.log(`  ${r.seed} hall of the ancestors: started day ${a.started}, ${a.parts}/36 parts, ${a.state}; stages done ${a.stages.join(", ") || "-"}${a.done ? `; finished day ${a.done} (month ${(a.done / 30).toFixed(1)})` : ""}`);
   }
   checkTargets(results, days);
@@ -263,6 +283,11 @@ function checkTargets(rs, days) {
   if (policy === "none" && days >= 330) add("A valley with no gifts finishes its own great project.", rs.every((r) => r.great.ancestors && r.great.ancestors.done), rs.map((r) => (r.great.ancestors && r.great.ancestors.done) || "-").join(","));
   const ev = policy.startsWith("every:") ? +policy.split(":")[1] : null;
   if (ev && ev <= 48 && days >= 60) add("Most of the village believes the creek gives (with a giver).", rs.every((r) => r.great.believers > r.great.alive / 2), rs.map((r) => `${r.great.believers}/${r.great.alive}`).join(","));
+  // Phase 3C
+  if (days >= 210) add("Beavers arrive between month 5 and month 7.", rs.every((r) => r.threeC.beaversDay != null && r.threeC.beaversDay >= 120 && r.threeC.beaversDay <= 210), rs.map((r) => r.threeC.beaversDay ?? "-").join(","));
+  if (days >= 16) add("The sky stones are finished before their second midwinter (day 15).", rs.filter((r) => r.threeC.skycalDone != null && r.threeC.skycalDone < 15).length >= Math.ceil(rs.length / 2), rs.map((r) => r.threeC.skycalDone ?? "-").join(","));
+  if (days >= 270) add("Most of the valley floor stays wet all year by month 9 (at least 80% at the driest).", rs.every((r) => { const w9 = r.weeks.find((w) => w.day >= 270); return w9 && w9.creek && w9.creek.driest >= 0.8; }), rs.map((r) => { const w9 = r.weeks.find((w) => w.day >= 270); return w9 && w9.creek ? w9.creek.driest : "-"; }).join(","));
+  if (policy === "every:48" && days >= 360) add("An every-other-day giver holds the first Returning in month 12.", rs.every((r) => r.threeC.firstReturning >= 330 && r.threeC.firstReturning < 360), rs.map((r) => r.threeC.firstReturning ?? "-").join(","));
   console.log("\nTargets:");
   for (const t of T) console.log(`  ${t.pass ? "PASS" : "FAIL"}  ${t.why}  [${t.detail}]`);
 }

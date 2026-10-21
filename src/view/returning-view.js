@@ -376,7 +376,7 @@ function returningTabHTML(w) {
     out += `<h4>The sky stones</h4><p class="muted">From the sky stones they can tell when midwinter is coming: ${d < 1 || d > YEAR_DAYS - 1 ? "it's midwinter now" : `next ${returningWhenText(secs)}`}.</p>`;
   } else if (K) out += `<h4>The sky stones</h4><p class="muted">They are setting up stones to mark where the sun comes up through the year; each marker goes in on the morning the sun rises behind it.</p>`;
   let B = w.beavers;
-  if (B) out += `<h4>The beavers</h4><p class="muted">${B.list.length === 1 ? "A beaver lives" : `${numberWord(B.list.length)[0].toUpperCase() + numberWord(B.list.length).slice(1)} beavers live`} in the lodge. They mend the dams${B.raised ? " and build them higher than the creekfolk did" : ""}, mostly at dusk and in the night.</p>`;
+  if (B) out += `<h4>The beavers</h4><p class="muted">${B.list.length === 1 ? "A beaver lives" : `${numberWord(B.list.length)[0].toUpperCase() + numberWord(B.list.length).slice(1)} beavers live`} in the lodge. They mend the dams${B.raised ? " and build them higher than the creekfolk did" : ""}, mostly at dusk and in the night.${B.raised && w.temple && w.temple.state === "done" ? " The water running down the temple steps comes from the high ponds they keep." : ""}</p>`;
   return out;
 }
 
