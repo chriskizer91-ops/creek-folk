@@ -22,11 +22,28 @@ if (process.argv[2] === "--child") {
   const [seed, days, every, saveAt, out] = [process.argv[3], +process.argv[4], +process.argv[5], process.argv[6], process.argv[7]];
   const saves = new Set(saveAt ? saveAt.split(",").map(Number) : []);
   const w = S.newValley(seed, { calStart: Date.parse("2026-10-20T15:00:00Z"), tzMin: 300 });
+  // the lives of the founders' arc, as they happen (the log itself keeps only its last 500 lines)
+  const arc = { pairs: [], passed: [], firstGen: {} };
+  w.onLog = (o) => {
+    if (/ have paired up\./.test(o.text)) arc.pairs.push(+(o.t / D).toFixed(2));
+    if (o.kind === "birth" && o.who && o.who[0] != null) {
+      const c = w.byId[o.who[0]],
+        g = c ? c.gen || 0 : 0;
+      if (arc.firstGen[g] == null) arc.firstGen[g] = +(o.t / D).toFixed(2);
+    }
+  };
+  const foundersAlive = () => w.creatures.filter((c) => c.founder && !c.visitor).map((c) => c.id);
+  let fPrev = foundersAlive();
   const rows = [];
   const t0 = Date.now();
   let tPrev = t0;
   for (let d = 1; d <= days; d++) {
-    S.runUntil(w, d * D);
+    for (let k = 1; k <= 8; k++) {
+      S.runUntil(w, (d - 1 + k / 8) * D);
+      const fNow = foundersAlive();
+      for (const id of fPrev) if (!fNow.includes(id)) arc.passed.push(+(w.t / D).toFixed(2));
+      fPrev = fNow;
+    }
     if (d % every === 0 || d === days) {
       const sc = S.stageCounts(w),
         cr = w.creek,
@@ -70,7 +87,7 @@ if (process.argv[2] === "--child") {
     }
   }
   const save = S.saveWorld(w);
-  process.send({ type: "done", seed, rows, ms: Date.now() - t0, saveKB: Math.round(save.length / 1024), log: w.log.slice(-40).map((e) => `${(e.t / D).toFixed(2)} ${e.text}`) });
+  process.send({ type: "done", seed, rows, arc, ms: Date.now() - t0, saveKB: Math.round(save.length / 1024), log: w.log.slice(-40).map((e) => `${(e.t / D).toFixed(2)} ${e.text}`) });
   process.exit(0);
 }
 
@@ -96,6 +113,8 @@ function launch() {
     else if (m.type === "done") {
       results[m.seed] = m;
       console.log(`${m.seed}: ${days} days in ${(m.ms / 1000).toFixed(0)} s (${Math.round((days * D * 1000) / m.ms)}x real time), save ${m.saveKB} KB`);
+      const a = m.arc;
+      console.log(`${m.seed}: first pairs on days ${a.pairs.slice(0, 4).join(" ")}; first of each generation born ${Object.entries(a.firstGen).map(([g, t]) => `g${g} ${t}`).join(", ")}; founders passed ${a.passed.join(" ")}`);
     }
   });
   child.on("exit", () => {
