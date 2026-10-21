@@ -3046,9 +3046,9 @@
         z: e.z,
         r:
         e.kind === "home" ?
-        1.05 :
+        1.05 * CF2_SCALE.build : // CF2: homes for person-sized creekfolk
         e.kind === "meeting" ?
-        2.7 :
+        2.7 * CF2_SCALE.build : // CF2
         STRUCTURES[e.kind].radius * 0.75,
         s: e
       });
@@ -3099,10 +3099,10 @@
     for (let n of i.structures)
     if (
     !(n.kind !== "home" || n.level < 3) &&
-    (t - n.x) ** 2 + (e - n.z) ** 2 < 1)
+    (t - n.x) ** 2 + (e - n.z) ** 2 < CF2_SCALE.build ** 2) // CF2: homes for person-sized creekfolk
     {
       let s = n.rot || 0;
-      return [n.x + Math.sin(s) * 1.35, n.z + Math.cos(s) * 1.35];
+      return [n.x + Math.sin(s) * 1.35 * CF2_SCALE.build, n.z + Math.cos(s) * 1.35 * CF2_SCALE.build];
     }
     return null;
   }
@@ -6961,13 +6961,12 @@
       },
       a = (u) => n.randomPoint(s, { avoid: r, ...u }),
       // CREEK: the village starts at the upstream end, up on the terrace away from the water
-      l = n.randomPoint(s, { side: 0, offFloor: !0, minEdge: 9, zMin: 18, zMax: 36, maxR: 0.8 }) ||
-      n.randomPoint(s, { side: 0, offFloor: !0, zMin: 12, zMax: 50 }) || { x: n.axisX(26) - n.floorHW(26) - 6, z: 26 };
+      l = cf2MeadowSpot(n, s); // CF2: on the west terrace, near the spring
     e.meadow = { x: +l.x.toFixed(2), z: +l.z.toFixed(2) },
     r.push({ x: l.x, z: l.z, r: 4.5 });
     let c = ["oak", "oak", "birch", "pine"];
     // CREEK: about two and a half times as much of everything, for a longer valley
-    for (let u = 0; u < 26; u++)
+    for (let u = 0; u < cf2Count(26); u++) // CF2: counts for the bigger valley
     o("tree", a({ side: 0, minEdge: 2.5, maxR: 0.86 }), {
       variant: s.pick(c),
       amt: s.int(1, 3),
@@ -6975,7 +6974,7 @@
       canopy: s.range(1.6, 2.2),
       space: 2.6
     });
-    for (let u = 0; u < 18; u++)
+    for (let u = 0; u < cf2Count(18); u++) // CF2
     o("tree", a({ side: 1, minEdge: 2.5, maxR: 0.86 }), {
       variant: s.pick(c),
       amt: s.int(1, 3),
@@ -6983,7 +6982,7 @@
       canopy: s.range(1.6, 2.2),
       space: 2.6
     });
-    for (let u = 0; u < 12; u++)
+    for (let u = 0; u < cf2Count(12); u++) // CF2
     o("tree", a({ side: u % 2, minEdge: 0.8, maxEdge: 2.2, maxR: 0.82 }), {
       variant: "willow",
       amt: s.int(0, 2),
@@ -6998,7 +6997,7 @@
         side: 0,
         minEdge: 3,
         maxR: 0.8,
-        near: { x: l.x, z: l.z, r: 18 }
+        near: { x: l.x, z: l.z, r: 18 * CF2_SCALE.build } // CF2
       }) || a({ side: 0, minEdge: 3 }),
       { canopy: 2.2, nextPod: s.range(400, 1600), space: 3.5 }
     );
@@ -7008,18 +7007,18 @@
       nextPod: s.range(1200, 5e3),
       space: 3.5
     });
-    for (let u = 0; u < 11; u++)
+    for (let u = 0; u < cf2Count(11); u++) // CF2
     o(
       "bush",
       (u < 5 ? a({
         side: 0,
         minEdge: 2,
         maxR: 0.84,
-        near: { x: l.x, z: l.z, r: 18 }
+        near: { x: l.x, z: l.z, r: 18 * CF2_SCALE.build } // CF2
       }) : null) || a({ side: 0, minEdge: 2, maxR: 0.86 }),
       { food: "berry", amt: s.int(4, 7), max: 7, space: 2 }
     );
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < cf2Count(2); k++) { // CF2
       let h = a({ side: 1, minEdge: 3, maxR: 0.8, zMin: k ? VL / 2 : 12, zMax: k ? VL - 12 : VL / 2 }) || { x: n.creekX(50 + k * 60) + 8, z: 50 + k * 60 };
       for (let u = 0; u < 5; u++)
       o(
@@ -7029,8 +7028,8 @@
         { food: "bluberry", amt: s.int(7, 11), max: 11, space: 1.8 }
       );
     }
-    for (let u = 0; u < 20; u++) {
-      let f = u < 10 ? 0 : 1,
+    for (let u = 0; u < cf2Count(20); u++) { // CF2
+      let f = u < cf2Count(10) ? 0 : 1, // CF2
         p = null;
       for (let x = 0; x < 30 && !p; x++) {
         let g = s.range(10, VL - 10),
@@ -7041,7 +7040,7 @@
       }
       o("reeds", p, { amt: s.int(5, 9), max: 10, space: 3 });
     }
-    o("stones", a({ side: 0, minEdge: 4, minR: 0.5, maxR: 0.86, near: { x: l.x, z: l.z, r: 30 } }) || a({ side: 0, minEdge: 4 }), {
+    o("stones", a({ side: 0, minEdge: 4, minR: 0.5, maxR: 0.86, near: { x: l.x, z: l.z, r: 30 * CF2_SCALE.build } }) || a({ side: 0, minEdge: 4 }), { // CF2
       amt: 12,
       max: 14,
       space: 3
@@ -7061,34 +7060,34 @@
       max: 16,
       space: 3
     });
-    for (let u = 0; u < 3; u++)
+    for (let u = 0; u < cf2Count(3); u++) // CF2
     o("stones", a({ side: u % 2, minEdge: 2, maxR: 0.86, zMin: VL / 2 }), {
       amt: 12,
       max: 14,
       space: 3
     });
-    for (let u = 0; u < 4; u++) {
+    for (let u = 0; u < cf2Count(4); u++) { // CF2
       let f = null;
       for (let p = 0; p < 40 && !f; p++) {
-        let x = n.bankPoint(u === 3 ? 0 : 1, s.range(14, VL - 14), 0.9);
+        let x = n.bankPoint(u % 4 === 3 ? 0 : 1, s.range(14, VL - 14), 0.9); // CF2
         n.valleyR(x.x, x.z) < 0.82 &&
         !r.some((g) => Math.hypot(g.x - x.x, g.z - x.z) < 3) && (
         f = x);
       }
       o("clay", f, { amt: 16, max: 20, space: 3 });
     }
-    for (let u = 0; u < 3; u++)
+    for (let u = 0; u < cf2Count(3); u++) // CF2
     o("glowcap", a({ side: u ? s.int(0, 1) : 1, minEdge: 3, minR: 0.6, maxR: 0.87 }), {
       amt: 4,
       max: 8,
       space: 2.5
     });
-    for (let u = 0; u < 5; u++)
+    for (let u = 0; u < cf2Count(5); u++) // CF2
     o("log", a({ side: u === 0 ? 0 : s.int(0, 1), minEdge: 2, maxR: 0.84 }), {
       rot: s.range(0, 3.14),
       space: 2.4
     });
-    for (let u = 0; u < 10; u++)
+    for (let u = 0; u < cf2Count(10); u++) // CF2
     o("boulder", a({ minEdge: 2, maxR: 0.87 }), {
       size: s.range(0.7, 1.3),
       rot: s.range(0, 6.28),
@@ -7108,7 +7107,7 @@
     }
     for (let u of e.creatures)
     for (let f of e.res)
-    Math.hypot(f.x - u.x, f.z - u.z) < 15 && (
+    Math.hypot(f.x - u.x, f.z - u.z) < 15 * CF2_SCALE.see && ( // CF2
     u.seen[f.id] = { a: f.amt ?? 0, t: 0 });
     return (
       e.weather = {

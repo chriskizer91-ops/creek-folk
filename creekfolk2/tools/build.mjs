@@ -18,7 +18,7 @@ import { transform } from 'esbuild';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dev = process.argv.includes('--dev');
-export const BUILD_VERSION = '1';
+export const BUILD_VERSION = 'cf2-1';
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 // Order matters: later files may use names from earlier ones. The first group is
@@ -34,7 +34,15 @@ export const SIM_FILES = [
   'src/sim/gift.js',      // Creekfolk 1: the gift and beliefs about the giver
   'src/sim/temple.js',    // Creekfolk 1: the temple and the Hall of the Ancestors (not used in Creekfolk 2)
   'src/sim/hooks.js',     // Creekfolk 1: new valleys, upgrades, dev triggers
+  // Creekfolk 2's own (after Creekfolk 1's, so they can replace parts of it; before
+  // api.js, which takes its references when it loads)
+  'src/sim/cf2-valley.js',   // the real-scale valley: terrain, the ledge, the bluff
+  'src/sim/cf2-branches.js', // the Dry Fork and the spring branch
+  'src/sim/cf2-scale.js',    // real scale: homes and the village for person-sized creekfolk
+  'src/sim/cf2-life.js',     // eight founders; lives across one real month
+  'src/sim/cf2-belief.js',   // belief asleep for now; no temple, no Hall of the Ancestors
   'src/sim/api.js',       // Creekfolk 1: the surface used by tools and the worker
+  'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it
 ];
 const VENDOR_FILES = ['vendor/three-r186.js'];
 const VIEW_FILES = [];

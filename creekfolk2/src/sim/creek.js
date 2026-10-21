@@ -32,8 +32,8 @@
 // Everything random comes from the creek's own seeded generator (saved with the world).
 // ==========================================================================
 
-var VW = 80, // valley grid: cells across
-  VL = 160, // cells along the creek
+var VW = 160, // valley grid: cells across // CF2: the real-scale valley (Creekfolk 1: 80)
+  VL = 224, // cells along the creek // CF2: (Creekfolk 1: 160)
   CELLS = VW * VL,
   VERTS = (VW + 1) * (VL + 1);
 
@@ -877,12 +877,14 @@ function creekHydro(w, init = false) {
   for (let id in cr.dams) cr.dams[id]._in = 0;
   let q = Qin,
     flowLen = 0;
+  cf2BranchStep(w, dtD, rain, s, init); // CF2: the Dry Fork and the spring branch
   for (let i = 0; i < N; i++) {
     let n = ns[i],
       S = Math.max(n._S || 0.005, 2e-4),
       d = owner[i] >= 0 ? cr.dams[owner[i]] : null,
       wetPond = !!d && d.pl > n.bed;
     q += rain * CREEK.latRun * n.len;
+    q += cf2BranchIn(w, i); // CF2: a branch comes in here
     let level = wetPond ? d.pl : n.bed + creekLowDepth(n, q, S),
       fw = Math.max(n.Wv - creekTopWidth(n), 6) * n.len; // floor area beside this node
     if (!init) {
