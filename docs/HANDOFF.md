@@ -54,7 +54,7 @@ Phase 3B pieces (details in `docs/phase3b-plan.md`, results in `docs/PHASE3B.md`
 | The creek as the giver, doubters, the Giving Place | done (`gift.js`) |
 | Requests, keeping watch, offerings, notches, resting and the lantern, rhythm wording | done (`gift.js`); belief while away tested with `tools/away-test.cjs` |
 | 17 gifts in four groups; living things (`fauna.js`) | done; every gift tested in the browser (`tools/browser-gifts.mjs`) |
-| The temple: start rule, pace, 36 parts, timber, curing, dry season, carvings | done (`temple.js`); year runs for five rhythms plus slowing and pausing (`runs/final/`) |
+| The temple: start rule, pace, 36 parts, timber, curing, dry season, carvings | done (`temple.js`); year runs for five rhythms plus slowing and pausing (`docs/runs-3b/`) |
 | Hall of the Ancestors for valleys with no giver | done (`temple.js`) |
 | The spring (news, the journey, water brought back) | done (`temple.js`) |
 | The one who believes in you, the wave | done (`gift.js`, `belief-view.js`) |
