@@ -46,6 +46,7 @@ export const SIM_FILES = [
   'src/sim/cf2-branches.js', // the Dry Fork and the spring branch
   'src/sim/cf2-scale.js',    // real scale: homes and the village for person-sized creekfolk
   'src/sim/cf2-life.js',     // eight founders; lives across one real month
+  'src/sim/cf2-culture.js',  // the founders' culture: the old valley's words, customs and stories
   'src/sim/cf2-belief.js',   // belief asleep for now; no temple, no Hall of the Ancestors
   'src/sim/api.js',       // Creekfolk 1: the surface used by tools and the worker
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it

@@ -298,7 +298,7 @@ function returningPhase(w) {
     if (A.phase !== "night" && w.t >= A.dusk) {
       A.phase = "night";
       R.fishRuns++;
-      logEvent(w, R.fishRuns === 1 ? 3 : 2, R.fishRuns === 1 ? "On midwinter night, fish that glowed softly like coals swam up the creek, past every pond, on up toward the old valley. Nobody had ever seen it before." : "On midwinter night the glowing fish swam up the creek toward the old valley again.", [], null, "returning"); // CF2: the fish run swims up toward the old valley (Creekfolk 1: "to the spring")
+      logEvent(w, R.fishRuns === 1 ? 3 : 2, R.fishRuns === 1 ? `On midwinter night, fish that glowed softly like coals swam up the creek, past every pond, on up toward the old valley. ${oldStoryHeld(w, "ov-fish") ? "It was just as the stories of the old valley said." : "Nobody had ever seen it before."}` : "On midwinter night the glowing fish swam up the creek toward the old valley again.", [], null, "returning"); // CF2: the fish run swims up toward the old valley, as the old stories say (Creekfolk 1: "to the spring", "Nobody had ever seen it before")
       if (R.fishRuns === 1) newStory(w, "fishrun", {}, null, 2, w.creatures.filter((c) => !c.visitor && !c.asleep));
     }
     return;

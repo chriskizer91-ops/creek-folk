@@ -179,12 +179,13 @@ function retell(w, teller, listener, s, v) {
     let anc = ancestors(w, teller).filter((r) => r.name !== nv.who),
       famous = null,
       best = 2,
-      fame = {};
+      fame = {},
+      firstOnes = "one of the first " + numberWord(LIFE.founders || 5); // CF2: the first eight (Creekfolk 1: "the first five")
     for (let c of w.creatures) for (let k in c.lore || {}) { let n = c.lore[k].v.who; if (n) fame[n] = (fame[n] || 0) + 1; }
-    for (let n in fame) if (n !== nv.who && n !== "one of the first five" && fame[n] > best) (best = fame[n]), (famous = n);
+    for (let n in fame) if (n !== nv.who && n !== firstOnes && fame[n] > best) (best = fame[n]), (famous = n);
     if (anc.length && rng.chance(0.5)) nv.who = rng.pick(anc).name;
     else if (famous) nv.who = famous;
-    else if (s.t < 3 * 86400 && rng.chance(0.5)) nv.who = "one of the first five";
+    else if (s.t < 3 * 86400 && rng.chance(0.5)) nv.who = firstOnes;
     else return v;
   } else if (op === "why") {
     let g = (teller.beliefs && teller.beliefs.giver) || 0;
