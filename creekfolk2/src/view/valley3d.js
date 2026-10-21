@@ -1971,6 +1971,9 @@ var CF2Valley = (function () {
       return g;
     }
     function groundKey(Tl) {
+      // beyond the valley only the season and the topsoil's dampness change the ground (and the
+      // creek's shape, for its gorges at either end)
+      if (!Tl.inner) return (Tl.distant ? "" : vw.creekV) + "|" + Math.round(soilWet() * 8) + "|" + vw.season;
       return vw.creekV + "|" + vw.waterV + "|" + W.overlay + "|" + vw.season;
     }
     function farTile(Tl) {
