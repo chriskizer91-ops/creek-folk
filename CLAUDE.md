@@ -24,7 +24,7 @@ node tools/build.mjs --dev    # same, unminified, for debugging
 Every build makes two self-contained pages from the same source: `creekfolk.html` (the
 game; the dev menu is hidden behind Ctrl+Shift+D) and `creekfolk-dev.html` (a visible
 Dev button that works on phones, and its own saves). `BUILD_VERSION` in
-`tools/build.mjs` names the build (3B is `"3b"`); bump it for every build you hand to
+`tools/build.mjs` names the build (3C is `"3c"`); bump it for every build you hand to
 the author, because each build keeps its own saves.
 
 ## Source layout

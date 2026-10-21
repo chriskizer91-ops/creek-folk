@@ -153,7 +153,8 @@ entries a year, as before.
 | Every other day | day 314 | day 343, month 12 | (6 by day 390) |
 | Daily | day 261.3 | day 287, month 10 (9.6 months in) | 6 |
 | Twice a day | day 234 | day 263, month 9 (8.8 months in) | 9 |
-[[E96NONE]]
+| Every four days | no temple (the start rule); the Hall of the Ancestors, day 314.6 | none; the glowing fish come alone at midwinter | 23 fish runs |
+| No giver | the Hall of the Ancestors, day 314.6 | none; the glowing fish come alone at midwinter | 21 fish runs |
 
 The Returning comes on the first midwinter after the path is done, so it lands 3 to 8 days
 after the path's last stretch. (Twice a day finished the temple on day 234 here against
@@ -165,17 +166,153 @@ first passing after day 12, someone leaves downstream, the temple finishes in mo
 every other day, most believe; and the 3C ones: beavers arrive between month 5 and month 7
 (days 120, 142, 150, 166), the sky stones are finished before their second midwinter (day
 13 in every valley), most of the floor stays wet all year by month 9 (at least 80% at the
-driest: 94%, 97%, 96%, 95% in the giving valleys [[NONEWET]]), and an every-other-day giver
+driest: 94% and 97% every other day, 96% daily, 95% twice a day, 97% every four days, 95%
+with no giver), and an every-other-day giver
 holds the first Returning in month 12 (day 343). The population target ("30 between month 2
 and month 6") passed in every run this time.
 
-[[CHECKS]]
+**Checks on the final build** (the release build, whose simulation is byte for byte the one
+the year runs used):
+- `determinism.cjs 20`: one replay, uneven slices, and saving and reloading four times all
+  end in the same state (hash `483384cec989cdd0`) after 20 days. PASS.
+- `browser-test.mjs`: a new valley, a 3-day jump through the worker (7.3 s), a reload, the
+  same valley; no warnings or errors.
+- `browser-dev.mjs`: the dev build keeps its own saves (`creekfolk-3c-dev`); +1 day in 3.4 s;
+  storm and birth; pause holds the clock (0.02 s in 3 s) and resume moves it; a snapshot
+  restores; a Phase 2 save is refused with your wording; no errors.
+- `browser-gifts.mjs`: all 17 gifts and every dev trigger, including the three new ones, with
+  the valley drawn between them; no errors. (While checking this I changed the dev menu so a
+  trigger that can't happen yet says "Not now: no pond for a lodge yet" rather than "Made it
+  happen: no pond for a lodge yet". That's the only change after the year runs, and it's in
+  the dev menu, not the simulation.)
+
+**Catch-up speed** (headless Chromium on this machine, minified build, the same code path as
+a real absence; both measured today, one after the other): 30 days from day 300 of the
+every-other-day valley (32 creekfolk, the temple done) took **6.7 min** (6,400 times real
+time). The 3B release on its own day-300 valley (30 creekfolk) took 5.2 min. So 3C is about
+a quarter slower for the same stage of a valley, a little less per creekfolk (it had two
+more). In a profile of the 3C valley (Node, 3 days), the new code itself is about 4% of the
+time, nearly all of it creekfolk considering whether to go and watch the beavers at dusk;
+the rest goes where it always has, into creekfolk choosing what to do and finding their way
+around (there is more to do and more to walk to now). Phones are still not measured.
 
 ## Pictures
-_(filled in)_
+From the final every-other-day valley (`docs/img/`) unless it says otherwise. The Returning
+pictures are the first midwinter after the path was finished (day 367 of a copy of valley 1).
+- The first Returning at dawn: the sun comes through the crown's gate, the water on the steps
+  turns gold, and a road of light runs out over the marsh. The village is gathered by the hall (right);
+  "Fensy looked up at the sky and waved" is the one who believes in you.
+  ![dawn](img/3c-returning-dawn.jpg)
+- The procession by day setting out from the temple (bottom left), down past the First Pool
+  ("Sorrel's Pool, the first pool they ever made"), with the healed marsh and the dams.
+  ![procession](img/3c-procession-day.jpg)
+- That night: the glowing fish swimming up the creek past the dams, lanterns along the creek
+  and channels, fireflies.
+  ![night](img/3c-returning-night.jpg)
+- The beavers' lodge at night, with the glowing fish going by and lanterns all round.
+  ![lodge](img/3c-lodge-night.jpg)
+- The temple's pyramid with a lantern for each who has passed since the temple was finished
+  (small, warm points on the steps; they are hard to see at this size).
+  ![lanterns](img/3c-pyramid-lanterns.jpg)
+- The sky stones on the terrace: the sighting stone (the block) and the standing markers.
+  ![sky stones](img/3c-sky-stones.jpg)
+- Then and now (hold the button): the healed valley at day 300, and the same view as it was on
+  the first day; and closer, the bare trench.
+  ![then and now](img/3c-then-and-now.jpg)
+  ![then, close](img/3c-then-close.jpg)
+- A family at the season's gathering: fur, masks and saddles you can follow from parent to
+  child; lily-pad hats, aprons; the small one in front is a child.
+  ![family](img/3c-family.jpg)
+- What they wear for what they love: a flower, a straw sun hat, bells on the ears, a lily-pad
+  hat. And elders with canes and pale brows, believers with their treasure on a cord.
+  ![wardrobe](img/3c-wardrobe.jpg)
+  ![treasures](img/3c-treasures.jpg)
+- Homes: porches, coloured doors, things by the door (stacked stones, a bench, streamers,
+  a basin); a porch and hearth closer (from a helper's run).
+  ![homes](img/3c-homes.jpg)
+  ![porch and hearth](img/3c-porch-hearth.jpg)
+- A signpost at a named place (the first crossing), and beyond the valley: the creek running
+  on through a gorge into the lake downstream (the camera can't go this high in the game).
+  ![signpost](img/3c-signpost.jpg)
+  ![downstream](img/3c-downstream-lake.jpg)
+- The grove at day 300: pines, willows, oaks and birches in family clusters, the founders'
+  trees tallest, fallen trees as nurse logs; and a nurse log close (moss, ferns, saplings).
+  ![grove](img/3c-grove-day300.jpg)
+  ![grove from above](img/3c-grove-day300-above.jpg)
+  ![nurse log](img/3c-grove-nurse-log.jpg)
+- A goat kid with its mother; a heron in the shallows in the dawn mist; mist over the marsh;
+  butterflies over the summer flowers.
+  ![goat kid](img/3c-goat-kid.jpg)
+  ![heron](img/3c-heron-mist-dawn.jpg)
+  ![mist](img/3c-mist-dawn.jpg)
+  ![butterflies](img/3c-butterflies.jpg)
 
 ## Honest notes
-_(filled in)_
+- **What I looked at, and how.** Everything new was checked in screenshots from headless
+  Chromium (software drawing, 1280 x 800) at chosen moments of saved valleys, and in the
+  numbers. I didn't watch a whole Returning play out live in a real browser at real speed;
+  the Returning pictures are a saved valley stepped to dawn, midday and night. Nothing was
+  tried on a phone, and phone catch-up is still not measured.
+- **Nobody has listened to the sound.** The helper who built it measured it offline (which
+  voices play, and how loud, at each wetness, season and hour); neither of us heard it. There
+  are no sounds yet for the beavers or for the Returning.
+- **Your Returning months:** every other day lands where you wanted (day 343, month 12) and
+  twice a day close to it (8.8 months against "about 9"). Daily comes about a month early
+  (day 287, 9.6 months against "about 10.5"), because a daily giver's temple finishes in
+  month 9, which you agreed to keep.
+- **A valley given a gift every four days never has a Returning.** It never starts the temple
+  (the 3B start rule), so it builds the Hall of the Ancestors and gets only the glowing fish at
+  midwinter, like a valley with no giver. If you'd like Hall valleys to have a Returning of
+  their own (a gathering at the Hall, a path through the grove), it's a small addition.
+- **The beavers are now what makes the last of the floor wet.** Without them the floor stopped
+  at about 79% wet at the driest; the brief has the whole floor marshy by months 6 to 9. So
+  their side dams hold water, and the floor reaches 93 to 97% within a few valley years of
+  their coming. In valley 1 they came late (day 166) and the floor went from 48% wet at the
+  driest on day 150 to 92% on day 180.
+- **The fish run alone is only for valleys with no temple at all.** A valley still building
+  its temple waits for its first Returning; at first it had twenty fish runs before it.
+- **The verses are short.** Each Returning adds a line naming the story they carved ("The
+  storm.", "Dewin's passing."), not a line of poetry. Real verses are writing work I'd rather
+  do with you.
+- **Lanterns:** the first Returning hangs one for everyone who passed since the temple was
+  finished, not since the valley began (69 and 66 by day 390). I chose that so the pyramid
+  isn't full on the first night; easy to change.
+- **The far scenery can't be seen from the game's camera.** The hills, the gorge and the lake
+  are there, but the camera doesn't tilt up enough to see the horizon; the lake picture is
+  from a test camera. Phase 4 could give the camera a way to look out.
+- **Then and now** takes a moment the first time you hold it (0.35 to 2 seconds on this
+  machine, building the first day's land); after that it's instant. It shows the land, the
+  creek and the trees of the first day; the hills beyond the valley are the same in both.
+- **Coming home** is rare by design (15% of visits, and only with room and someone they love):
+  2 to 4 per valley in a year.
+- **Looks follow the passion they're known for** (`sig`), not their strongest interest:
+  interests fill up for nearly everyone within days, so they can't tell creekfolk apart.
+- **The procession path** is built as labour like the temple, one stretch every two days,
+  so it takes three valley years (22 real days in these runs).
+- **Two-year runs weren't made**, as you said; the longest runs went to day 390. Months 10 to
+  13 were steady (above). Phase 5's "memory stays flat through year 2" is still to show.
+- **Twice a day finished the temple on day 234** here against day 220 in 3B. The simulated
+  player happened to give no dreams this time (a dream brings a part sooner); the temple code
+  didn't change.
+- **The dev-menu test** (`browser-dev.mjs`) twice missed a click while the machine was busy
+  with year runs; it passed every time on a quiet machine, including today.
 
 ## What I'd do next
-_(filled in)_
+**Phase 4, visuals**, as the brief has it: a one-page art bible (palettes per hour and season,
+wet and dry looks for the 8-day year, scale, silhouettes for children, grown-ups and elders),
+then a gallery page rendering the same valley at several hours, in all four seasons, early
+and late in its history, with at least two rounds of strict critique and fixes before showing
+you. Things I already know it should cover:
+- art for everything that is still simple shapes: the temple and the hall, the beavers and
+  their lodge, the sky stones, the procession path and its lanterns, the goats;
+- the lanterns on the pyramid (hard to see), and the golden road at dawn seen from more
+  angles;
+- a camera that can look up and out to the hills, the gorge and the lake;
+- sounds for the beavers and the Returning, and someone actually listening to the soundscape;
+- real verses for the song, with you.
+
+Before or alongside it, I'd win back some of the catch-up speed (about a quarter slower than
+3B), starting with the beaver-watching check, and measure a phone.
+
+**Phase 5**, the year tests over two years, with the rewritten targets from your changes
+(memory flat through year 2 among them).

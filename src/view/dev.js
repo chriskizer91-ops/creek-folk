@@ -176,7 +176,12 @@ var DevMenu = class {
       let r = giveGift(w, b.dataset.gift);
       this.note = r ? `Gave: ${b.dataset.gift}` : "That gift couldn't be given.";
     }
-    if (b.dataset.trigger && w && !this.app.catching) (this.note = "Made it happen: " + devTrigger(w, b.dataset.trigger)), b.dataset.trigger === "beyond" && (WAVE.pending = !0); // BELIEF: wave right away
+    if (b.dataset.trigger && w && !this.app.catching) {
+      let r = devTrigger(w, b.dataset.trigger);
+      // a refusal ("no pond for a lodge yet") isn't something that happened
+      this.note = (/^(no |nobody)|already/.test(r) ? "Not now: " : "Made it happen: ") + r;
+      b.dataset.trigger === "beyond" && (WAVE.pending = !0); // BELIEF: wave right away
+    }
     if (b.dataset.overlay != null) {
       let g = this.app.renderer.views && this.app.renderer.views.terrain;
       if (g) (g.overlay = b.dataset.overlay || null), (g.lastPaint = -99);

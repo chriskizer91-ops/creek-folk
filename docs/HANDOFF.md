@@ -13,15 +13,15 @@ what is done.
 5. The plan for the part you are on, e.g. `docs/phase3a-plan.md`.
 
 ## Where things stand
-_Last updated: 2026-10-21, Phase 3B done and shown to the author (`docs/PHASE3B.md`); 3C not started._
+_Last updated: 2026-10-21, Phase 3C done and shown to the author (`docs/PHASE3C.md`); Phase 4 not started._
 
 | Part | State | Branch |
 |---|---|---|
 | Phase 1: foundation | done, shown to the author | `main` (`releases/creekfolk-phase1.html`) |
 | Phase 2: minds | done, shown to the author | `main` (`releases/creekfolk-phase2.html`) |
 | Phase 3A: the land | done, shown to the author (`docs/PHASE3A.md`); merged | `main` |
-| Phase 3B: belief and the temple | done, shown to the author (`docs/PHASE3B.md`, plan and changes in `docs/phase3b-plan.md`); not merged until the author has seen it | `phase-3b` (`releases/creekfolk-phase3b.html`) |
-| Phase 3C: life and the ending | not started | |
+| Phase 3B: belief and the temple | done, shown to the author (`docs/PHASE3B.md`, plan and changes in `docs/phase3b-plan.md`); merged | `main` (`releases/creekfolk-phase3b.html`) |
+| Phase 3C: life and the ending | done, shown to the author (`docs/PHASE3C.md`, plan and changes in `docs/phase3c-plan.md`); not merged until the author has seen it | `phase-3c` (`releases/creekfolk-phase3c.html`) |
 | Phase 4: visuals | not started | |
 | Phase 5: year tests (two years) | not started | |
 
@@ -64,6 +64,28 @@ Known gaps after 3B: daily givers finish in month 9 rather than "about month 10"
 table's 1.2; see the report); a player who only ever gives every four days gets the Hall of
 the Ancestors, never the temple (the start rule); beavers, goats breeding, the Returning,
 the sky calendar, then-and-now, the soundscape and two-year limits are 3C.
+
+Phase 3C pieces (details in `docs/phase3c-plan.md`, results in `docs/PHASE3C.md`; built by
+the lead and four helpers on branches `3c/looks`, `3c/homes`, `3c/sound`, `3c/grove`, all
+merged into `phase-3c`):
+
+| Piece | State |
+|---|---|
+| Looks traced through families, things to wear, the three ages, treasures | done (`looks.js`, `looks-view.js`); `tools/looks-family.cjs` |
+| Homes: doors, decorations, porch and hearth, gardens, place markers, far scenery | done (`homes.js`, `homes-view.js`) |
+| The grove (kinds by family, growth, nurse logs, bounded), goats' kids and wool, butterflies, herons, mist | done (`grove.js`, `life-view.js`); `tools/grove-test.cjs` |
+| Soundscape that follows the wetland; then and now | done (`soundscape.js`, `thennow.js`); sound measured offline only |
+| Beavers: arrival, lodge, kits, dam-tending, side dams that hold water | done (`beavers.js`, `beavers-view.js`) |
+| The sky stones | done (`skycal.js`) |
+| The procession path, the Returning every midwinter, lanterns, carvings, verses, the fish run without a temple | done (`returning.js`, `returning-view.js`) |
+| Coming home, news of the next valley, legends | done (`minds.js`) |
+| Year runs to day 390 (month 13), checks, benchmark, report | done (`docs/runs-3c/`, `docs/PHASE3C.md`) |
+
+Known gaps after 3C: nobody has listened to the sound, and there are no beaver or Returning
+sounds; the game's camera can't see the far scenery; verses are short labels; a valley given
+a gift every four days gets only the fish run, never a Returning; catch-up is about a quarter
+slower than 3B (6.7 min for 30 days from day 300, against 5.2); phones not measured; two-year
+runs not made (to day 390 only). Pictures in `docs/img/3c-*.jpg`.
 
 ## Rules the author has set
 - Finish a part, then **stop and show the author** before starting the next part.

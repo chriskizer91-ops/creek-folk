@@ -1,0 +1,31 @@
+  year-1 day 30: 25 creekfolk (134 s, save 1043 KB) | creek: wet now 11%, at the driest 7%, trench 0.945m, dams 333333333331, raised 0, feed 25, bumpy 0.011/0, downstream-knowers 25 | believe 17/25, ancestors 0/36, offerings 0, asked 1 answered 0
+  year-1 day 60: 18 creekfolk (349 s, save 1031 KB) | creek: wet now 9%, at the driest 8%, trench 0.6m, dams 33333333333331, raised 1, feed 24, bumpy 0.028/0, downstream-knowers 18 | believe 14/18, ancestors 4/36, offerings 27, asked 29 answered 3, spring found day 43.4
+  year-1 day 90: 22 creekfolk (563 s, save 1273 KB) | creek: wet now 52%, at the driest 16%, trench 0.462m, dams 33333333333333!, raised 5, feed 26, bumpy 0.016/0.001, downstream-knowers 22 | believe 15/22, ancestors 8/36, offerings 57, asked 52 answered 4, spring found day 43.4
+  year-1 day 120: 25 creekfolk (810 s, save 1410 KB) | creek: wet now 78%, at the driest 41%, trench 0.391m, dams 33333333333333!, raised 8, feed 30, bumpy 0.012/0.001, downstream-knowers 25 | believe 23/25, ancestors 11/36, offerings 99, asked 74 answered 7, spring found day 43.4
+  year-1 day 150: 29 creekfolk (1109 s, save 1684 KB) | creek: wet now 92%, at the driest 88%, trench 0.316m, dams 33333333333333, raised 63, feed 36, bumpy 0.016/0.001, downstream-knowers 29 | believe 26/29, ancestors 15/36, offerings 151, asked 97 answered 9, spring found day 43.4, beavers 3
+  year-1 day 180: 31 creekfolk (1482 s, save 1823 KB) | creek: wet now 97%, at the driest 96%, trench 0.26m, dams 33333333333333, raised 98, feed 36, bumpy 0.018/0.001, downstream-knowers 31 | believe 28/31, ancestors 19/36, offerings 203, asked 127 answered 13, spring found day 43.4, beavers 6, fish runs 4
+  year-1 day 210: 32 creekfolk (1910 s, save 1996 KB) | creek: wet now 99%, at the driest 97%, trench 0.227m, dams 33333333333333, raised 116, feed 36, bumpy 0.021/0.002, downstream-knowers 32 | believe 29/32, ancestors 22/36, offerings 259, asked 157 answered 18, spring found day 43.4, beavers 6, fish runs 8
+  year-1 day 240: 30 creekfolk (2311 s, save 2009 KB) | creek: wet now 99%, at the driest 96%, trench 0.206m, dams 33333333333333, raised 134, feed 36, bumpy 0.022/0.002, downstream-knowers 29 | believe 23/30, ancestors 26/36, offerings 300, asked 187 answered 21, spring found day 43.4, beavers 5, fish runs 12
+  year-1 day 270: 32 creekfolk (2668 s, save 2125 KB) | creek: wet now 97%, at the driest 97%, trench 0.198m, dams 33333333333333, raised 144, feed 36, bumpy 0.018/0.002, downstream-knowers 32 | believe 29/32, ancestors 30/36, offerings 340, asked 217 answered 23, spring found day 43.4, beavers 6, fish runs 15
+  year-1 day 300: 31 creekfolk (3051 s, save 2155 KB) | creek: wet now 97%, at the driest 97%, trench 0.193m, dams 33333333333333, raised 158, feed 36, bumpy 0.016/0.002, downstream-knowers 31 | believe 19/31, ancestors 34/36, offerings 364, asked 246 answered 24, spring found day 43.4, beavers 6, fish runs 19
+  year-1 day 330: 31 creekfolk (3511 s, save 2267 KB) | creek: wet now 99%, at the driest 96%, trench 0.187m, dams 33333333333333, raised 179, feed 36, bumpy 0.016/0.003, downstream-knowers 30 | believe 21/31, ancestors 36/36, offerings 393, asked 276 answered 26, spring found day 43.4, beavers 6, fish runs 23
+
+1 valleys, 330 days each, in 3512 s wall time
+
+year-1: 30d:21 60d:21 90d:22 120d:23 180d:32 240d:29 300d:32 | births 309, passings 254, downstream 35, generations 30, errors 0, first passing day 14.63, full by day -, sim 3511 s (8120x), save 2267 KB
+  year-1 minds: 72 stories, 39 myths (first day 22.5), 24 places, skills lost 0 / relearned 0, visits 19, gifts 83, believers 21, giver "sakeka", customs seasons,passing,thanks
+  year-1 belief: first believer day 29.2, believe 21/31, asked 276 answered 26, offerings 393, spring heard 43.1 found 43.4, beyond -
+  year-1 3C: beavers came day 142 (6 now; dams built up 164, mended 1448, side dams 12); sky stones day 7 to 13 (40 midwinter mornings); path - to -; first Returning day -, Returnings 0, lanterns 0, verses 0, fish runs 23; came home to stay 4; legends 37
+  year-1 saves: d30 1043KB/41MB d60 1031KB/45MB d90 1273KB/22MB d120 1410KB/35MB d150 1684KB/55MB d180 1823KB/42MB d210 1996KB/62MB d240 2009KB/48MB d270 2125KB/42MB d300 2155KB/52MB d330 2267KB/53MB
+  year-1 wet at the driest by valley year: 0.11 0.1 0.41 0.97 0.96 0.96 0.95 0.96
+  year-1 hall of the ancestors: started day 30, 36/36 parts, done; stages done 121.1, 218.7, 314.6; finished day 314.6 (month 10.5)
+
+Targets:
+  PASS  No valley ever drops to zero.  [10]
+  PASS  No simulation errors.  [0]
+  PASS  The first passing happens after day 12.  [14.63]
+  PASS  Most valleys reach 30 creekfolk between month 2 and month 6.  [154]
+  PASS  Someone leaves downstream once the valley is full.  [35]
+  PASS  Beavers arrive between month 5 and month 7.  [142]
+  PASS  The sky stones are finished before their second midwinter (day 15).  [13]
+  PASS  Most of the valley floor stays wet all year by month 9 (at least 80% at the driest).  [0.9664]
