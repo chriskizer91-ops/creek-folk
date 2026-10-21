@@ -13,9 +13,20 @@ var CF2_SCALE = {
   build: 1.5, // homes, stores, gardens and the rest, against Creekfolk 1's
   res: 2.4, // trees, bushes, reeds, stones, clay and the rest, against Creekfolk 1's valley
   see: 1.5, // how far they notice things and who counts as a witness
+  floor: 1.7, // how much wider the valley floor is (about 20.5 m from the axis to its edge, against 12.3)
 };
 
 for (let k in STRUCTURES) if (k !== "dam" && k !== "crossing") STRUCTURES[k].radius = +(STRUCTURES[k].radius * CF2_SCALE.build).toFixed(2);
+
+// Creekfolk 1's 3C at real scale (see docs/MERGE.md). The memorial grove is laid out for
+// person-sized creekfolk: trunks further apart, and the grove wider (grove.js scales the
+// rest of its lengths, and its fallen logs, in place). The sky stones take the room their
+// scaled structure needs. The beavers' little side dams: as many more as the bigger floor
+// has room for (they look for sites across the wider floor in beavers.js).
+GROVE.space = +(GROVE.space * CF2_SCALE.build).toFixed(2);
+GROVE.reach = +(GROVE.reach * CF2_SCALE.build).toFixed(2);
+SKYCAL.radius = STRUCTURES.skycal.radius;
+BEAVER.smallDams = cf2Count(BEAVER.smallDams);
 
 // How many of each thing a new valley starts with (createWorld's counts in Creekfolk 1).
 function cf2Count(n) {

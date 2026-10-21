@@ -53,4 +53,16 @@ var CreekSim = {
   paceOfRate,
   STRUCTURES,
   devTrigger,
+  // Phase 3C (lead's pieces)
+  BEAVER,
+  beaversArrive,
+  SKYCAL,
+  skycalDaysToMidwinter,
+  RETURNING,
+  returningNext,
+  returningWindow,
+  daysToMidwinter,
+  RETURNEE,
+  LEGEND,
+  GROVE, GOATS, groveOf, groveSize, // 3C: the memorial grove and the goats (grove.js), for the Node tools
 };

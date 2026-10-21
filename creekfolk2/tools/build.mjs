@@ -22,8 +22,8 @@ export const BUILD_VERSION = 'cf2-1';
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 // Order matters: later files may use names from earlier ones. The first group is
-// Creekfolk 1's simulation as of 3B (commit 8e9ec93); Creekfolk 2's own files follow it,
-// and replace Creekfolk 1 functions where docs/MERGE.md says so.
+// Creekfolk 1's simulation as of 3C (branch phase-3c, commit 59d5e4b); Creekfolk 2's own
+// files follow it, and replace Creekfolk 1 functions where docs/MERGE.md says so.
 export const SIM_FILES = [
   'src/sim/core.js',      // Creekfolk 1: the valley simulation (minds, building, water)
   'src/sim/calendar.js',  // Creekfolk 1: the 8-day year, seasons, wet and dry
@@ -33,6 +33,12 @@ export const SIM_FILES = [
   'src/sim/fauna.js',     // Creekfolk 1: living gifts (flowers, fruit trees, goats, bees, fish, birds)
   'src/sim/gift.js',      // Creekfolk 1: the gift and beliefs about the giver
   'src/sim/temple.js',    // Creekfolk 1: the temple and the Hall of the Ancestors (not used in Creekfolk 2)
+  'src/sim/looks.js',     // Creekfolk 1 3C: fur colours, coat patterns and things to wear, inherited
+  'src/sim/homes.js',     // Creekfolk 1 3C: doors, decorations, more home levels, gardens
+  'src/sim/grove.js',     // Creekfolk 1 3C: the memorial grove's kinds, growth and nurse logs; goats' kids
+  'src/sim/beavers.js',   // Creekfolk 1 3C: the beavers
+  'src/sim/skycal.js',    // Creekfolk 1 3C: the sky stones that find their midwinter
+  'src/sim/returning.js', // Creekfolk 1 3C: the Returning (not used here) and the glowing fish run; the 3C hooks
   'src/sim/hooks.js',     // Creekfolk 1: new valleys, upgrades, dev triggers
   // Creekfolk 2's own (after Creekfolk 1's, so they can replace parts of it; before
   // api.js, which takes its references when it loads)

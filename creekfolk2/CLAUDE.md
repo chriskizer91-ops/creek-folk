@@ -42,18 +42,29 @@ All source files share one scope: the build concatenates them in the order liste
   draws it; `Hud` and `DevMenu` are the interface; the village and mind sheets load a full copy of
   the world (`app.worldCopy()`) with the simulation's own `loadWorld`.
 - **Creekfolk 1's simulation** (`core.js`, `calendar.js`, `creek.js`, `life.js`, `minds.js`,
-  `fauna.js`, `gift.js`, `temple.js`, `hooks.js`, `api.js`) was copied at commit `8e9ec93` (3B).
-  Creekfolk 2's own logic goes in `src/sim/cf2-*.js`, loaded after them. Edits inside Creekfolk 1's
-  files are marked `// CF2:`; replaced or wrapped functions are listed in `docs/MERGE.md`. Keep
-  both lists exact: they are how Creekfolk 1's 3C gets merged in.
+  `fauna.js`, `gift.js`, `temple.js`, `hooks.js`, `api.js`) was copied at commit `8e9ec93` (3B),
+  and Creekfolk 1's 3C was merged in from commit `59d5e4b` (with its new files below; report in
+  `docs/MERGE-3C.md`). Creekfolk 2's own logic goes in `src/sim/cf2-*.js`, loaded after them.
+  Edits inside Creekfolk 1's files are marked `// CF2:`; replaced or wrapped functions are listed
+  in `docs/MERGE.md`. Keep both lists exact: they are how anything later from Creekfolk 1 gets
+  merged in (base `59d5e4b`).
+
+| Creekfolk 1 file (from 3C) | What it is |
+|---|---|
+| `src/sim/looks.js` | Inherited looks: 24 fur colours in a ring, coat patterns, face markings, pale paws, the colour of what they wear, what grown-ups wear for their passion (`creature.look`, `looksOf`, `looksText`, `looksWorn`); believers wear their treasure (`c.treasure`). |
+| `src/sim/homes.js` | Doors and decorations by the door from what the owner loves (`home.deco`), the porch and hearth levels (comfort, not room), the fourth garden bed, a second and third garden. |
+| `src/sim/grove.js` | The memorial grove: tree kinds by family, growth all year (`groveSize`), nurse logs (`world.grove.logs`), bounded (240 standing, 24 logs); goats' kids, old goats, wool blankets. Scaled to real size in place (`// CF2:`). |
+| `src/sim/beavers.js` | The beavers (`world.beavers`): arrival (3C's rule: after day 120 with 55% wet at the driest, or by day 210), the lodge in the deepest pond, kits, tending and raising dams, little side dams on the floor that hold water. |
+| `src/sim/skycal.js` | The sky stones on the terrace after the first midwinter (`world.skycal`, structure `skycal`); meeting there on midwinter morning. |
+| `src/sim/returning.js` | The Returning (needs a finished temple, so never in Creekfolk 2) and the glowing fish run at midwinter once the creek has healed (`world.returning`); the 3C hooks (`lifeTick3C`, `lifeOptions3C`, `devTrigger3C`, `partDone3C`). |
 
 | Creekfolk 2 file | What it is |
 |---|---|
 | `src/sim/cf2-valley.js` | The real-scale valley (replaces Creekfolk 1's `Terrain`): 160 x 224 m, one height function, floor, terraces, the limestone bluff, the ledge across the creek, the creek's starting nodes. Tunables in `CF2_VALLEY`. |
 | `src/sim/cf2-branches.js` | The Dry Fork and the spring branch: laid out, carved, their water (`world.creek.br`), the cells along them. Tunables in `CF2_BRANCH`. |
-| `src/sim/cf2-scale.js` | Real scale: homes and the village for person-sized creekfolk, counts of things in the bigger valley, how far they notice. `CF2_SCALE`. |
+| `src/sim/cf2-scale.js` | Real scale: homes and the village for person-sized creekfolk, counts of things in the bigger valley, how far they notice; 3C's grove, sky stones and the beavers' side dams at this scale. `CF2_SCALE`. |
 | `src/sim/cf2-life.js` | Eight founders; life stages for the one-month arc. |
-| `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring. |
+| `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
 | `src/view/clock.js` | The page's clock: `devNow()`, the player's correction, the dev offset, the database name. |

@@ -440,14 +440,16 @@ function creekSafeToRaise(w, s, add) {
 }
 
 // A silted-up dam built up a hand higher (the tending chore). Returns true if it rose.
-function creekRaiseDam(w, s, who) {
+// 3C: the beavers call it with no `who` and { above, quiet }: they build higher, and
+// they log their own lines.
+function creekRaiseDam(w, s, who, opt = {}) {
   let cr = w.creek,
     d = cr && cr.dams[s.id];
   s.raise = 0;
   s.siltNoted = 0;
   if (!d) return false;
   let n = cr.nodes[d.i],
-    top = n.fp + CREEK.raiseAbove;
+    top = n.fp + (opt.above ?? CREEK.raiseAbove);
   if (d.crest >= top - 0.01) return false;
   // someone who knows the water must stand at its foot won't build it up into a leak.
   // If no dam below holds water against it, they lay a stone apron below it first, so
@@ -474,7 +476,7 @@ function creekRaiseDam(w, s, who) {
   s.raised = d.raised;
   s.cond = 1;
   w.stats.raises = (w.stats.raises || 0) + 1;
-  logEvent(
+  if (!opt.quiet) logEvent(
     w,
     w.stats.raises === 1 ? 2 : 1,
     d.crest > n.fp ?
@@ -989,7 +991,8 @@ function creekCellWater(w, dtD, s) {
     nWet = 0,
     nGreen = 0,
     nf = 0;
-  let pf = creekPondFloor(w, c);
+  let pf = creekPondFloor(w, c),
+    bl = typeof beaverPondLevels === "function" ? beaverPondLevels(w, c) : null; // 3C: the beavers' side dams hold water on the floor
   let decay = new Float32Array(32);
   for (let j = 0; j < 32; j++) decay[j] = 1 - Math.exp(-j / 2 / lam); // d in half-metre steps
   // the creek's level and the water table are blended between the two nodes either
@@ -1014,6 +1017,7 @@ function creekCellWater(w, dtD, s) {
       f = d >= 15.5 ? 1 : decay[Math.floor(d * 2)],
       table = lv + (g - lv) * f;
     if (pf[k] > table) table = pf[k];
+    if (bl && bl[k] > table) table = bl[k];
     wt[k] = table;
     let dw = c.h[k] - table,
       gr = Math.max(soil, dw < 0.55 ? 1 : dw < CREEK.root ? 1 - (dw - 0.55) / (CREEK.root - 0.55) : 0),
