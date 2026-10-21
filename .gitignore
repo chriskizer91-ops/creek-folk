@@ -3,3 +3,4 @@ shots/
 orig/
 runs/
 dist/
+.claude/
