@@ -60,7 +60,7 @@ var DevMenu = class {
     h += `<p class="note">${this.app.paused ? "Paused. " : ""}Dev offset: ${spanText(Clock.dev / 1000)} ahead${Clock.fix ? ` · clock corrected by ${spanText(Math.abs(Clock.fix) / 1000)}` : ""}.</p>`;
     h += `<div class="seg">${J.map(([l, s]) => `<button data-jump="${s}">${l}</button>`).join("")}</div>`;
     h += `<div class="setrow"><span class="lab">Jump to</span><input type="datetime-local" id="devTo"><button class="btn small" id="devToGo">Go</button></div>`;
-    h += `<p class="note">${r ? `Last jump: ${spanText(r.span)} replayed in ${(r.ms / 1000).toFixed(1)} s (${Math.round(r.rate).toLocaleString()}× real time). 30 days would take about ${Math.max(1, Math.round((30 * 86400) / r.rate / 60))} min here.` : "Jump to measure how fast this device replays the valley."}</p>`;
+    h += `<p class="note">${r ? `Last jump: ${spanText(r.span)} replayed in ${(r.ms / 1000).toFixed(1)} s (${Math.round(r.rate).toLocaleString()}× real time). With ${r.n || "this many"} creekfolk, 30 days would take about ${Math.max(1, Math.round((30 * 86400) / r.rate / 60))} min here; more creekfolk take longer.` : "Jump to measure how fast this device replays the valley."}</p>`;
     h += `<div class="setrow"><button class="btn small" id="devPause">${this.app.paused ? "Let the clock run" : "Pause the valley's clock"}</button></div>`;
     h += `<h2>Make it happen</h2><div class="seg">${T.map(([k, l]) => `<button data-trig="${k}">${l}</button>`).join("")}</div>`;
     h += `<h2>Overlays</h2><div class="seg">${O.map(([k, l]) => `<button data-ov="${k || ""}" aria-pressed="${this.overlay === k}">${l}</button>`).join("")}</div>`;
@@ -109,7 +109,7 @@ var DevMenu = class {
     let span = m.to - m.from;
     this.jumping = null;
     if (span < 600 || !m.ms) return;
-    this.readout = { span, ms: m.ms, rate: span / (m.ms / 1000), at: Date.now() };
+    this.readout = { span, ms: m.ms, rate: span / (m.ms / 1000), at: Date.now(), n: [...this.app.vw.cs.values()].filter((c) => !c.visitor && !c.away).length };
     lsSet("creekfolk2.devspeed." + BUILD_VERSION, this.readout);
   }
   pause(on) {
