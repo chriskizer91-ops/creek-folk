@@ -54,7 +54,8 @@ var View3D = class {
       let pal = [PKToon.P.ink].concat(CF2Valley.palette(), spritePalette(), folkPalette(), ["#a8d0de", "#fff2c8"]),
         seen = {};
       pal = pal.filter((c) => ((c = c.toLowerCase()), seen[c] ? false : (seen[c] = 1)));
-      this.px = PKPixel3D.create(this.r, { palette: pal, snapLow: true, softInk: true });
+      this.px = PKPixel3D.create(this.r, { palette: pal, snapLow: true, softInk: true, lut: true });
+      this.beasts = CF2Beasts.create(this);
       this.dots = new FolkDots(this);
       this.scene.add(this.dots.points);
       let m = this.vw.meadow || { x: VW / 2, z: 40 };
@@ -372,6 +373,7 @@ var View3D = class {
     this.valley.stream(this.view.x, this.view.z, this.view.hv < 60 ? Math.max(40, this.view.hv * 1.2) : 999, 6);
     this.light(t, ty);
     this.drawFolk(t, dt);
+    this.beasts.update(t, dt);
     this.cutAround();
     this.px.render(this.scene, this.cam);
   }

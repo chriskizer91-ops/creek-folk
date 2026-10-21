@@ -51,7 +51,11 @@
     'vec3 tint(vec3 c){ float L = dot(c, vec3(0.299, 0.587, 0.114)); c = max(vec3(0.0), mix(vec3(L), c, sat)); return c * mix(gradeD, gradeL, smoothstep(0.18, 0.72, L)) + lift; }',
     'vec3 graded(vec3 c, vec2 cell, float a){ if (isGlow(a)) return c; float g = 0.0; if (glow.z > 0.0) { float d = length((cell - glow.xy) / glow.z); g = clamp(1.0 - d, 0.0, 1.0); g = g * g * (3.0 - 2.0 * g); g = floor(g * 5.0 + 0.5) / 5.0 * glow.w; } return mix(tint(c), c * glowTint, g); }',
     'vec3 ycc(vec3 c){ return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }',
+    // CF2: with LUT, the search is looked up instead: a table of the nearest colour for every 64 x 64 x 64 step of red, green
+    // and blue, worked out once on the GPU by the same search (makeLut below). One read instead of one per colour (hundreds)
+    '#ifdef LUT\nuniform sampler2D tLut;\nvec3 nearest(vec3 c){ ivec3 q = clamp(ivec3(floor(c * 64.0)), ivec3(0), ivec3(63)); return texelFetch(tLut, ivec2(q.r + (q.b % 8) * 64, q.g + (q.b / 8) * 64), 0).rgb; }\n#else',
     'vec3 nearest(vec3 c){ vec3 q = ycc(c); float bd = 1e9; vec3 best = c; for (int i = 1; i < NP; i++){ vec3 p = palAt(i); vec3 d = ycc(p) - q; d *= vec3(1.0, 1.7, 1.7); float e = dot(d, d); if (e < bd){ bd = e; best = p; } } return best; }',   // R186: pal[i] -> palAt(i)
+    '#endif',
     // Easy to see: the ground round the king a few dithered steps darker, the king a shade brighter
     'vec3 pooled(vec3 o, vec2 cell, bool hero){ if (pool.w <= 0.0) return o; if (hero) return min(vec3(1.0), o * 1.1 + 0.04); float d = length(cell - pool.xy) / pool.z; float a = 1.0 - smoothstep(0.6, 1.0, d); a = floor(a * 3.0 + bayer(cell) * 0.999) / 3.0; return mix(o, o * 0.38, a * pool.w); }',
     // the sky: bands from the horizon up, the sun or moon with rings of light, two-tone clouds, stars
@@ -118,9 +122,26 @@
     var t = new THREE.DataTexture(d, w, h, THREE.RGBAFormat, THREE.UnsignedByteType); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
     return t;
   }
+  // CF2: the look-up table for o.lut: 512 x 512 texels, eight slices of blue a row, each 64 x 64 of red (across) and green (up),
+  // holding the palette colour nearest the middle of that step, found with the pass's own search
+  var LUT_FRAG = ['precision highp float;', 'uniform sampler2D tPal;', 'vec3 palAt(int i){ return texelFetch(tPal, ivec2(i % PW, i / PW), 0).rgb; }',
+    'vec3 ycc(vec3 c){ return vec3(dot(c, vec3(0.25, 0.5, 0.25)), dot(c, vec3(0.5, 0.0, -0.5)), dot(c, vec3(-0.25, 0.5, -0.25))); }',
+    'vec3 nearest(vec3 c){ vec3 q = ycc(c); float bd = 1e9; vec3 best = c; for (int i = 1; i < NP; i++){ vec3 p = palAt(i); vec3 d = ycc(p) - q; d *= vec3(1.0, 1.7, 1.7); float e = dot(d, d); if (e < bd){ bd = e; best = p; } } return best; }',
+    'void main(){ ivec2 p = ivec2(gl_FragCoord.xy); vec3 c = (vec3(float(p.x % 64), float(p.y % 64), float(p.x / 64 + (p.y / 64) * 8)) + 0.5) / 64.0; gl_FragColor = vec4(nearest(c), 1.0); }'].join('\n');
+  function makeLut(renderer, palT, n, into) {
+    var rt = into || new THREE.WebGLRenderTarget(512, 512, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat, depthBuffer: false, generateMipmaps: false });
+    var m = new THREE.ShaderMaterial({ uniforms: { tPal: { value: palT } }, vertexShader: VERT, fragmentShader: LUT_FRAG, defines: { NP: n, PW: palT.image.width }, depthTest: false, depthWrite: false });
+    var sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m);
+    sc.add(q);
+    var old = renderer.getRenderTarget();
+    renderer.setRenderTarget(rt); renderer.render(sc, cam); renderer.setRenderTarget(old);
+    m.dispose(); q.geometry.dispose();
+    return rt;
+  }
   PX.create = function (renderer, o) {
     o = o || {};
     var pal = palTex(o.palette);   // R186: was an array of Vector3 for 'uniform vec3 pal[NP]'
+    var lut = o.lut ? makeLut(renderer, pal, o.palette.length) : null;   // CF2
     function v3(x, y, z) { return { value: new THREE.Vector3(x, y, z) }; }
     var mat = new THREE.ShaderMaterial({
       uniforms: {
@@ -128,11 +149,13 @@
         gradeD: v3(1, 1, 1), gradeL: v3(1, 1, 1), lift: v3(0, 0, 0), glow: { value: new THREE.Vector4(0, 0, 0, 0) }, glowTint: v3(1, 1, 1), thick: { value: 0 },
         zrange: { value: new THREE.Vector2(0, 1) }, ppm: { value: 100 }, ao: { value: new THREE.Vector2(0, 0.3) }, haze: { value: new THREE.Vector4(0, 0, 0, 0) }, hazeZ: v3(40, 6, 30),
         skyTop: v3(0.55, 0.75, 0.86), skyHor: v3(0.75, 0.86, 0.9), skyI: { value: new THREE.Vector4(0, 0, 0, 1) }, sunP: { value: new THREE.Vector4(0, 0, 0, 0) }, sunC: v3(1, 0.96, 0.82),
-        selOut: { value: 0 }, dcell: { value: 1 }, spill: { value: 0 }, pool: { value: new THREE.Vector4(0, 0, 1, 0) }, sat: { value: 1 }
+        selOut: { value: 0 }, dcell: { value: 1 }, spill: { value: 0 }, pool: { value: new THREE.Vector4(0, 0, 1, 0) }, sat: { value: 1 },
+        tLut: { value: lut ? lut.texture : null }   // CF2
       },
       // R186: NP is still the number of colours; PW is the palette texture's width
       vertexShader: VERT, fragmentShader: FRAG, defines: o.softInk ? { NP: o.palette.length, PW: pal.image.width, SOFT_INK: 1 } : { NP: o.palette.length, PW: pal.image.width }, depthTest: false, depthWrite: false
     });
+    if (lut) mat.defines.LUT = 1;   // CF2
     var U = mat.uniforms;
     var post = new THREE.Scene(), postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     post.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
@@ -180,6 +203,7 @@
     // R186: (new, for Creekfolk 2) change the palette: any length, ink first; a new length rebuilds the pass's shader once
     px.setPalette = function (list) {
       var t = palTex(list), old = U.tPal.value; U.tPal.value = t; if (old) old.dispose();
+      if (lut) makeLut(renderer, t, list.length, lut);   // CF2
       if (mat.defines.NP !== list.length || mat.defines.PW !== t.image.width) { mat.defines.NP = list.length; mat.defines.PW = t.image.width; mat.needsUpdate = true; }
     };
     // a pool of light round a point given in art pixels (x, y from the bottom left), radius r, strength a

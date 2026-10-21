@@ -134,7 +134,8 @@ function cwSlow(w, c) {
   return {
     id: c.id,
     name: c.name,
-    look: c.look,
+    look: c.look ? looksOf(w, c) : c.look, // 3C's looks, filled in (they are only ever filled from the seed and the id)
+    wear: c.look ? looksWorn(w, c) : null, // what they wear for what they love (grown-ups)
     born: c.born,
     lifespan: c.lifespan,
     stage: c.stage,
@@ -206,6 +207,7 @@ function cwSendState(full, heavy = true) {
     S.creekT = -1;
     S.weather = "";
     S.fauna = "";
+    S.beavers = S.groveLogs = S.skycal = S.fishRun = "";
     m.seed = w.seed;
     m.calStart = w.calStart;
     m.tzMin = w.tzMin;
@@ -241,6 +243,20 @@ function cwSendState(full, heavy = true) {
   if (heavy && w.fauna) {
     let f = JSON.stringify(w.fauna);
     if (f !== S.fauna) (S.fauna = f), (m.fauna = w.fauna);
+  }
+  // 3C's: the beavers (their lodge, where they swim, their little side dams), the grove's
+  // fallen trees, the sky stones, the glowing fish run
+  if (heavy) {
+    let x = {
+      beavers: w.beavers || null,
+      groveLogs: (w.grove && w.grove.logs) || null,
+      skycal: w.skycal || null,
+      fishRun: (w.returning && w.returning.active) || null,
+    };
+    for (let k in x) {
+      let j = JSON.stringify(x[k]);
+      if (j !== S[k]) (S[k] = j), (m[k] = x[k]);
+    }
   }
   // the ground and the creek's shape: after a flood, a dam, or plants changing the banks
   let cr = w.creek,

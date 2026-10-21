@@ -47,6 +47,9 @@ var DevMenu = class {
         ["birth", "A birth"],
         ["passing", "A passing"],
         ["visitor", "A visitor"],
+        ["beavers", "Beavers"],
+        ["skycal", "Sky stones"],
+        ["returning", "The fish run"],
       ],
       O = [
         [null, "None"],

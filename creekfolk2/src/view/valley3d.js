@@ -82,8 +82,11 @@ var CF2Valley = (function () {
     ovF: ["#e0c040", "#e0c040", "#e0c040"],
     ovG: ["#60b050", "#60b050", "#60b050"],
   };
+  // the owners' colours, for their doors (Creekfolk 1's 3C), and what the grove's logs grow
+  CF2_FUR.forEach((r, i) => (PAINT["fur" + i] = r));
+  PAINT.lodge = ["#4e3a28", "#5e4630", "#7a5c40"];
   var FOAM = { water: "#eef6f6", waterC: "#eef6f6", pond: "#b4ccb0", mudW: "#d9cba8" };
-  var REFL = { water: "#a9ccd8", waterC: "#acdad8", pond: "#a2c2c4", mudW: "#9caaa8" };
+  var REFL = { water: "#a9ccd8", waterC: "#acdad8", pond: "#729480", mudW: "#9caaa8" };
   var VARY = { grass: 0.12, grassL: 0.11, grassD: 0.11, straw: 0.1, strawL: 0.1, dust: 0.1, marsh: 0.12, path: 0.08, pathE: 0.1, clay: 0.07, gravel: 0.08, bed: 0.08, lime: 0.05, limeBed: 0.06, moss: 0.1, soil: 0.08, mud: 0.08 };
   var SWAYK = { oak: 0.45, oak2: 0.3, elm: 0.45, pecan: 0.45, gold: 0.45, cedar: 0.2, willow: 0.6, bush: 0.3 };
   var mats = {};
@@ -283,6 +286,23 @@ var CF2Valley = (function () {
     function hillCap(h) {
       return h < 32 ? h : 32 + 14 * (1 - Math.exp(-(h - 32) / 14));
     }
+    // The branches' channels are narrower than the simulation's metre grid, which draws them as
+    // staircases; drawn, they are carved again from their own smooth lines, the same way
+    // cf2CarveBranches carves the grid (a bed D deep and HW wide, banks about as steep as tall).
+    var BRL = Object.values(T.branches);
+    function branchNear(x, z) {
+      var best = null;
+      for (var b of BRL) {
+        var bx = b.box;
+        if (x < bx[0] - 7 || x > bx[2] + 7 || z < bx[1] - 7 || z > bx[3] + 7) continue;
+        var d = cf2BranchDist(b, x, z);
+        if (d && d.o < 6 && (!best || d.o - b.HW[d.i] < best.o - best.hw)) best = { b, i: d.i, o: d.o, hw: b.HW[d.i], D: b.D[d.i] };
+      }
+      return best;
+    }
+    function branchCut(bn) {
+      return bn ? Math.max(0, bn.D - Math.max(0, bn.o - bn.hw) / 0.9) : 0;
+    }
     function height(x, z) {
       if (x < 1 || z < 1 || x > VW - 1 || z > VL - 1) {
         if (x >= 0 && z >= 0 && x <= VW && z <= VL) return T.heightAt(x, z);
@@ -293,14 +313,25 @@ var CF2Valley = (function () {
         iz = Math.floor(z),
         fx = x - ix,
         fz = z - iz,
+        bn = sampV(T.brCut, x, z) > 0 || branchBoxed(x, z) ? branchNear(x, z) : null,
+        C = bn ? T.brCut : null,
+        at = (k) => (C ? h[k] + C[k] : h[k]),
         r = [];
       for (var j = -1; j <= 2; j++) {
         var zz = clamp(iz + j, 0, VL) * N1;
-        r.push(cr(h[zz + clamp(ix - 1, 0, VW)], h[zz + ix], h[zz + clamp(ix + 1, 0, VW)], h[zz + clamp(ix + 2, 0, VW)], fx));
+        r.push(cr(at(zz + clamp(ix - 1, 0, VW)), at(zz + ix), at(zz + clamp(ix + 1, 0, VW)), at(zz + clamp(ix + 2, 0, VW)), fx));
       }
       var v = cr(r[0], r[1], r[2], r[3], fz),
         lo = Math.min(r[1], r[2]) - 0.15;
-      return v < lo ? lo : v; // no dips below the grid (they would hold water that isn't there)
+      v = v < lo ? lo : v; // no dips below the grid (they would hold water that isn't there)
+      return bn ? v - branchCut(bn) : v;
+    }
+    // near a branch's channel at all (the grid's carving reaches about a metre past its banks)
+    function branchBoxed(x, z) {
+      var ix = Math.floor(x),
+        iz = Math.floor(z);
+      for (var dz = -1; dz <= 2; dz++) for (var dx = -1; dx <= 2; dx++) if (T.brCut[clamp(iz + dz, 0, VL) * N1 + clamp(ix + dx, 0, VW)] > 0) return true;
+      return false;
     }
     W.height = height;
 
@@ -343,6 +374,25 @@ var CF2Valley = (function () {
         v = fz - j,
         k = j * VW + i;
       return (a[k] + (a[k + 1] - a[k]) * u) * (1 - v) + (a[k + VW] + (a[k + VW + 1] - a[k + VW]) * u) * v;
+    }
+    // the same, smoother (Catmull-Rom, held between the four nearest cells so it never overshoots):
+    // for the water table, whose cells meet in steps
+    function sampC(a, x, z) {
+      var fx = clamp(x - 0.5, 0, VW - 1.0001),
+        fz = clamp(z - 0.5, 0, VL - 1.0001),
+        i = Math.floor(fx),
+        j = Math.floor(fz),
+        u = fx - i,
+        v = fz - j,
+        row = (jj) => {
+          var k = clamp(jj, 0, VL - 1) * VW;
+          return cr(a[k + clamp(i - 1, 0, VW - 1)], a[k + i], a[k + Math.min(i + 1, VW - 1)], a[k + clamp(i + 2, 0, VW - 1)], u);
+        },
+        val = cr(row(j - 1), row(j), row(j + 1), row(j + 2), v),
+        k0 = j * VW + i,
+        lo = Math.min(a[k0], a[k0 + 1], a[k0 + VW], a[k0 + VW + 1]),
+        hi = Math.max(a[k0], a[k0 + 1], a[k0 + VW], a[k0 + VW + 1]);
+      return val < lo ? lo : val > hi ? hi : val;
     }
     // a grid of vertices ((VW + 1) x (VL + 1)), read between them
     function sampV(a, x, z) {
@@ -418,14 +468,14 @@ var CF2Valley = (function () {
         return n.veg > 0.62 ? TI.grassD : slope > 0.6 ? TI.clay : TI.mud;
       }
       // in a branch's channel: the Dry Fork's pale bed, the spring's moss and gravel
-      var bc = sampV(T.brCut, x, z);
-      if (bc > 0.08) {
-        var sp = T.branches.spring.head;
+      var bn = branchBoxed(x, z) ? branchNear(x, z) : null,
+        bc = branchCut(bn);
+      if (bc > 0.06) {
+        var sp = T.branches.spring.head,
+          e = bn.o - bn.hw + 0.08 * fineN(x * 1.7, z * 1.7);
         if (Math.hypot(x - sp.x, z - sp.z) < 4 + 0.6 * fineN(x, z)) return TI.moss;
-        var dry = T.branches.dry,
-          dd = bc > 0.15 ? cf2BranchDist(dry, x, z) : null;
-        if (dd && dd.o < dry.HW[dd.i] + 0.6) return dd.o < dry.HW[dd.i] + 0.1 ? TI.limeBed : TI.lime;
-        return bc > 0.25 ? TI.gravel : TI.moss;
+        if (bn.b.id === "dry") return e < 0.1 ? TI.limeBed : e < 0.6 ? TI.lime : TI.gravel;
+        return e < 0 ? TI.gravel : TI.moss;
       }
       if (!g) return TI.grass;
       var wear = samp(g.wear, x, z) * (1 + 0.22 * fineN(x * 1.6, z * 1.6));
@@ -636,118 +686,97 @@ var CF2Valley = (function () {
       m.name = "Creek";
       into.add(m);
     }
-    // water standing on the floor: ponds that rose over their banks, marsh pools, side channels
-    function floorWater(Tl, into) {
+    // water standing on the floor: ponds that rose over their banks, marsh pools, side channels,
+    // and the water along the branches. A sheet at the water table's level (read smoothly between
+    // the simulation's cells) wherever it stands above the ground somewhere in a quad; where it
+    // runs below the ground the ground hides it, so the shore follows the ground's own curves.
+    // The creek's trench is the creek's (its ribbon), except where the floor's water stands over it.
+    var BRW = [null, T.branches.spring, T.branches.dry];
+    function branchOf(x, z) {
+      var bn = branchBoxed(x, z) ? branchNear(x, z) : null;
+      if (!bn || bn.o > bn.hw + 0.5) return 0;
+      return bn.b.id === "spring" ? 1 : 2;
+    }
+    function floorWater(Tl, into, cs) {
       var g = G();
       if (!g || !Tl.inner) return;
-      var x0 = Tl.x0,
-        z0 = Tl.z0,
-        n = TILE,
+      var n = Math.round(TILE / cs),
         V1 = n + 1,
-        wetC = new Uint8Array(n * n),
-        any = false;
-      for (var j = 0; j < n; j++)
-        for (var i = 0; i < n; i++) {
-          var cx = x0 + i,
-            cz = z0 + j;
-          if (cx >= VW || cz >= VL) continue;
-          var k = cz * VW + cx,
-            vi = cz * N1 + cx,
-            hc = 0.25 * (T.h[vi] + T.h[vi + 1] + T.h[vi + N1] + T.h[vi + N1 + 1]);
-          if (g.wt[k] > hc + 0.01 && !(T.cut[vi] > 0.1 && g.wt[k] < T.fpAt(cz + 0.5) - 0.02) && !(T.brCut[vi] > 0.1)) (wetC[j * n + i] = 1), (any = true);
+        L = new Float32Array(V1 * V1),
+        D = new Float32Array(V1 * V1),
+        any = false,
+        i,
+        j;
+      for (j = 0; j <= n; j++)
+        for (i = 0; i <= n; i++) {
+          var x = Tl.x0 + i * cs,
+            z = Tl.z0 + j * cs,
+            k = j * V1 + i;
+          if (x > VW || z > VL) {
+            D[k] = -9;
+            continue;
+          }
+          L[k] = sampC(g.wt, x, z);
+          D[k] = L[k] - height(x, z);
+          // in the creek's trench, below the floor: that water is the creek's
+          if (D[k] > -0.02 && sampV(T.cut, x, z) > 0.1 && L[k] < T.fpAt(z) - 0.02) D[k] = -9;
+          if (D[k] > 0.005) any = true;
         }
       if (!any) return;
       var pos = [],
-        idx = [],
         flo = [],
         dep = [],
         edg = [],
         uvs = [],
-        vid = new Int32Array(V1 * V1).fill(-1);
+        vid = new Int32Array(V1 * V1).fill(-1),
+        idxK = [[], [], []],
+        spD = vw.br && vw.br.dry && vw.br.dry.state === "running" ? 1.0 : 0.04;
       function vert(i, j) {
-        var key = j * V1 + i;
-        if (vid[key] >= 0) return vid[key];
-        // the water's level at a corner: the mean of the wet cells round it
-        var s = 0,
-          c = 0;
-        for (var dj = -1; dj <= 0; dj++)
-          for (var di = -1; di <= 0; di++) {
-            var ii = i + di,
-              jj = j + dj;
-            if (ii < 0 || jj < 0 || ii >= n || jj >= n || !wetC[jj * n + ii]) continue;
-            s += g.wt[(z0 + jj) * VW + x0 + ii];
-            c++;
-          }
-        var x = x0 + i,
-          z = z0 + j,
-          y = s / c,
-          d = clamp(y - height(x, z), -0.3, 3);
-        pos.push(x, y, z);
-        flo.push(0, 0);
+        var k = j * V1 + i;
+        if (vid[k] >= 0) return vid[k];
+        var x = Tl.x0 + i * cs,
+          z = Tl.z0 + j * cs,
+          d = clamp(D[k], -0.3, 3),
+          kb = branchOf(x, z),
+          fx = 0,
+          fz = 0;
+        if (kb) {
+          var br = BRW[kb],
+            dd = cf2BranchDist(br, x, z),
+            i0 = Math.max(0, dd.i - 1),
+            i1 = Math.min(br.n - 1, dd.i + 1),
+            tx = br.X[i1] - br.X[i0],
+            tz = br.Z[i1] - br.Z[i0],
+            l = Math.hypot(tx, tz) || 1,
+            sp = kb === 1 ? 0.45 : spD;
+          fx = (tx / l) * sp;
+          fz = (tz / l) * sp;
+        }
+        pos.push(x, L[k], z);
+        flo.push(fx, fz);
         dep.push(d);
         edg.push(clamp(1 - d / 0.12, 0, 1));
         uvs.push(x, z);
-        return (vid[key] = pos.length / 3 - 1);
-      }
-      // the margin: dry cells next to wet ones (the ground rising out of the water hides the rest)
-      var draw = wetC.slice();
-      for (j = 0; j < n; j++)
-        for (i = 0; i < n; i++)
-          if (wetC[j * n + i])
-            for (var dj2 = -1; dj2 <= 1; dj2++)
-              for (var di2 = -1; di2 <= 1; di2++) {
-                var ii2 = i + di2,
-                  jj2 = j + dj2;
-                if (ii2 >= 0 && jj2 >= 0 && ii2 < n && jj2 < n && !draw[jj2 * n + ii2]) draw[jj2 * n + ii2] = 2;
-              }
-      function anyWetAround(i, j) {
-        for (var dj = -1; dj <= 0; dj++)
-          for (var di = -1; di <= 0; di++) {
-            var ii = i + di,
-              jj = j + dj;
-            if (ii >= 0 && jj >= 0 && ii < n && jj < n && wetC[jj * n + ii]) return true;
-          }
-        return false;
-      }
-      function vertNear(i, j) {
-        if (anyWetAround(i, j)) return vert(i, j);
-        // a corner with no wet cell round it: the level of the nearest wet cell beside it
-        var key = j * V1 + i;
-        if (vid[key] >= 0) return vid[key];
-        var best = null;
-        for (var dj = -2; dj <= 1 && best == null; dj++)
-          for (var di = -2; di <= 1; di++) {
-            var ii = i + di,
-              jj = j + dj;
-            if (ii >= 0 && jj >= 0 && ii < n && jj < n && wetC[jj * n + ii]) {
-              best = g.wt[(z0 + jj) * VW + x0 + ii];
-              break;
-            }
-          }
-        var x = x0 + i,
-          z = z0 + j,
-          y = best == null ? height(x, z) - 0.05 : best,
-          d = clamp(y - height(x, z), -0.3, 3);
-        pos.push(x, y, z);
-        flo.push(0, 0);
-        dep.push(d);
-        edg.push(clamp(1 - d / 0.12, 0, 1));
-        uvs.push(x, z);
-        return (vid[key] = pos.length / 3 - 1);
+        return (vid[k] = pos.length / 3 - 1);
       }
       for (j = 0; j < n; j++)
         for (i = 0; i < n; i++) {
-          if (!draw[j * n + i]) continue;
-          var A = vertNear(i, j),
-            B = vertNear(i + 1, j),
-            C = vertNear(i, j + 1),
-            Dd = vertNear(i + 1, j + 1);
-          idx.push(A, C, B, B, C, Dd);
+          var a0 = j * V1 + i,
+            dmax = Math.max(D[a0], D[a0 + 1], D[a0 + V1], D[a0 + V1 + 1]);
+          if (dmax <= 0.005 || Math.min(D[a0], D[a0 + 1], D[a0 + V1], D[a0 + V1 + 1]) < -8) continue;
+          var A = vert(i, j),
+            B = vert(i + 1, j),
+            C = vert(i, j + 1),
+            Dd = vert(i + 1, j + 1);
+          idxK[branchOf(Tl.x0 + (i + 0.5) * cs, Tl.z0 + (j + 0.5) * cs)].push(A, C, B, B, C, Dd);
         }
-      var m = new THREE.Mesh(waterGeo(pos, idx, flo, dep, edg, uvs), paint("pond", { water: true }));
-      m.receiveShadow = true;
-      m.name = "FloorWater";
-      into.add(m);
+      ["pond", "waterC", vw.flood || spD > 0.5 ? "mudW" : "water"].forEach(function (key, kc) {
+        if (!idxK[kc].length) return;
+        var m = new THREE.Mesh(waterGeo(pos, idxK[kc], flo, dep, edg, uvs), paint(key, { water: true }));
+        m.receiveShadow = true;
+        m.name = "FloorWater_" + key;
+        into.add(m);
+      });
     }
     // the branches' water
     function branchWater(Tl, into, wc) {
@@ -834,11 +863,11 @@ var CF2Valley = (function () {
       B.add(key + "|f|c", bake(new THREE.IcosahedronGeometry(r, Dd > 1 && r > 1.0 ? 1 : 0), x, y, z, TR() * 3, TR() * 3, TR() * 3, 1, sy || 0.8, 1));
     }
     function treeKindOf(r) {
-      var v = r.kind === "podtree" ? "pod" : r.variant || "oak";
+      var v = r.kind === "podtree" ? "pod" : r.tk || r.variant || "oak";
       return v === "pine" ? "cedar" : v === "birch" ? "syc" : v === "willow" ? "willow" : v === "pod" ? "pecan" : v === "gold" ? "gold" : v === "elm" ? "elm" : "oak";
     }
     function treeSize(r) {
-      if (r.kind === "grove") return clamp(0.35 + 0.18 * (r.size || r.stage || r.age || 1), 0.35, 1.9); // grove trees grow all their lives
+      if (r.kind === "grove") return clamp(0.62 * groveSize(vw, r), 0.2, 3.2); // grove trees grow all their lives, the founders' into giants
       return 0.85 + ((r.id * 2654435761) % 1000) / 2000 + (r.kind === "podtree" ? 0.25 : 0);
     }
     function buildTree(B, r, Dd) {
@@ -1311,6 +1340,7 @@ var CF2Valley = (function () {
       var up = (n) => clamp(show - (n - 1), 0, 1);
       if (s.kind === "dam") return addDam(B, s, far);
       if (s.kind === "home") return addHome(B, s, far, show, up, R, rad, h0, rot, seg);
+      if (s.kind === "skycal") return addSkycal(B, s, show, far);
       if (s.kind === "garden") {
         // beds of dark soil in wooden edging, planted in rows; a compost heap, a channel from
         // the water, a nursery of seedlings, a third bed
@@ -1538,18 +1568,20 @@ var CF2Valley = (function () {
       }
       // walls on a stone footing
       B.add("stone|f", bake(cyl(wr + 0.06, wr + 0.1, 0.28, seg), s.x, h0 + 0.1, s.z));
-      B.add("mudwall|f", bake(cyl(wr * 0.95, wr, wallH, seg), s.x, h0 + 0.05 + wallH / 2, s.z));
+      B.add("mudwall|f|c", bake(cyl(wr * 0.95, wr, wallH, seg), s.x, h0 + 0.05 + wallH / 2, s.z));
       // the roof: three courses stepping in to a knot at the top
       var y0 = h0 + 0.05 + wallH;
-      B.add(roofK + "|f", bake(cyl(re * 0.66, re, Hr * 0.4, seg), s.x, y0 + Hr * 0.2 - 0.05, s.z));
-      B.add(roofK + "|f", bake(cyl(re * 0.36, re * 0.7, Hr * 0.36, seg), s.x, y0 + Hr * 0.58 - 0.1, s.z));
-      B.add(roofK + "|f", bake(new THREE.ConeGeometry(re * 0.4, Hr * 0.42, seg), s.x, y0 + Hr * 0.97 - 0.15, s.z));
+      B.add(roofK + "|f|c", bake(cyl(re * 0.66, re, Hr * 0.4, seg), s.x, y0 + Hr * 0.2 - 0.05, s.z));
+      B.add(roofK + "|f|c", bake(cyl(re * 0.36, re * 0.7, Hr * 0.36, seg), s.x, y0 + Hr * 0.58 - 0.1, s.z));
+      B.add(roofK + "|f|c", bake(new THREE.ConeGeometry(re * 0.4, Hr * 0.42, seg), s.x, y0 + Hr * 0.97 - 0.15, s.z));
       if (!far) {
         B.add("wood|f", bake(cyl(0.04, 0.08, 0.32, 6), s.x, y0 + Hr * 1.18 - 0.12, s.z));
         // the door (dark inside, a frame of wood), a step, a window
         var ox = s.x + dx * wr * 0.97,
           oz = s.z + dz * wr * 0.97;
-        B.add("soil|f", bake(box(0.62, 1.12, 0.14), ox, h0 + 0.05 + 0.56, oz, 0, rot, 0));
+        // the door in its owner's colour (Creekfolk 1's 3C); a dark doorway while nobody lives there
+        var own = s.owner != null ? vw.creature(s.owner) : null;
+        B.add((own && own.look ? "fur" + furIndex(own.look) : "soil") + "|f", bake(box(0.62, 1.12, 0.14), ox, h0 + 0.05 + 0.56, oz, 0, rot, 0));
         B.add("wood|f", bake(box(0.08, 1.2, 0.18), ox + dz * 0.35, h0 + 0.65, oz - dx * 0.35, 0, rot, 0));
         B.add("wood|f", bake(box(0.08, 1.2, 0.18), ox - dz * 0.35, h0 + 0.65, oz + dx * 0.35, 0, rot, 0));
         B.add("wood|f", bake(box(0.82, 0.1, 0.2), ox, h0 + 1.25, oz, 0, rot, 0));
@@ -1562,12 +1594,51 @@ var CF2Valley = (function () {
         // a pot by the door, a woodpile against the wall
         var pa = rot + 0.55;
         B.add("clay|f", bake(cyl(0.15, 0.11, 0.3, 8), s.x + Math.sin(pa) * (wr + 0.25), h0 + 0.15, s.z + Math.cos(pa) * (wr + 0.25)));
-        var ka = rot - 1.3;
+        var ka = rot - 1.3,
+          kr = wr + (show > 4.05 ? 0.85 : 0.22); // clear of the deck, once there is one
         for (q = 0; q < 5; q++) {
-          var kx = s.x + Math.sin(ka) * (wr + 0.22),
-            kz = s.z + Math.cos(ka) * (wr + 0.22);
+          var kx = s.x + Math.sin(ka) * kr,
+            kz = s.z + Math.cos(ka) * kr;
           B.add("wood|f", bake(cyl(0.07, 0.07, 0.8, 6), kx, h0 + 0.08 + (q > 2 ? 0.13 : 0), kz, Math.PI / 2, ka + Math.PI / 2, 0, 1, 1, 1));
         }
+      }
+      // the front porch: two posts and a little roof over the door
+      if (show > 6.05) {
+        var fp = up(7),
+          px0 = s.x + dx * (wr + 0.95),
+          pz0 = s.z + dz * (wr + 0.95);
+        for (q = -1; q <= 1; q += 2) B.add("post|f", bake(cyl(0.05, 0.06, 1.75 * fp, 5), px0 + dz * q * 0.55, h0 + 0.875 * fp, pz0 - dx * q * 0.55));
+        if (fp >= 0.5) B.add(roofK + "|f|c", bake(box(1.5, 0.08, 1.25), s.x + dx * (wr + 0.5), h0 + 1.82, s.z + dz * (wr + 0.5), -0.28, rot, 0, 1, 1, 1));
+        if (!far && fp >= 1) B.add("wood|f", bake(box(1.1, 0.06, 0.32), px0 - dx * 0.1 + dz * 0.25, h0 + 0.38, pz0 - dz * 0.1 - dx * 0.25, 0, rot, 0));
+      }
+      // the stone hearth, and its chimney up the wall at the back
+      if (show > 7.05) {
+        var fh = up(8),
+          ca = rot + Math.PI * 0.85,
+          chx = s.x + Math.sin(ca) * (wr + 0.12),
+          chz = s.z + Math.cos(ca) * (wr + 0.12),
+          chH = (wallH + Hr * 0.75) * fh;
+        for (q = 0; q < Math.ceil(7 * fh); q++) B.add((q % 2 ? "stone" : "rock") + "|f", bake(box(0.55 - q * 0.02, chH / 7 + 0.02, 0.5 - q * 0.02), chx, h0 + (q + 0.5) * (chH / 7), chz, 0, ca + (q % 2) * 0.08, 0));
+      }
+      // the things by the door that the owner put there, from what they love (3C's homes.js)
+      if (!far && s.deco && s.deco.list) {
+        var shown = s.deco.list.filter((d) => d.at <= vw.t);
+        if (s.deco.old) shown.push(s.deco.old);
+        // where they stand round the home (the door faces local +z), at this valley's size
+        var SL = [
+          [1.1, 1.02],
+          [1.55, -0.14],
+          [-0.95, 1.26],
+          [1.02, -1.18],
+        ];
+        shown.slice(0, SL.length).forEach(function (d, j) {
+          var k3 = wr / 1.05,
+            lx = SL[j][0] * k3,
+            lz = SL[j][1] * k3,
+            wx = s.x + lx * Math.cos(rot) + lz * Math.sin(rot),
+            wz = s.z - lx * Math.sin(rot) + lz * Math.cos(rot);
+          addDecor(B, d.k, wx, wz, height(wx, wz), d.h || j, Math.atan2(wx - s.x, wz - s.z), own);
+        });
       }
       // the extra room on one side
       if (show > 5.05) {
@@ -1580,10 +1651,160 @@ var CF2Valley = (function () {
         B.add("stone|f", bake(cyl(r2 + 0.05, r2 + 0.08, 0.24, seg), rx, rh + 0.08, rz));
         B.add("mudwall|f", bake(cyl(r2 * 0.95, r2, wallH * 0.85 * fr, seg), rx, rh + 0.05 + (wallH * 0.85 * fr) / 2, rz));
         if (fr >= 1) {
-          B.add(roofK + "|f", bake(cyl(r2 * 0.5, r2 + 0.35, Hr * 0.4, seg), rx, rh + wallH * 0.85 + Hr * 0.2, rz));
-          B.add(roofK + "|f", bake(new THREE.ConeGeometry(r2 * 0.55, Hr * 0.45, seg), rx, rh + wallH * 0.85 + Hr * 0.58, rz));
+          B.add(roofK + "|f|c", bake(cyl(r2 * 0.5, r2 + 0.35, Hr * 0.4, seg), rx, rh + wallH * 0.85 + Hr * 0.2, rz));
+          B.add(roofK + "|f|c", bake(new THREE.ConeGeometry(r2 * 0.55, Hr * 0.45, seg), rx, rh + wallH * 0.85 + Hr * 0.58, rz));
         }
       }
+    }
+    // One thing by a home's door (3C's homes-view, at this valley's size): flowers in pots, a
+    // stack of smooth stones, chimes, a basin of creek water, a little carved figure, a streamer
+    // on a pole, a log bench. It faces away from the home (ry).
+    function addDecor(B, k, x, z, y, h, ry, own) {
+      var S = CF2_SCALE.build,
+        cs = Math.cos(ry),
+        sn = Math.sin(ry),
+        at = (lx, lz) => [x + lx * cs + lz * sn, z - lx * sn + lz * cs],
+        P = (key, g, lx, ly, lz, rx, ryy, rz) => {
+          var q = at(lx * S, lz * S);
+          B.add(key + "|f", bake(g, q[0], y + ly * S, q[1], rx || 0, ry + (ryy || 0), rz || 0, S, S, S));
+        },
+        FL = ["fred", "fblue", "fyel", "mush", "berry", "gold"];
+      switch (k) {
+        case "flowers":
+          for (var j = 0; j < 3; j++) {
+            var fx = (j - 1) * 0.18,
+              fz = (j % 2) * 0.09;
+            P("clay", cyl(0.075, 0.055, 0.11, 6), fx, 0.055, fz);
+            P("grass", cyl(0.012, 0.012, 0.2, 3), fx, 0.2, fz);
+            P(FL[(h + j * 2) % FL.length], new THREE.IcosahedronGeometry(0.07, 0), fx, 0.32, fz);
+          }
+          break;
+        case "stones":
+          [
+            [0.14, 0.08, "rock"],
+            [0.11, 0.2, "stone"],
+            [0.085, 0.3, "rock"],
+            [0.065, 0.38, "lime"],
+          ].forEach((st, j2) => P(st[2], new THREE.DodecahedronGeometry(st[0], 0).scale(1, 0.62, 1), 0, st[1], 0, 0, j2 * 0.9, 0));
+          break;
+        case "chimes":
+          P("post", cyl(0.025, 0.032, 0.9, 4), 0, 0.45, 0);
+          P("post", box(0.34, 0.03, 0.03), 0.15, 0.88, 0);
+          [0.24, 0.18, 0.13].forEach((len, j2) => P(h % 2 ? "clay" : "reed", cyl(0.016, 0.016, len, 4), 0.08 + j2 * 0.09, 0.86 - len / 2, 0));
+          break;
+        case "basin":
+          P("clay", cyl(0.21, 0.15, 0.16, 8), 0, 0.08, 0);
+          P("waterC", cyl(0.18, 0.18, 0.02, 8), 0, 0.155, 0);
+          for (var j3 = 0; j3 < 3; j3++) P("reed", cyl(0.012, 0.012, 0.42, 3), 0.24 + j3 * 0.03, 0.21, -0.05 + j3 * 0.04, 0, 0, (j3 - 1) * 0.12);
+          break;
+        case "carving":
+          P("post", cyl(0.07, 0.08, 0.24, 6), 0, 0.12, 0);
+          P("wood", new THREE.IcosahedronGeometry(0.13, 1).scale(1, 1.15, 1), 0, 0.34, 0);
+          P("wood", new THREE.IcosahedronGeometry(0.095, 1), 0, 0.53, 0);
+          P("post", new THREE.ConeGeometry(0.035, 0.11, 4), -0.055, 0.64, 0);
+          P("post", new THREE.ConeGeometry(0.035, 0.11, 4), 0.055, 0.64, 0);
+          break;
+        case "pennant":
+          P("trunk", cyl(0.02, 0.026, 1.6, 4), 0, 0.8, 0);
+          P(own && own.look ? "fur" + furIndex(own.look) : "fred", new THREE.ConeGeometry(0.1, 0.46, 3), 0.23, 1.48, 0, 0, 0, -Math.PI / 2);
+          P(FL[h % FL.length], new THREE.ConeGeometry(0.06, 0.3, 3), 0.15, 1.28, 0, 0, 0, -Math.PI / 2 - 0.2);
+          break;
+        case "bench":
+          P("trunk", cyl(0.085, 0.085, 0.72, 6), 0, 0.22, 0, 0, 0, Math.PI / 2);
+          P("wood", box(0.6, 0.03, 0.12), 0, 0.31, 0);
+          P("post", cyl(0.07, 0.085, 0.16, 5), -0.24, 0.08, 0);
+          P("post", cyl(0.07, 0.085, 0.16, 5), 0.24, 0.08, 0);
+          break;
+      }
+    }
+    // A tree of the grove that has fallen: a nurse log, mossing over, ferns and saplings on it,
+    // sinking back into the ground as it rots (Creekfolk 1's 3C).
+    function addNurseLog(B, lg, far) {
+      var R = rnd(lg.id * 977 + 5),
+        d = groveLogDecay(vw, lg),
+        len = (lg.len || 4) * 1.5,
+        r = (lg.r || 0.25) * 1.5 * (1 - 0.35 * d),
+        y = height(lg.x, lg.z) + r * (0.75 - 0.6 * d),
+        a = lg.rot || 0,
+        dx = Math.cos(a),
+        dz = Math.sin(a);
+      B.add("wood|f", bake(cyl(r, r * 1.1, len, far ? 6 : 10), lg.x, y, lg.z, Math.PI / 2, -a + Math.PI / 2, 0));
+      if (far) return;
+      // the root plate at its foot
+      B.add("soil|f", bake(cyl(r * 2.2, r * 2.2, r * 0.6, 9), lg.x - (dx * len) / 2, y + r * 0.2, lg.z - (dz * len) / 2, Math.PI / 2, -a + Math.PI / 2, 0));
+      var nm = 3 + Math.round(6 * d);
+      for (var q = 0; q < nm; q++) {
+        var f = R() - 0.5;
+        B.add("moss|f", bake(new THREE.IcosahedronGeometry(r * (0.45 + 0.3 * R()), 0), lg.x + dx * f * len, y + r * 0.75, lg.z + dz * f * len, 0, R() * 3, 0, 1.4, 0.4, 1));
+      }
+      for (q = 0; q < 2 + Math.round(3 * d); q++) {
+        var f2 = R() - 0.5,
+          g = fernGeo.clone();
+        g.scale(0.9, 0.9, 0.9);
+        B.add("fern|f", bake(g, lg.x + dx * f2 * len + (R() - 0.5) * r * 2, y + r * 0.6, lg.z + dz * f2 * len + (R() - 0.5) * r * 2, 0, R() * 6, 0));
+      }
+      // young trees growing from it
+      for (q = 0; q < Math.round(2 * d); q++) {
+        var f3 = R() - 0.5,
+          sx = lg.x + dx * f3 * len,
+          sz = lg.z + dz * f3 * len;
+        B.add("trunk|f", bake(cyl(0.025, 0.035, 0.9, 5), sx, y + r + 0.4, sz));
+        B.add((lg.tk === "pine" ? "cedar" : lg.tk === "willow" ? "willow" : "elm") + "|f", bake(new THREE.IcosahedronGeometry(0.32, 0), sx, y + r + 0.95, sz, 0, R() * 3, 0, 1, 1.2, 1));
+      }
+    }
+    // The beavers' lodge: a dome of sticks in the pond, growing as the sticks come in; and
+    // their little stick dams across the side channels on the floor.
+    function addLodge(B, L, far) {
+      var R = rnd(7331),
+        sz = (0.55 + 0.6 * (L.size || 0.5)) * 1.3,
+        w = W.water(L.x, L.z),
+        y = (w == null ? height(L.x, L.z) : w) - 0.2;
+      B.add("lodge|f", bake(new THREE.SphereGeometry(0.9 * sz, far ? 7 : 10, far ? 4 : 6, 0, 6.29, 0, Math.PI / 2), L.x, y, L.z, 0, 0, 0, 1, 1.0, 1));
+      if (far) return;
+      for (var q = 0; q < 28; q++) {
+        var a = (q / 28) * Math.PI * 2 * 2.3 + R() * 0.5,
+          el = 0.15 + (q / 28) * 1.05,
+          rr = 0.92 * sz * Math.cos(el),
+          yy = 0.9 * sz * Math.sin(el);
+        B.add((q % 3 ? "wood" : "post") + "|f", bake(box(0.8 * sz * Math.max(0.35, Math.cos(el)), 0.05, 0.05), L.x + Math.cos(a) * rr, y + yy + 0.02, L.z + Math.sin(a) * rr, 0, -(a + Math.PI / 2) + (R() - 0.5) * 0.5, (R() - 0.5) * 0.3));
+      }
+    }
+    function addSideDam(B, sd, j) {
+      var R = rnd(j * 131 + 17),
+        y = height(sd.x, sd.z);
+      for (var q = 0; q < 8; q++) B.add((q % 2 ? "wood" : "post") + "|f", bake(cyl(0.03, 0.035, 1.1, 4), sd.x + (q - 3.5) * 0.15, y + 0.07 + (q % 3) * 0.05, sd.z + (R() - 0.5) * 0.25, 0, (R() - 0.5) * 0.6, Math.PI / 2));
+      B.add("mud|f", bake(box(1.1, 0.1, 0.25), sd.x, y + 0.03, sd.z - 0.12));
+    }
+    // The sky stones: a sighting stone, and a fan of markers toward the sunrise, the tallest
+    // where the midwinter sun comes up (local +z), then a ring of pebbles.
+    function addSkycal(B, s, show, far) {
+      // local +z is the way the creekfolk look for the midwinter sunrise (skycal.js: along
+      // SUNRISE_DIR as x = cos, z = sin); local +x is to its right
+      var Dx = Math.cos(SUNRISE_DIR),
+        Dz = Math.sin(SUNRISE_DIR),
+        Rr = 2.2 * CF2_SCALE.build,
+        part = (k) => clamp(show * 6 - k, 0, 1),
+        toW = (lx, lz) => [s.x + lz * Dx + lx * Dz, s.z + lz * Dz - lx * Dx],
+        h0 = height(s.x, s.z),
+        face = Math.atan2(Dx, Dz);
+      if (part(0)) B.add("stone|f", bake(box(0.6, 0.8 * part(0), 0.55), s.x, h0 + 0.4 * part(0), s.z, 0, face, 0));
+      [
+        [1, 0, 1.8],
+        [2, 0.5, 1.25],
+        [3, 1.1, 1.35],
+        [4, 0.62, 1.25],
+      ].forEach(function (m) {
+        var p = part(m[0]);
+        if (!p) return;
+        var q = toW(Math.sin(m[1]) * Rr, Math.cos(m[1]) * Rr);
+        B.add("stone|f", bake(box(0.34, m[2] * p, 0.28), q[0], height(q[0], q[1]) + (m[2] * p) / 2, q[1], 0, face - m[1], 0));
+      });
+      if (part(5) && !far)
+        for (var i = 0; i < Math.round(18 * part(5)); i++) {
+          var px = s.x + Math.cos(i * 0.349) * Rr * 1.3,
+            pz = s.z + Math.sin(i * 0.349) * Rr * 1.3;
+          B.add((i % 2 ? "stone" : "lime") + "|f", bake(new THREE.DodecahedronGeometry(0.13, 0), px, height(px, pz) + 0.04, pz, i, i * 2, 0, 1, 0.6, 1));
+        }
     }
     function addDam(B, s, far) {
       var cd = vw.dams && vw.dams[s.id],
@@ -1631,7 +1852,14 @@ var CF2Valley = (function () {
       focus = { x: VW / 2, z: VL / 2, r: 60 };
     function thingsKey(Tl) {
       var parts = [];
-      for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.stage || r.size || ""));
+      for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.kind === "grove" ? Math.floor(groveSize(vw, r) * 6) : r.stage || r.size || ""));
+      for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) parts.push("log" + lg.id + ":" + Math.floor(groveLogDecay(vw, lg) * 5));
+      var Bv = vw.beavers;
+      if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) parts.push("lodge" + Math.round((Bv.lodge.size || 0) * 10));
+      if (Bv) for (var sd of Bv.small || []) if (tileOf(sd.x, sd.z) === Tl) parts.push("sd" + sd.x + "," + sd.z);
+      for (var s of vw.list("structures").values())
+        if (tileOf(s.x, s.z) === Tl && s.kind === "home")
+          parts.push("h" + s.id + ":" + s.owner + ":" + (vw.creature(s.owner) ? furIndex(vw.creature(s.owner).look || {}) : "") + ":" + (s.deco && s.deco.list ? s.deco.list.filter((d) => d.at <= vw.t).length + (s.deco.old ? "o" : "") : ""));
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
       return parts.join("|");
     }
@@ -1647,6 +1875,10 @@ var CF2Valley = (function () {
           else if (!far || rk.r > 0.4) B.add(rk.key + "|f", bake(new THREE.DodecahedronGeometry(rk.r, 0), rk.x, rk.y + rk.r * 0.3, rk.z, rk.rx, rk.ry, 0, 1, 0.7, 1));
         }
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) addStructure(B, s, far);
+      for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) addNurseLog(B, lg, far);
+      var Bv = vw.beavers;
+      if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) addLodge(B, Bv.lodge, far);
+      if (Bv && !far) Bv.small.forEach((sd, j) => tileOf(sd.x, sd.z) === Tl && addSideDam(B, sd, j));
       B.build(g, { noShadow: far });
       return g;
     }
@@ -1661,7 +1893,7 @@ var CF2Valley = (function () {
       g.add(land);
       if (Tl.inner) {
         creekRibbon(Tl, g, 2, 3);
-        floorWater(Tl, g);
+        floorWater(Tl, g, 1);
         branchWater(Tl, g, 3);
       }
       g.add(buildThings(Tl, true));
@@ -1675,7 +1907,7 @@ var CF2Valley = (function () {
       g.add(land);
       plants(Tl, g, land);
       creekRibbon(Tl, g, 0.5, [5, 7, 9, 11, 12, 13][W.detail - 1]);
-      floorWater(Tl, g);
+      floorWater(Tl, g, Math.max(0.25, CSD[W.detail - 1]));
       branchWater(Tl, g, 5);
       g.add(buildThings(Tl, false));
       return g;
