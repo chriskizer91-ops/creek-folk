@@ -1891,7 +1891,8 @@
     return !(
     !s ||
     s.know && n && !n.know[s.know] ||
-    s.needsTiles && workshopLevel(i) < 4);
+    s.needsTiles && workshopLevel(i) < 4 ||
+    s.ready && !s.ready(i, t, n)); // 3C: a level can say when it may be begun (homes.js)
 
   }
   function waitingFor(i, t, e, n) {
@@ -5040,7 +5041,7 @@
     if (s.multi) {
       let d = i.structures.filter((u) => u.kind === n);
       if (d.length >= s.multi || d.some((u) => u.building)) return !1;
-    } else if (!s.personal && i.structures.some((d) => d.kind === n)) return !1;
+    } else if (!s.personal && i.structures.some((d) => d.kind === n) && !(n === "garden" && homeGardenRoom(i))) return !1; // 3C: more than one garden (homes.js)
     if (
     s.personal &&
     i.structures.some((d) => d.kind === n && d.owner === t.id) ||
@@ -6356,7 +6357,7 @@
         canBuildLevel(i, p, p.level, t))
 
         h =
-        (0.55 + 0.25 * p.level) * (
+        (0.55 + 0.25 * Math.min(p.level, 5)) * ( // 3C: the porch and the hearth are wanted like the room before them (homes.js)
         1.25 - 0.5 * t.interests.building + 0.2 * t.temp.patience),
         u = p,
         l.interest && (h = 1.1 + 0.3 * p.level),
@@ -6397,7 +6398,7 @@
       let f = 0.35 + (c - h) * 1.2 * o;
       (!e || f > e.score) && (e = { kind: a, score: f, upgrade: u, target: d });
     }
-    return e;
+    return homeFoundOption(i, t, e); // 3C: the fourth bed, a second and third garden (homes.js)
   }
   function projectReason(i, t, e, n, s) {
     let r = STRUCTURES[e];
@@ -6677,7 +6678,7 @@
     return l;
   }
   function gardenOption(i, t) {
-    let e = findStructure(i, "garden", (a) => a.level > 0 && a.beds);
+    let e = homeGardenFor(i, t); // 3C: the garden that needs them most (homes.js)
     if (!e || !t.know.planting) return null;
     let n = t.interests.growing,
       s = STRUCTURES.garden.radius,
@@ -7427,6 +7428,7 @@
         }
       }
     }
+    i.tick % 10 === 3 && homesTick(i); // 3C: decorations by the door (homes.js)
     if (updateHydro(i), i.tick % 10 === 0) {
       let a = i.wear;
       for (let l = 0; l < a.length; l++)
