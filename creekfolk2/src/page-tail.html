@@ -1,0 +1,91 @@
+
+<div id="hud">
+  <div class="lefthud">
+    <p class="clock" id="clock">&nbsp;</p>
+    <p class="sub" id="sub" hidden></p>
+  </div>
+  <div class="tools">
+    <button class="ib dev" id="bDev" hidden aria-label="Developer menu">Dev</button>
+    <button class="ib" id="bAmbient" aria-pressed="false" aria-label="Drift (the interface fades and the view drifts)" title="Drift">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12c3-4 6-4 9 0s6 4 9 0"/><path d="M3 18c3-4 6-4 9 0s6 4 9 0" opacity=".5"/></svg>
+    </button>
+    <button class="ib" id="bVillage" aria-label="The village" title="The village">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 11l5-4 5 4v8H3z"/><path d="M13 13l4-3 4 3v6h-8"/></svg>
+    </button>
+    <button class="ib" id="bSettings" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    </button>
+  </div>
+</div>
+<div id="line" hidden></div>
+<div id="toast"></div>
+<div id="follow" hidden><span id="followName"></span><button class="btn small" id="bMind">Their mind</button><button class="btn small" id="bUnfollow">Stop following</button></div>
+
+<!-- the first moment: a new valley, or one that couldn't be opened -->
+<div class="veil" id="vStart" hidden>
+  <div class="panel">
+    <p class="eyebrow">Creekfolk 2</p>
+    <h1>The Leavers</h1>
+    <p id="startText">Eight young creekfolk left their valley and followed the creek downstream. Its next valley is cut down, and dry every summer. They know how to heal a creek.</p>
+    <p class="note" id="startNote" hidden></p>
+    <div class="go"><button class="btn gold" id="bBegin">Follow them</button></div>
+  </div>
+</div>
+
+<!-- catching up after a gap: every moment is replayed -->
+<div class="veil" id="vCatch" hidden>
+  <div class="panel">
+    <p class="eyebrow">Catching up</p>
+    <h2 id="catchTitle">While you were away</h2>
+    <div class="bar"><i id="catchBar"></i></div>
+    <p class="note" id="catchNote"></p>
+    <p id="catchKeep" hidden>Keep the screen on until it's done.</p>
+  </div>
+</div>
+
+<!-- what happened while you were away -->
+<div class="veil" id="vAway" hidden>
+  <div class="panel">
+    <button class="x" id="xAway" aria-label="Close">&times;</button>
+    <p class="eyebrow">While you were away</p>
+    <h2 id="awayTitle"></h2>
+    <div id="awayList"></div>
+  </div>
+</div>
+
+<!-- the clock jumped far ahead -->
+<div class="veil" id="vGap" hidden>
+  <div class="panel">
+    <p class="eyebrow">The clock</p>
+    <h2 id="gapTitle"></h2>
+    <p id="gapText"></p>
+    <div class="go"><button class="btn gold" id="bGapAll">Catch up on all of it</button><button class="btn" id="bGapWrong">The clock is wrong</button></div>
+  </div>
+</div>
+
+<!-- settings -->
+<div class="veil" id="vSettings" hidden>
+  <div class="panel">
+    <button class="x" id="xSettings" aria-label="Close">&times;</button>
+    <p class="eyebrow">Settings</p>
+    <h2>The valley's clock</h2>
+    <p id="clockText"></p>
+    <div class="setrow"><span class="lab">The time now</span><input type="datetime-local" id="clockInput" step="60"><button class="btn small" id="bClockSet">Set</button><button class="btn small" id="bClockReset">Use this computer's clock</button></div>
+    <h2>A backup</h2>
+    <p>Save the valley to a file, and open it again here if this browser ever loses it.</p>
+    <div class="setrow"><button class="btn small" id="bExport">Save a backup file</button><label class="btn small" style="display:inline-flex;align-items:center">Open a backup file<input type="file" id="importFile" accept=".json,application/json" hidden></label></div>
+    <p class="note" id="setNote"></p>
+  </div>
+</div>
+
+<!-- the village and a creekfolk's mind: parchment sheets -->
+<div class="veil" id="vSheet" hidden>
+  <div class="sheet parch" id="sheet"></div>
+</div>
+
+<!-- the developer menu -->
+<div class="veil" id="vDev" hidden>
+  <div class="panel devpanel" id="devPanel"></div>
+</div>
+</body>
+</html>

@@ -45,7 +45,17 @@ export const SIM_FILES = [
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it
 ];
 const VENDOR_FILES = ['vendor/three-r186.js'];
-const VIEW_FILES = [];
+const VIEW_FILES = [
+  'src/view/clock.js',    // the page's clock (the player's correction, the dev offset)
+  'src/view/vworld.js',   // the page's copy of the valley, as the worker describes it
+  'src/view/words.js',    // plain words about creekfolk (from Creekfolk 1's interface)
+  'src/view/sheets.js',   // the village and mind sheets
+  'src/view/hud.js',      // the interface
+  'src/view/dev.js',      // the developer menu
+  'src/view/mapview.js',  // the valley from above, on a 2D canvas
+  'src/view/app.js',      // the worker, the drawing loop
+  'src/view/boot.js',     // starts it
+];
 
 const join = (files) => files.map((f) => `// ==== ${f} ====\n` + read(f)).join('\n');
 const flags = (devBuild) => `var BUILD_VERSION = ${JSON.stringify(BUILD_VERSION)}, DEV_BUILD = ${devBuild};\n`;
@@ -64,12 +74,22 @@ fs.writeFileSync(path.join(root, 'dist/sim.cjs'), `"use strict";\n${sim}\nmodule
 console.log('dist/sim.cjs');
 
 if (VIEW_FILES.length) {
-  const head = read('src/page-head.html');
+  // the fonts, embedded so the page never loads anything from the network
+  const font = (file, family, style, weight) =>
+    `@font-face { font-family: '${family}'; font-style: ${style}; font-weight: ${weight}; font-display: block; src: url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'assets/fonts', file)).toString('base64')}) format('woff2'); }`;
+  const fonts = [
+    font('Gloock-normal-400.woff2', 'Gloock', 'normal', 400),
+    font('HankenGrotesk-normal-400-600.woff2', 'Hanken Grotesk', 'normal', '400 600'),
+    font('HankenGrotesk-italic-400.woff2', 'Hanken Grotesk', 'italic', 400),
+    font('IBMPlexMono-normal-400.woff2', 'IBM Plex Mono', 'normal', 400),
+    font('IBMPlexMono-normal-500.woff2', 'IBM Plex Mono', 'normal', 500),
+  ].join('\n');
+  const head = read('src/page-head.html').replace('/*@@FONTS@@*/', fonts);
   const tail = read('src/page-tail.html');
   const safe = (s) => s.replace(/<\/script/gi, '<\\/script');
   for (const devBuild of [false, true]) {
-    const worker = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${read('src/sim/worker.js')}\n})();`);
-    const main = await min(`(() => {\n${flags(devBuild)}${join(VENDOR_FILES)}\n${join(VIEW_FILES)}\n})();`);
+    const worker = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${read('src/sim/cf2-worker.js')}\n})();`);
+    const main = await min(`(() => {\n${flags(devBuild)}${join(SIM_FILES)}\n${join(VENDOR_FILES)}\n${join(VIEW_FILES)}\n})();`);
     const title = devBuild ? 'Creekfolk 2 (dev)' : 'Creekfolk 2';
     const html =
       head.replace('<title>Creekfolk 2</title>', `<title>${title}</title>`) +
