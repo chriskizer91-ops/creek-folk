@@ -85,6 +85,7 @@ var CF2Valley = (function () {
   // the owners' colours, for their doors (Creekfolk 1's 3C), and what the grove's logs grow
   CF2_FUR.forEach((r, i) => (PAINT["fur" + i] = r));
   PAINT.lodge = ["#4e3a28", "#5e4630", "#7a5c40"];
+  PAINT.hearth = ["#e8a040", "#ffd27a", "#fff0c0"]; // windows lit at night
   var FOAM = { water: "#eef6f6", waterC: "#eef6f6", pond: "#b4ccb0", mudW: "#d9cba8" };
   var REFL = { water: "#a9ccd8", waterC: "#acdad8", pond: "#729480", mudW: "#9caaa8" };
   var VARY = { grass: 0.12, grassL: 0.11, grassD: 0.11, straw: 0.1, strawL: 0.1, dust: 0.1, marsh: 0.12, path: 0.08, pathE: 0.1, clay: 0.07, gravel: 0.08, bed: 0.08, lime: 0.05, limeBed: 0.06, moss: 0.1, soil: 0.08, mud: 0.08 };
@@ -889,6 +890,8 @@ var CF2Valley = (function () {
         }
         return;
       }
+      // winter: the birches, elms and pecans stand bare (the live oaks and cedars keep theirs)
+      if (vw.season === "winter" && (kind === "syc" || kind === "elm" || kind === "pecan")) return bareTree(B, kind, x, h, z, sz, TR, Dd);
       if (kind === "syc") {
         var th = (2.2 + TR() * 0.6) * sz,
           cr = 1.05 * sz;
@@ -940,11 +943,42 @@ var CF2Valley = (function () {
       // the seed pods the creekfolk wait for, hanging under the pod tree's canopy
       if (r.kind === "podtree" && r.pods) for (q = 0; q < Math.min(6, r.pods); q++) B.add("pod|f", bake(new THREE.IcosahedronGeometry(0.22, 0), x + (TR() - 0.5) * cr2, h + th2 + 0.1, z + (TR() - 0.5) * cr2));
     }
+    // a tree in winter: the trunk and its limbs, forking twice toward the sky, a few twigs
+    function bareTree(B, kind, x, h, z, sz, TR, Dd) {
+      var bark = kind === "syc" ? "syc" : "trunk",
+        th = (kind === "syc" ? 2.2 : 1.6) * sz,
+        tw = (kind === "syc" ? 0.24 : 0.28) * sz;
+      trunk(B, bark, x, h, z, tw, th, TR, (TR() - 0.5) * 0.1, Dd);
+      var limbs = 3 + ((TR() * 2) | 0);
+      for (var q = 0; q < limbs; q++) {
+        var a = (q / limbs) * 6.28 + TR(),
+          tilt = 0.45 + TR() * 0.35,
+          len = (1.1 + TR() * 0.5) * sz,
+          bx = x + Math.cos(a) * Math.sin(tilt) * len * 0.5,
+          bz = z + Math.sin(a) * Math.sin(tilt) * len * 0.5,
+          by = h + th + Math.cos(tilt) * len * 0.5 - 0.1;
+        B.add(bark + "|f", bake(cyl(tw * 0.22, tw * 0.4, len, Dd > 2 ? 5 : 4), bx, by, bz, Math.sin(a) * tilt, 0, -Math.cos(a) * tilt));
+        if (Dd > 2)
+          for (var f = 0; f < 2; f++) {
+            var a2 = a + (f ? 0.6 : -0.6),
+              t2 = tilt + 0.25,
+              l2 = len * 0.6,
+              ex = x + Math.cos(a) * Math.sin(tilt) * len,
+              ez = z + Math.sin(a) * Math.sin(tilt) * len,
+              ey = h + th + Math.cos(tilt) * len - 0.15;
+            B.add(bark + "|f", bake(cyl(tw * 0.1, tw * 0.2, l2, 4), ex + Math.cos(a2) * Math.sin(t2) * l2 * 0.5, ey + Math.cos(t2) * l2 * 0.5, ez + Math.sin(a2) * Math.sin(t2) * l2 * 0.5, Math.sin(a2) * t2, 0, -Math.cos(a2) * t2));
+          }
+      }
+    }
     function farTree(B, r) {
       var h = height(r.x, r.z),
         sz = treeSize(r),
         kind = treeKindOf(r);
       if (kind === "cedar") return B.add("cedar|f", bake(new THREE.ConeGeometry(0.9 * sz, 2.6 * sz, 6), r.x, h + 1.55 * sz, r.z));
+      if (vw.season === "winter" && (kind === "syc" || kind === "elm" || kind === "pecan")) {
+        B.add((kind === "syc" ? "syc" : "trunk") + "|f", bake(box(0.25 * sz, 2.2 * sz, 0.25 * sz), r.x, h + 1.1 * sz, r.z));
+        return B.add("trunk|f", bake(new THREE.ConeGeometry(1.0 * sz, 1.6 * sz, 5, 1, true), r.x, h + 2.6 * sz, r.z, Math.PI, r.id % 7, 0));
+      }
       var leaf = kind === "syc" ? "elm" : kind === "willow" ? "willow" : kind === "pecan" ? (vw.season === "autumn" ? "gold" : "pecan") : kind === "elm" ? "elm" : "oak",
         th = (kind === "syc" ? 2.4 : 1.8) * sz,
         cr = (kind === "syc" ? 1.1 : kind === "willow" ? 1.6 : 1.4) * sz;
@@ -1586,10 +1620,11 @@ var CF2Valley = (function () {
         B.add("wood|f", bake(box(0.08, 1.2, 0.18), ox - dz * 0.35, h0 + 0.65, oz + dx * 0.35, 0, rot, 0));
         B.add("wood|f", bake(box(0.82, 0.1, 0.2), ox, h0 + 1.25, oz, 0, rot, 0));
         B.add("stone|f", bake(box(0.7, 0.1, 0.4), s.x + dx * (wr + 0.3), h0 + 0.03, s.z + dz * (wr + 0.3), 0, rot, 0));
-        var wa = rot + 1.75,
+        var wa = rot - 1.75, // the side away from the extra room
           wx = s.x + Math.sin(wa) * wr * 0.97,
           wz = s.z + Math.cos(wa) * wr * 0.97;
         B.add("soil|f", bake(box(0.32, 0.28, 0.12), wx, h0 + 0.95, wz, 0, wa, 0));
+        if (LB) LB.add("hearth|g", bake(box(0.26, 0.22, 0.04), wx + Math.sin(wa) * 0.05, h0 + 0.95, wz + Math.cos(wa) * 0.05, 0, wa, 0));
         B.add("wood|f", bake(box(0.42, 0.06, 0.18), wx, h0 + 0.79, wz, 0, wa, 0));
         // a pot by the door, a woodpile against the wall
         var pa = rot + 0.55;
@@ -1610,6 +1645,11 @@ var CF2Valley = (function () {
         for (q = -1; q <= 1; q += 2) B.add("post|f", bake(cyl(0.05, 0.06, 1.75 * fp, 5), px0 + dz * q * 0.55, h0 + 0.875 * fp, pz0 - dx * q * 0.55));
         if (fp >= 0.5) B.add(roofK + "|f|c", bake(box(1.5, 0.08, 1.25), s.x + dx * (wr + 0.5), h0 + 1.82, s.z + dz * (wr + 0.5), -0.28, rot, 0, 1, 1, 1));
         if (!far && fp >= 1) B.add("wood|f", bake(box(1.1, 0.06, 0.32), px0 - dx * 0.1 + dz * 0.25, h0 + 0.38, pz0 - dz * 0.1 - dx * 0.25, 0, rot, 0));
+        // a lantern hung from the porch, lit at night
+        if (!far && fp >= 1 && LB) {
+          B.add("post|f", bake(box(0.03, 0.2, 0.03), px0 + dz * 0.55, h0 + 1.62, pz0 - dx * 0.55));
+          LB.add("hearth|g", bake(box(0.13, 0.16, 0.13), px0 + dz * 0.55, h0 + 1.45, pz0 - dx * 0.55));
+        }
       }
       // the stone hearth, and its chimney up the wall at the back
       if (show > 7.05) {
@@ -1863,10 +1903,14 @@ var CF2Valley = (function () {
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
       return parts.join("|");
     }
+    var LB = null, // the batch the lights of the tile being built go into (near tiles only)
+      LIGHTS = new Set(),
+      nightOn = false;
     function buildThings(Tl, far) {
       var g = new THREE.Group(),
         B = new Batch(),
         det = W.detail;
+      LB = far ? null : new Batch();
       for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) addThing(B, r, det, far);
       for (var sc of SCENERY) if (tileOf(sc.x, sc.z) === Tl) addTree(B, sc, det, far);
       for (var rk of ROCKS)
@@ -1880,6 +1924,15 @@ var CF2Valley = (function () {
       if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) addLodge(B, Bv.lodge, far);
       if (Bv && !far) Bv.small.forEach((sd, j) => tileOf(sd.x, sd.z) === Tl && addSideDam(B, sd, j));
       B.build(g, { noShadow: far });
+      if (LB) {
+        var lg2 = new THREE.Group();
+        lg2.name = "Lights";
+        LB.build(lg2, { noShadow: true });
+        lg2.visible = nightOn;
+        g.add(lg2);
+        LIGHTS.add(lg2);
+        LB = null;
+      }
       return g;
     }
     function groundKey(Tl) {
@@ -1913,7 +1966,7 @@ var CF2Valley = (function () {
       return g;
     }
     function dispose(g) {
-      if (g) g.traverse((o) => o.isMesh && o.geometry.dispose());
+      if (g) g.traverse((o) => (o.isMesh && o.geometry.dispose(), o.name === "Lights" && LIGHTS.delete(o)));
     }
     function tileDist(Tl, x, z) {
       var dx = Math.max(Tl.x0 - x, 0, x - (Tl.x0 + TILE)),
@@ -2008,6 +2061,12 @@ var CF2Valley = (function () {
           if (ws != null && ws > height(x, z) + 0.01) return ws;
         }
       return null;
+    };
+    // after dusk the windows and lanterns are lit
+    W.setNight = function (on) {
+      if (on === nightOn) return;
+      nightOn = on;
+      for (var l of LIGHTS) l.visible = on;
     };
     W.CUT = CUT;
     W.setOverlay = function (o) {

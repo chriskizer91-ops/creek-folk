@@ -234,6 +234,7 @@ var View3D = class {
       px = this.px,
       V = this.view;
     px.setGrade2(L.shade, L.light, L.lift);
+    this.valley.setNight(L.night > 0.45);
     this.sun.intensity = L.sun * CF2_LIGHT;
     this.hemi.intensity = L.hemi * CF2_LIGHT;
     this.sun.color.setRGB(1, L.sunG, L.sunB);
