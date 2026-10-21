@@ -137,8 +137,8 @@ gives whatever the valley needs most (mostly warm days, snow, starry nights and 
 | Every other day | 2 | day 12.6 | days 106.4, 106.3 | 207.6, 208.2 | **314, 306** (month 11) | 0 |
 | Daily | 1 | day 7 | 84.9 | 167.4 | **261.6** (month 9) | 0 |
 | Twice a day | 1 | day 7 | 74.0 | 148.6 | **220.3** (month 8) | 0 |
-| About every four days | 1 | never | | | | |
-| No giver | 1 | never | | | | |
+| About every four days | 1 | never (three or four gifts in fourteen days) | Hall of the Ancestors from day 30: stones 120.9 | hall 218.7 | lantern tower **314.6** (month 11) | 0 |
+| No giver | 1 | never | Hall of the Ancestors from day 30: stones 121.0 | hall 218.7 | lantern tower **314.6** (month 11) | 0 |
 
 **When the giving changes** (one valley each, the same valley as every-other-day valley 1
 until the change):
@@ -177,12 +177,13 @@ Against what you expected:
 | Every other day | days 8.6, 6.6 | day 14, day 7 | 26/28, 24/26 | 253 (66), 256 (65) | 802, 805 | 22.7 / 23.0, 18.4 / 18.7 | first on day 199 in both (the hundredth gift); then 9 and 10 holders in turn |
 | Daily | day 5.3 | day 7 | 23/26 | 251 (123) | 1,602 | 11.0 / 11.3 | day 150 (five months); 11 holders |
 | Twice a day | day 3.2 | day 7 | 23/26 | 451 (265) | 490 | 20.6 / 20.8 | day 150; 11 holders |
-[[E96BELIEF]]
+| About every four days | day 29.2 | day 35 | 20/23 | 214 (23) | 411 | 51.6 / 51.9 | never (83 gifts in the year) |
+| No giver | | | 0/27 | | | never heard of it | |
 
 "Most believe by" is the first weekly check with more than half believing. Two or three in
-each village didn't believe at day 330: the doubters. Offerings: about five new ones for each visit when you
-come every other day or daily; under one a visit twice a day, because the gift comes before
-anyone has started keeping watch. The one who believes in you passes the belief on when they
+each village didn't believe at day 330: the doubters. Offerings: about five new ones for
+each visit when you come every other day, daily or every four days; under one a visit
+twice a day, because the gift comes before anyone has started keeping watch. The one who believes in you passes the belief on when they
 pass or leave, so it moves through the village about every two to three weeks; there was
 never more than one at a time.
 
@@ -196,17 +197,17 @@ the waiting temple was told by 13 to 24 of them throughout. Before the fix (see 
 belief fell below half within about ten days.
 
 **The rest of the valley** (the same runs): population at day 300 between 26 and 32;
-births 283-302, passings 233-249, gone downstream 33-37 in 330 days; no simulation errors;
+births 283-302, passings 233-249, gone downstream 28-49 in 330 days; no simulation errors;
 no skill lost. The year runner's population target ("most valleys reach 30 between month 2
-and month 6") failed in the twice-a-day valley (first 30 on day 203) [[POPFAIL]]; that is
-the population swing from 3A, untouched in 3B. Saves at day 330: 2.0 to 2.1 MB (3A: 1.5 to
-1.7 MB at day 210). In Node the year runs went at 10,300 to 11,300 times real time, two
-at once on this two-core machine.
+and month 6") failed in the twice-a-day valley (first 30 on day 203); that is the
+population swing from 3A, untouched in 3B. Saves at day 330: about 2 MB (1,999 to 2,101 KB; 3A:
+1.5 to 1.7 MB at day 210). In Node the year runs went at 9,000 to 11,100 times real time,
+two at once on this two-core machine.
 
 **Determinism** (`tools/determinism.cjs`, 20 days, every gift given in turn): one replay,
 uneven slices and repeated save-and-reload give the identical state hash.
 
-**In the browser** (headless Chromium, final minified build) [[BROWSERFINAL]]:
+**In the browser** (headless Chromium, final minified build):
 `browser-test.mjs`: a new valley, a 3-day jump through the worker in 6.5 s, the same
 valley after a reload, no errors. `browser-dev.mjs`: the dev build keeps its own database
 (`creekfolk-3b-dev`); +1 day in 3.0 s; the snapshot before it restores; storm, birth, gift
@@ -217,9 +218,43 @@ the dev menu, with the valley drawn between them, no errors.
 **Catch-up speed** (headless Chromium on this machine, minified build, the same code path
 as a real absence): every-other-day valley 1 at day 300 (30 creekfolk, the temple at 34 of
 36 parts): 30 days in **5.5 min** (7,800 times real time). 3A measured 3.8 to 4.6 min for
-30 creekfolk at day 150. [[AGE]] In a profile of the same valley (Node) no 3B code was
-among the top twenty functions; the time goes where it went in 3A, into creekfolk choosing
-what to do and finding their way round the village. **Phones: still not measured by me.**
+30 creekfolk at day 150; re-measured today on the same machine, the 3A release takes 4.1 min
+on its day-150 valley (29 creekfolk), and this build takes 5.0 min on a younger 3B valley
+(day 180, 25 creekfolk). So 3B costs roughly a fifth more than 3A for a similar village,
+perhaps a little more (that 3B valley had fewer creekfolk); I can't run both builds on the
+same valley, since each build reads only its own saves. In a profile of the day-300 valley
+(Node) no 3B code was among the top twenty functions; the time goes where it went in 3A,
+into creekfolk choosing what to do and finding their way round the village.
+**Phones: still not measured by me.** If a phone is three to five times slower than this
+machine, 30 days would take roughly 16 to 28 minutes; that is a guess.
+
+## Pictures
+From the final runs (`docs/img/`), unless it says otherwise:
+- Day 60, every other day: the shrine at the Giving Place, with offerings around it and the
+  water bowl on its ledge (an earlier run of the same valley).
+  ![the shrine](img/3b-shrine-day60.jpg)
+- Day 120: the shrine done and the hall's footings laid (an earlier run).
+  ![day 120](img/3b-temple-day120.jpg)
+- Day 240: the hall finished, the crown's first terraces.
+  ![day 240](img/3b-temple-day240.jpg)
+- Day 330: finished. The hall, and the crown with water running down its steps and the
+  sun gate on top, turned toward their midwinter sunrise. "Dillmo looked up at the sky
+  and waved" is the one who believes in you.
+  ![day 330](img/3b-temple-day330.jpg)
+  ![close](img/3b-temple-close.jpg)
+- A valley with no giver: the Hall of the Ancestors, its ring of stones and lantern tower,
+  in the memorial grove, day 330.
+  ![Hall of the Ancestors](img/3b-ancestors.jpg)
+- Gifts (from earlier runs while building): a pair of goats under a new fruit tree, with new
+  flowers; a snow day; a starry night (seen in the water); a rainbow.
+  ![goats and flowers](img/3b-goats-flowers.jpg)
+  ![snow](img/3b-snow.jpg)
+  ![stars](img/3b-stars.jpg)
+  ![rainbow](img/3b-rainbow.jpg)
+- The village's Temple tab, the gift sheet, and the dev menu.
+  ![Temple tab](img/3b-temple-tab.jpg)
+  ![gift sheet](img/3b-gift-sheet.jpg)
+  ![dev menu](img/3b-dev-menu.jpg)
 
 ## Honest notes
 - **Daily givers finish about a month sooner than you expected.** With every other day
@@ -272,7 +307,7 @@ what to do and finding their way round the village. **Phones: still not measured
   fruits all look alike. Phase 4 is where they get their art.
 - **The wave happens when the page opens** or when you come back to the tab after a
   minute away. It can't know whether you are actually looking.
-- **Population still swings** (from 3A): between about 17 and 32, and the year runner's
+- **Population still swings** (from 3A): between about 16 and 32, and the year runner's
   "30 by month 6" target failed in some valleys. 3B didn't touch births or leaving.
 - **Not built yet (3C):** beavers (the crown doesn't wait for them), goats having kids,
   the Returning and the procession to the Spring, the sky calendar, then-and-now, the
@@ -287,7 +322,9 @@ what to do and finding their way round the village. **Phones: still not measured
   passed; looks you can trace through families, homes, the grove's trees growing all year,
   goats with kids, herons, the soundscape, then-and-now, and two-year runs showing memory
   and save size stay flat.
-- Before that, if you want: change the daily and twice-a-day pace to land on your months,
-  or tune births and leaving so the population follows what the land can feed (from 3A).
+- Before that, three decisions that are yours: whether daily giving should finish in month
+  10 (pace 1.08 instead of 1.2); whether a player who only ever gives every four days should
+  get a temple (it would need a different start rule); and whether to tune births and
+  leaving so the population follows what the land can feed (from 3A).
 - One thing only you can measure: catch-up on your phone (Dev, +1 week, then read "30 days
   would take about N min here").

@@ -287,7 +287,10 @@ dams, raises, feed) and saves worlds on the days in `SAVE_AT=30,60,...`.
 prints belief and the temple's progress and checks the temple targets. Also:
 `tools/gift-smoke.cjs` (every gift in turn), `tools/temple-preview.cjs` (a temple that
 rises as fast as its builders can work, for looking at it), `tools/ui-shots.mjs` (the
-gift sheet and Temple tab).
+gift sheet and Temple tab), `tools/browser-gifts.mjs` (every gift and trigger in the dev
+build), `tools/away-test.cjs` (how belief holds when the gifts stop). `GIFTS=sched:48@0,96@90`
+changes the rhythm on given days (0 hours: no gifts); `SIM=<file>` runs a frozen copy of
+the simulation.
 Results go to `runs/`.
 
 ## Conventions
