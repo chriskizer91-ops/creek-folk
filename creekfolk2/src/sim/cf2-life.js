@@ -3,16 +3,29 @@
 //
 // Eight founders, fresh young adults who left the first valley, arrive together. Life
 // stages follow the brief's suggestion (child to day 7, adult to about 27, wise elder to
-// about 36), so founders who arrive aged seven to nine and a half days pass in the
-// founders' fourth week. Phase 2 tunes this so the last founder passes at about day 30.
+// about 36). The founders arrive aged seven to eleven days, about half a day apart, and
+// live closer to the usual span than their descendants do (LIFE.founderSpread), so they
+// pass one by one through the founders' fourth week, the first at about day 25 and the
+// last at about day 29 or 30 (the brief: 28 to 32).
 // ==========================================================================
 
 Object.assign(LIFE, {
   founders: 8,
-  founderAges: [7.4, 7.7, 8.0, 8.3, 8.6, 8.9, 9.2, 9.5],
+  founderAges: [7.0, 7.55, 8.1, 8.65, 9.2, 9.75, 10.3, 10.85],
   elderDays: 27,
-  lifespanDays: 36,
+  lifespanDays: 36.5,
+  pairBirthDays: 4.5, // a pair with room has a child about this often (Creekfolk 1: 6), so the eight are about thirty by day 30
+  founderSpread: 0.2, // days: how much a founder's span varies (everyone else: lifespanSpread)
 });
+
+// The founders' spans, drawn again with their own spread, so they don't pass all at once.
+var cf2LifeSpanValleyBase = newValley;
+newValley = function (seed, opts) {
+  let w = cf2LifeSpanValleyBase(seed, opts);
+  for (let c of w.creatures)
+    if (c.founder) c.lifespan = Math.round((LIFE.lifespanDays + clamp(w.rng.normal() * LIFE.founderSpread, -2 * LIFE.founderSpread, 2 * LIFE.founderSpread)) * DAY_S);
+  return w;
+};
 
 // They came down the creek from the valley they were born in (Decision 6), rather than waking
 // from nowhere as in Creekfolk 1: the first line of the valley's history says so, and so does

@@ -905,6 +905,10 @@ function creekHydro(w, init = false) {
         let seep = (CREEK.pondSeep * clamp((level - n.g) / 0.5, 0, 1) * Math.max(creekWidthAt(n, level - n.bed), 0.5) * n.len) / VALLEY_DAY;
         d._in -= seep;
         dg += (seep * dtS) / (sy * fw);
+        // CF2: and soaks sideways through its banks into the floor, the way the floor drains into it
+        let side = CF2_CREEK.pondSide * (level - n.g) * (1 - Math.exp(-dtD / tau));
+        d._in -= (side * sy * fw) / dtS;
+        dg += side;
       } else if (q > 0) {
         // a flowing creek loses water into a bed that sits above the water table
         let lost = Math.min(q, CREEK.bedLoss * Math.max(n.wb, 0.5) * n.len * clamp((level - n.g) / 0.3, 0, 1) * (n.g < n.bed ? 1 : 0.35));
@@ -916,7 +920,7 @@ function creekHydro(w, init = false) {
       dg += rain * CREEK.rech * dtD + hillOut;
       let depth = n.fp - n.g;
       if (depth < CREEK.root) dg -= CREEK.et * warm * cloudy * (1 - depth / CREEK.root) * dtD;
-      let fill = clamp((n.bed - (cr.init[i] ? cr.init[i][0] : n.bed)) / 0.6, 0, 1); // mud in the bed seals it
+      let fill = clamp((n.bed - (cr.init[i] ? cr.init[i][0] : n.bed)) / CF2_CREEK.sealRise, 0, 1); // mud in the bed seals it // CF2: after sealRise m of it (Creekfolk 1: 0.6)
       if (n.g > n.bed - 1) dg -= CREEK.deep * (1 - 0.85 * fill) * (1 - 0.7 * n.veg * fill) * dtD;
       n.g = clamp(n.g + dg, n.bed - 1.6, n.fp);
     }
@@ -1023,7 +1027,7 @@ function creekCellWater(w, dtD, s) {
       gr = Math.max(soil, dw < 0.55 ? 1 : dw < CREEK.root ? 1 - (dw - 0.55) / (CREEK.root - 0.55) : 0),
       target = dw < 0.02 ? 1 : dw < 0.32 ? 1 - (dw - 0.02) / 0.3 : 0;
     // well away from the floor there is no water table to speak of
-    if (!c.floor[k] && d > 8) (gr = soil), (target = 0);
+    if (!c.floor[k] && d > 8 && !(pf[k] > c.h[k])) (gr = soil), (target = 0); // CF2: unless a pond stands over it
     green[k] = gr;
     if (dtD <= 0) continue;
     let cur = wet[k];
@@ -1088,7 +1092,7 @@ function creekPondFloor(w, c) {
           nz = j === 2 ? z + 1 : j === 3 ? z - 1 : z;
         if (nx < 0 || nz < 0 || nx >= VW || nz >= VL || nz < zLo - 4 || nz > zHi + 1) continue;
         let m = nz * VW + nx;
-        if (seen[m] === mark || !c.floor[m] || c.h[m] >= D.pl) continue;
+        if (seen[m] === mark || c.h[m] >= D.pl) continue; // CF2: onto any connected cell lower than the pond, so its shore follows the ground (Creekfolk 1: floor cells only)
         seen[m] = mark;
         queue[qn++] = m;
       }

@@ -65,7 +65,9 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/cf2-valley.js` | The real-scale valley (replaces Creekfolk 1's `Terrain`): 160 x 224 m, one height function, floor, terraces, the limestone bluff, the ledge across the creek, the creek's starting nodes. Tunables in `CF2_VALLEY`. |
 | `src/sim/cf2-branches.js` | The Dry Fork and the spring branch: laid out, carved, their water (`world.creek.br`), the cells along them. Tunables in `CF2_BRANCH`. |
 | `src/sim/cf2-scale.js` | Real scale: homes and the village for person-sized creekfolk, counts of things in the bigger valley, how far they notice; 3C's grove, sky stones and the beavers' side dams at this scale. `CF2_SCALE`. |
-| `src/sim/cf2-life.js` | Eight founders; life stages for the one-month arc. |
+| `src/sim/cf2-creek.js` | The healing arc (Phase 2): mud from the valley's own hills, a floor that settles, side channels that fill and reopen, dams spaced from the bottom of the creek up and worked at low water, ponds that soak into the floor, storms in fronts. Tunables in `CF2_CREEK` (and Creekfolk 1's `CREEK` values it changes). |
+| `src/sim/cf2-life.js` | Eight founders; life stages for the one-month arc (`LIFE`). |
+| `src/sim/cf2-craft.js` | What the founders bring from the old valley: the craft of healing a creek (`creature.know`, "knew it from the old valley"), a wish to dam it, and a travelling party's bonds. `CF2_CRAFT`. |
 | `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
@@ -96,7 +98,7 @@ All source files share one scope: the build concatenates them in the order liste
   rim; on the east side, from about z = 70 to 200, a limestone bluff at the rim instead (not
   walkable; creekfolk route in straight lines with detours, so steep ground has to be off-limits).
 - A limestone ledge crosses the creek at `terrain.zLedge` (about 100 to 112 m): the creek is cut
-  about 0.6 m below its floor above it and about 1.1 m below it, with a little fall over it.
+  about 0.6 m below its floor above it and about 0.8 m below it, with a little fall over it.
 - The spring branch runs from a spring at the foot of the west terrace (`terrain.branches.spring`)
   to the creek, all year; the Dry Fork (`terrain.branches.dry`) comes over the bluff (the Dry Falls)
   and is dry most days. Both are fixed channels with their own water; they add their drained
@@ -106,6 +108,14 @@ All source files share one scope: the build concatenates them in the order liste
   homes and the rest are `CF2_SCALE.build` times bigger.
 - Rule (from Creekfolk 1): every change to the creek ends with `creekRefresh()` (or
   `creekDerive()` when its shape changed), so derived state matches the saved state.
+- **The healing arc** (`cf2-creek.js`, Phase 2): the founders arrive knowing how to dam a creek
+  from the bottom up (`cf2-craft.js`), begin at the bottom of the valley within a day or two, and
+  work the dams only in the dry season; each wet season's floods fill the ponds with mud, and the
+  next dry season the silted dams are built up a hand higher. So the creek heals about a step a
+  valley year: wet at the driest point of each year (`creek.driest`, recorded at the first winter
+  rains, days 6, 14, 22, 30) measured on six seeds at 1-2%, 5-37%, 50-79%, 70-91%, then 85-93%
+  through day 46. The floor settles (deposits thin out 0.3 m above where it started) and side
+  channels fill in while new ones open, so a healed valley keeps changing but never runs away.
 
 ## The time model
 
@@ -153,6 +163,10 @@ minutes behind: the worker replays the gap in 250 ms slices and reports progress
 node tools/build.mjs --dev && node tools/determinism.cjs 4    # live == replay == save/reload, by state hash
 node tools/month.cjs --seeds 2 --days 30 --save 15,30            # whole months headless; prints the valley and creek
 node tools/map.cjs <seed> <days> runs/map.png                    # the simulated valley from above, as a picture
+node tools/creek-lab.cjs --seed cf2-1 --dams arc --fixed-weather  # the creek alone, scripted or replayed dams (--dams <save>, healed, none)
+node tools/lab-batch.cjs variants.json --dams "runs/x/{seed}-day32.json" --wx a,b,c  # creek variants side by side, same storms
+node tools/creek-look.cjs runs/x.json                            # a saved valley's creek node by node, and how wet each stretch is
+node tools/lives.cjs runs/x.json                                 # the founders' arc in lives: passings, generations
 node tools/build.mjs && node tools/browser-test.mjs              # the rules, in headless Chromium (no network allowed)
 node tools/build.mjs --dev && node tools/tour.mjs runs/x.json   # the 3D view live (WebGL): zooms, follow, triggers, a jump
 node tools/bench-browser.mjs runs/x.json 30                      # catch-up speed in the browser's worker

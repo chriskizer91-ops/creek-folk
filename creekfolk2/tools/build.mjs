@@ -44,8 +44,10 @@ export const SIM_FILES = [
   // api.js, which takes its references when it loads)
   'src/sim/cf2-valley.js',   // the real-scale valley: terrain, the ledge, the bluff
   'src/sim/cf2-branches.js', // the Dry Fork and the spring branch
+  'src/sim/cf2-creek.js',    // the creek heals in a month: tunables, the floor that settles, channels that wander
   'src/sim/cf2-scale.js',    // real scale: homes and the village for person-sized creekfolk
   'src/sim/cf2-life.js',     // eight founders; lives across one real month
+  'src/sim/cf2-craft.js',    // what the founders bring from the old valley: the craft, each other
   'src/sim/cf2-belief.js',   // belief asleep for now; no temple, no Hall of the Ancestors
   'src/sim/api.js',       // Creekfolk 1: the surface used by tools and the worker
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it

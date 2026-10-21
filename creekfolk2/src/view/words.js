@@ -237,7 +237,8 @@ function knowledgeLines(c, w) {
     dams: "Branches across the creek slow the water and make the ground wet and green.",
     downstream: "Dams are built from the bottom of the creek up: a dam holds its pond only when the water below it stands against its foot.",
   };
-  for (let k in KNOW) if (c.know[k]) out.push({ text: KNOW[k], how: "since day " + dayNumber(c.know[k]) });
+  // CF2: what the founders brought from the old valley has a time before the valley began
+  for (let k in KNOW) if (c.know[k]) out.push({ text: KNOW[k], how: typeof c.know[k] === "number" && c.know[k] < 0 ? "knew it from the old valley" : "since day " + dayNumber(c.know[k]) });
   for (let r of ritualList(c))
     out.push({
       text: `Always ${GESTURE_DESC[r.g].trim()} before ${RITUAL_TASKS[r.task]} — it seems to help.`,
