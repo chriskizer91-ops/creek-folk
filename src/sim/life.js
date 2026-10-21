@@ -165,6 +165,7 @@ function noteSeason(w) {
 
 function growUp(w, c) {
   let st = stageOf(w, c);
+  looksGrow(w, c, st); // 3C: grown-ups wear something for what they love (looks.js)
   if (st === "child") {
     // Strength grows with the body.
     c.strength = +(c.adultStrength * (0.35 + 0.65 * smoothstep(0, LIFE.childDays, ageDays(w, c)))).toFixed(3);
@@ -294,6 +295,7 @@ function bear(w, a, b) {
   c.look.hue = +(((la.hue + dh * w.rng.range(0.3, 0.7) + w.rng.normal() * 0.03) % 1 + 1) % 1).toFixed(3);
   c.look.tail = w.rng.chance(0.5) ? la.tail : lb.tail;
   c.look.spots = w.rng.chance(0.5) ? la.spots : lb.spots;
+  looksInherit(w, c, a, b); // 3C: fur, coat and markings from one parent or the other (looks.js)
   for (let k in c.interests) c.interests[k] = +clamp((a.interests[k] + b.interests[k]) / 2 + w.rng.normal() * 0.12, 0.05, 0.95).toFixed(3);
   c.fearWater = +clamp(0.35 + c.temp.caution * 0.4, 0.05, 0.9).toFixed(3);
   initLife(w, c, w.t, { parents: [a.id, b.id], gen: Math.max(a.gen || 0, b.gen || 0) + 1 });
