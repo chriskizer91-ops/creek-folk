@@ -124,7 +124,73 @@ every gift, plus "the creek answers now", "find the spring", "one believes in yo
 "everyone believes".
 
 ## Measured
-_(filled in from the year runs)_
+Everything here was run on the final build unless it says otherwise. "Tested" means I ran
+it and read the result; anything I estimated says so. The year runs are whole valleys,
+every moment simulated, 330 days each (`tools/year.cjs`, results in `runs/final/`). The
+simulated player gives on a rhythm, give or take half an hour, and three times in four
+gives whatever the valley needs most (mostly warm days, snow, starry nights and rain).
+
+**The temple's pace.**
+
+| Giving | Valleys | Temple began | Shrine done | Hall done | Crown done (finished) | Made do |
+|---|---|---|---|---|---|---|
+| Every other day | 2 | day 12.6 | days 106.4, 106.3 | 207.6, 208.2 | **314, 306** (month 11) | 0 |
+| Daily | 1 | day 7 | 84.9 | 167.4 | **261.6** (month 9) | 0 |
+| Twice a day | 1 | day 7 | 74.0 | 148.6 | **220.3** (month 8) | 0 |
+| About every four days | 1 | never | | | | |
+| No giver | 1 | never | | | | |
+
+[[SLOWPAUSE]]
+
+Against what you expected:
+- **Every other day, mid month 11** (day 315): day 314 in one valley; day 306 in the
+  other. The simulated player gave one dream in each valley, and a dream brings the next
+  part closer; in the second valley it came just as a stage began and saved about four
+  days. Without dreams the earlier build finished on day 314 in both valleys.
+- **Daily, about month 10:** day 261.6, in month 9, about three weeks before month 10
+  begins. This is the pace table at work: 1.2 times full speed on a year tuned to mid month
+  11 lands in month 9.
+- **Twice a day, about month 8.5:** day 220.3. If you meant the middle of month 8
+  (day 225), it is five days early; if you meant eight and a half months in (day 255), it
+  is a month early.
+- The material clocks add little: about two days to the hall (curing clay) and up to a
+  week to the crown (its great stones wait for the dry season, at most about three days a
+  part), so the pace table decides nearly everything. To land daily in month 10 the table
+  would need about 1.08 for daily; twice a day already matches "the middle of month 8" at
+  1.4.
+- Labour and materials never held a part up: "made do" (a part stuck five days) happened
+  0 times with a giver.
+
+**Belief and the loop** (the same runs):
+
+| Giving | First believer | Most believe by | Believe at day 330 | Requests (answered) | Offerings left | Spring heard / found | The one who believes in you |
+|---|---|---|---|---|---|---|---|
+| Every other day | days 8.6, 6.6 | day 14, day 7 | 26/28, 24/26 | 253 (66), 256 (65) | 802, 805 | 22.7 / 23.0, 18.4 / 18.7 | first on day 199 in both (the hundredth gift); then 9 and 10 holders in turn |
+| Daily | day 5.3 | day 7 | 23/26 | 251 (123) | 1,602 | 11.0 / 11.3 | day 150 (five months); 11 holders |
+| Twice a day | day 3.2 | day 7 | 23/26 | 451 (265) | 490 | 20.6 / 20.8 | day 150; 11 holders |
+[[E96BELIEF]]
+
+"Most believe by" is the first weekly check with more than half believing. Two or three in
+each village didn't believe at day 330: the doubters. Offerings: about five new ones for each visit when you
+come every other day or daily; under one a visit twice a day, because the gift comes before
+anyone has started keeping watch. The one who believes in you passes the belief on when they
+pass or leave, so it moves through the village about every two to three weeks; there was
+never more than one at a time.
+
+[[AWAY]]
+
+**The rest of the valley** (the same runs): population at day 300 between 26 and 32;
+births 283-302, passings 233-249, gone downstream 33-37 in 330 days; no simulation errors;
+no skill lost. The year runner's population target ("most valleys reach 30 between month 2
+and month 6") failed in the twice-a-day valley (first 30 on day 203) [[POPFAIL]]; that is
+the population swing from 3A, untouched in 3B. Saves at day 330: 2.0 to 2.1 MB (3A: 1.5 to
+1.7 MB at day 210). In Node the year runs went at 10,300 to 11,300 times real time, two
+at once on this two-core machine.
+
+**Determinism** (`tools/determinism.cjs`, 20 days, every gift given in turn): one replay,
+uneven slices and repeated save-and-reload give the identical state hash.
+
+[[BROWSER]]
 
 ## Honest notes
 - **Daily and twice-a-day givers finish sooner than you expected.** The pace table (1.2
