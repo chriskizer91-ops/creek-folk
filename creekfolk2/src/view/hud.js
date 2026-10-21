@@ -20,6 +20,22 @@ var Hud = class {
     $("xSettings").onclick = () => ($("vSettings").hidden = true);
     $("xAway").onclick = () => ($("vAway").hidden = true);
     $("bVillage").onclick = () => this.openVillage();
+    // then and now: hold the button, or T
+    let then = (on) => {
+      let R = this.app.renderer;
+      if (!R || !R.setThen || !!this.thenOn === on) return;
+      this.thenOn = on;
+      R.setThen(on);
+      $("bThen").setAttribute("aria-pressed", on);
+      $("thenNote").hidden = !on;
+    };
+    let bt = $("bThen");
+    bt.onpointerdown = (e) => (e.preventDefault(), bt.setPointerCapture && bt.setPointerCapture(e.pointerId), then(true));
+    bt.onpointerup = bt.onpointercancel = bt.onlostpointercapture = () => then(false);
+    bt.oncontextmenu = (e) => e.preventDefault();
+    addEventListener("keydown", (e) => (e.key === "t" || e.key === "T") && !e.repeat && !/INPUT|TEXTAREA/.test(document.activeElement.tagName) && then(true));
+    addEventListener("keyup", (e) => (e.key === "t" || e.key === "T") && then(false));
+    addEventListener("blur", () => then(false));
     $("bAmbient").onclick = () => this.setAmbient(!this.ambient);
     $("bGapAll").onclick = () => this.answerGap("all");
     $("bGapWrong").onclick = () => this.answerGap("wrong");
@@ -53,7 +69,8 @@ var Hud = class {
   onLog(entries) {
     for (let e of entries) {
       if (e.imp >= 2) this.lastLine = e;
-      if (e.imp >= 3 && !this.app.catching) this.toast(e.text);
+      if (e.kind === "founders" && e.imp >= 3 && !this.app.catching) this.moment(e);
+      else if (e.imp >= 3 && !this.app.catching) this.toast(e.text);
     }
     if (entries.length && this.lastLine) this.showLine(this.lastLine);
   }
@@ -71,6 +88,30 @@ var Hud = class {
       s.textContent = spanText(ago * 60) + " ago";
       el.append(s);
     }
+  }
+  // One quiet moment when the last of the eight passes: the view turns to where they were,
+  // two lines come and go, and the valley carries on.
+  moment(e) {
+    let el = $("moment"),
+      name = e.text.split(" was the last")[0],
+      R = this.app.renderer;
+    if (R && R.view && e.x != null) {
+      R.follow && R.follow(null);
+      Object.assign(R.view.goal, { x: e.x, z: e.z, hv: Math.min(R.view.goal.hv, 30) });
+    }
+    el.innerHTML = "";
+    let a = document.createElement("span"),
+      b = document.createElement("span");
+    a.textContent = `${name} was the last of the eight who came down the creek.`;
+    b.textContent = "The valley goes on.";
+    b.className = "later";
+    el.append(a, document.createElement("br"), b);
+    el.classList.add("on");
+    clearTimeout(this._mo);
+    this._mo = setTimeout(() => {
+      b.classList.add("on");
+      this._mo = setTimeout(() => el.classList.remove("on"), 9000);
+    }, 5000);
   }
   toast(text, sec = 6) {
     let el = $("toast");
@@ -125,12 +166,20 @@ var Hud = class {
   }
   caught(m) {
     $("vCatch").hidden = true;
-    let ev = (m.events || []).filter((e) => e.imp >= 3);
-    if (m.to - m.from > 3 * 3600 && ev.length) {
+    let ev = (m.events || []).filter((e) => e.imp >= 3),
+      days = (m.chron || []).filter((e) => e.d * 86400 + 86400 > m.from);
+    if (m.to - m.from > 3 * 3600 && (ev.length || days.length)) {
       $("awayTitle").textContent = `${spanText(m.to - m.from)} in the valley`;
       let L = $("awayList");
       L.innerHTML = "";
       let w = { cycle: this.app.vw.cycle, calStart: this.app.vw.calStart, tzMin: this.app.vw.tzMin };
+      // a day or more: the chronicle's pages for those days
+      if (m.to - m.from > 20 * 3600 && days.length) {
+        let prev = (m.chron || []).find((e) => !days.includes(e)) || null;
+        L.innerHTML = `<div class="chron">${chronicleHtml(w, days, prev)}</div>`;
+        $("vAway").hidden = false;
+        return;
+      }
       for (let e of ev.slice(-40)) {
         let p = document.createElement("p");
         p.innerHTML = `<span class="note">${dateText(w, e.t)}</span><br>`;
@@ -218,15 +267,24 @@ var Hud = class {
       tabs = [
         ["land", "Land"],
         ["people", "People"],
+        ["ways", "Ways and stories"],
+        ["chronicle", "Chronicle"],
         ["log", "What happened"],
       ],
-      body = tab === "people" ? villagePeople(w) : tab === "log" ? villageLog(w) : villageLand(w),
+      body = tab === "people" ? villagePeople(w) : tab === "ways" ? villageWays(w) : tab === "chronicle" ? villageChronicle(w) : tab === "log" ? villageLog(w) : villageLand(w),
       el = this.sheet(
         `<h2>The valley</h2><p class="k">${esc(dateText(w))}, the valley's ${ordinal(Math.floor(w.t / 86400) + 1)} day</p>` +
           `<div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" aria-pressed="${k === tab}">${l}</button>`).join("")}</div>` +
           body,
       );
     for (let b of el.querySelectorAll("[data-tab]")) b.onclick = () => this.renderVillage(b.dataset.tab);
+  }
+  // The creek's bank at a point the player tapped (the mud layers).
+  async openBank(z) {
+    let w = await this.app.worldCopy();
+    if (!w) return;
+    this.village = w;
+    this.sheet(bankSheet(w, z));
   }
   async openMind(id) {
     let w = (this.village && this.village.t >= this.app.vw.t - 5 && this.village) || (await this.app.worldCopy());

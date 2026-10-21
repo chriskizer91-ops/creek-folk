@@ -179,7 +179,47 @@ var View3D = class {
         d = Math.hypot(px - sx, py - sy);
       if (d < bd) (bd = d), (best = c);
     }
+    // nobody there: a tap on the creek opens its bank (the mud layers)
+    if (!best && this.onCreekTap && this.vw.nodes) {
+      let g = this.groundAt(sx, sy),
+        n = g && this.vw.nodes[clamp(Math.round((g.z - CREEK.z0) / CREEK.ds), 0, this.vw.nodes.length - 1)];
+      if (n && g.z > 0 && g.z < VL && Math.abs(g.x - n.x) < (n.wb + n.m * Math.max(0, n.fp - n.bed)) / 2 + 2.5) return void this.onCreekTap(g.z);
+    }
     this.follow(best ? best.id : null);
+  }
+  // Then and now: while held, the valley as it was on its first morning (made again in the
+  // worker from its seed), from the same camera. Built the first time it is asked for.
+  async setThen(on) {
+    this.thenOn = on;
+    if (!on || this.thenValley || this.thenAsk || this.thenNone) return;
+    this.thenAsk = true;
+    let m = await this.app.ask({ type: "then" }, "then");
+    this.thenAsk = false;
+    if (!m || m.none) return void (this.thenNone = true);
+    let vw = new VWorld();
+    vw.sync(m);
+    this.thenVW = vw;
+    this.thenValley = CF2Valley.create(vw, { detail: this.app.quality === "low" ? 2 : 3 });
+    this.thenValley.group.visible = false;
+    this.scene.add(this.thenValley.group);
+    this.thenValley.stream(this.view.x, this.view.z, 999, 1e9);
+  }
+  // The point of the ground under a point of the screen.
+  groundAt(sx, sy) {
+    let rc = new THREE.Raycaster();
+    rc.setFromCamera(new THREE.Vector2((sx / innerWidth) * 2 - 1, 1 - (sy / innerHeight) * 2), this.cam);
+    let o = rc.ray.origin,
+      d = rc.ray.direction;
+    if (Math.abs(d.y) < 1e-4) return null;
+    let y = this.valley.height(this.view.goal.x, this.view.goal.z),
+      p = { x: 0, z: 0 };
+    for (let k = 0; k < 6; k++) {
+      let t = (y - o.y) / d.y;
+      p.x = o.x + t * d.x;
+      p.z = o.z + t * d.z;
+      y = this.valley.height(p.x, p.z);
+    }
+    return p;
   }
   // ---- the camera --------------------------------------------------------------------
   placeCamera(dt) {
@@ -243,6 +283,7 @@ var View3D = class {
     this.look = L;
     px.setGrade2(L.shade, L.light, L.lift);
     this.valley.setNight(L.night > 0.45);
+    if (this.thenValley) this.thenValley.setNight(L.night > 0.45);
     this.sun.intensity = L.sun * CF2_LIGHT;
     this.hemi.intensity = L.hemi * CF2_LIGHT;
     this.sun.color.setRGB(1, L.sunG, L.sunB);
@@ -378,12 +419,24 @@ var View3D = class {
     if (!this.ready || !this.px) return;
     this.t = t;
     this.time += dt;
-    let ty = this.placeCamera(dt);
-    this.valley.stream(this.view.x, this.view.z, this.view.hv < 60 ? Math.max(40, this.view.hv * 1.2) : 999, 6);
+    let ty = this.placeCamera(dt),
+      then = !!(this.thenOn && this.thenValley);
+    (then ? this.thenValley : this.valley).stream(this.view.x, this.view.z, this.view.hv < 60 ? Math.max(40, this.view.hv * 1.2) : 999, 6);
+    // then and now: the first morning's land in place of today's, with none of today's life on it
+    this.valley.group.visible = !then;
+    if (this.thenValley) this.thenValley.group.visible = then;
+    this.life.group.visible = this.beasts.group.visible = !then;
     this.light(t, ty);
     this.life.update(t, dt);
     this.air.update(t, dt, this.look);
-    this.drawFolk(t, dt);
+    if (then) {
+      for (let f of this.folk.values()) {
+        if (f.sprite) f.sprite.visible = false;
+        if (f.model) f.model.root.visible = false;
+      }
+      this.dots.begin();
+      this.dots.end();
+    } else this.drawFolk(t, dt);
     this.beasts.update(t, dt);
     this.cutAround();
     this.px.render(this.scene, this.cam);

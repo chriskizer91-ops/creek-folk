@@ -38,9 +38,17 @@ function villageLand(w) {
     logs = (w.grove && w.grove.logs && w.grove.logs.length) || 0;
   if (bv || groveN) {
     h += `<h3>The valley's life</h3>`;
-    if (groveN) h += `<p>${groveN === 1 ? "One tree stands" : `${groveN} trees stand`} in the grove, one for each creekfolk who passed on${logs ? `; ${logs === 1 ? "an old one has" : `${logs} old ones have`} fallen and lie mossing over` : ""}.</p>`;
+    if (groveN) {
+      let oldest = w.res.filter((r) => r.kind === "grove").sort((a, b) => (a.planted || 0) - (b.planted || 0))[0],
+        rings = Math.floor((w.t - (oldest.planted || 0)) / (YEAR_DAYS * VALLEY_DAY));
+      h += `<p>${groveN === 1 ? "One tree stands" : `${groveN} trees stand`} in the grove, one for each creekfolk who passed on${logs ? `; ${logs === 1 ? "an old one has" : `${logs} old ones have`} fallen and lie mossing over` : ""}.${rings >= 1 ? ` The oldest, ${esc(oldest.name)}'s, has ${rings === 1 ? "one ring" : numberWord(rings) + " rings"} in its trunk, one for every winter since it was planted.` : ""}</p>`;
+    }
     if (bv) h += `<p>${bv.list.length === 1 ? "A beaver lives" : `${bv.list.length} beavers live`} in the lodge in the pond, tending the dams${bv.small && bv.small.length ? `, and they've built ${bv.small.length === 1 ? "a little dam" : bv.small.length + " little dams"} across the floor` : ""}.</p>`;
   }
+  let fb = firstDamBank(w);
+  h += `<h3>In the creek's bank</h3>`;
+  if (fb) h += `<p>Behind the first dam, the mud the floods have left, layer by layer:</p>` + bankSvg(w, fb) + bankWords(w, fb);
+  h += `<p class="mute">Tap the creek anywhere to see what has settled in its bank there.</p>`;
   if (B) {
     let dry = { dry: "The Dry Fork is dry, a bed of pale stones.", pools: "The Dry Fork stands in pools after the rain.", running: "The Dry Fork is running, loud, off the bluff." }[B.dry.state];
     h += `<h3>The branches</h3><p>The spring under the west terrace runs clear and cold, as it always does. ${dry}</p>`;

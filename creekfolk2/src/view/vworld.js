@@ -75,7 +75,7 @@ var VWorld = class {
     if (changed) this.entV++;
     if (m.weather) this.weather = m.weather;
     if (m.fauna) this.fauna = m.fauna;
-    for (let k of ["beavers", "groveLogs", "skycal", "fishRun"]) if (k in m) (this[k] = m[k]), this.entV++;
+    for (let k of ["beavers", "groveLogs", "skycal", "fishRun", "carvings"]) if (k in m) (this[k] = m[k]), this.entV++;
     if (m.creek) {
       this.nodes = m.creek.nodes;
       this.dams = m.creek.dams;

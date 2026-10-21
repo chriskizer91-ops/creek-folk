@@ -29,6 +29,8 @@ var CULTURE = {
 };
 CONCEPT_LABELS.oldvalley = "the old valley";
 CONCEPT_LABELS.giver = "the creek that gives";
+// 3C's and 3B's buildings had no labels in the words list
+Object.assign(CONCEPT_LABELS, { skycal: "the sky stones", path: "the path", temple: "the temple", ancestors: "the Hall of the Ancestors" });
 
 // The stories of the old valley: when (days before the new valley), how much it matters, the
 // truth, and whether the founders were there. `who` names one of the old valley's elders.
@@ -77,7 +79,7 @@ function driftOld(w, teller, s, v, rng) {
   else if (op === "big") nv.big = Math.min(3, (nv.big || 0) + 1);
   else if (op === "why") nv.why = teller && teller.stage === "elder" && rng.chance(0.4) ? "elders" : "creek";
   else if (op === "who") {
-    let founders = teller ? ancestors(w, teller).filter((r) => r.gen === 0 && r.name !== nv.who) : [],
+    let founders = teller ? ancestors(w, teller).filter((r) => r.founder && r.name !== nv.who) : [],
       others = ((ov && ov.names) || []).filter((n) => n !== nv.who);
     if (founders.length && rng.chance(0.6)) nv.who = rng.pick(founders).name;
     else if (others.length) nv.who = rng.pick(others);
@@ -111,7 +113,12 @@ function arriveWithCulture(w) {
       c.lex[k] = mine === word ? { [word]: +rng.range(1.6, 2.4).toFixed(2) } : { [mine]: 2, [word]: 1 };
     }
     beliefsOf(c).thanks = ov.gesture;
+    c.founder = true;
+    lineageRecord(w, c).founder = true;
   }
+  // the words they all share aren't news ("Everyone now says ...", core.js socialTick)
+  w.mile = w.mile || { pairs: {}, words: {} };
+  for (let k of CULTURE.oldWords) w.mile.words[k] = ov.words[k];
   w.customs = w.customs || {};
   w.customs.passing = { counts: { [ov.offering]: 6 }, custom: ov.offering, since: 0, old: true };
   w.customs.seasons = { n: 2, old: true };
@@ -195,7 +202,7 @@ function thankTheCreek(w) {
   let ran = cr.flowLen >= VL - 4,
     first = C.thanks === 1,
     why = oldStoryHeld(w, "ov-gifts"),
-    founders = who.some((c) => (c.gen || 0) === 0),
+    founders = who.some((c) => c.founder),
     g = GESTURE_FIRST[cu.g].replace(/my /, "their ");
   logEvent(
     w,

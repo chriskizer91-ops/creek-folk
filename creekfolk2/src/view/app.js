@@ -22,6 +22,7 @@ var App = class {
     this.worker.onerror = (e) => this.hud && this.hud.error("The valley stopped: " + (e.message || "an error in the simulation"));
     this.hud = new Hud(this);
     this.renderer = makeRenderer(this, document.getElementById("view"));
+    this.renderer.onCreekTap = (z) => this.hud.openBank(z);
     this.dev = new DevMenu(this);
     this.post({ type: "boot", db: VALLEY_DB, dev: DEV_BUILD, offset: Clock.offset() });
     document.addEventListener("visibilitychange", () => {

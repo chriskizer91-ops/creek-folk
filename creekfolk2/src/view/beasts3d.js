@@ -136,7 +136,7 @@ var CF2Beasts = (function () {
       }
       for (var [id, v2] of beavers) if (!seen.has(id)) grp.remove(v2.obj), beavers.delete(id);
     }
-    return { update };
+    return { update, group: grp };
   }
   return { create };
 })();

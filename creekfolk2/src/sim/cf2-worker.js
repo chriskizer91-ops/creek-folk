@@ -157,6 +157,29 @@ function cwSlow(w, c) {
 // a founder or a traveler, and the same up the second parent's side (from the lineage, so
 // lines outlive the ones who started them). The page dresses families by them.
 var CW_LINES = new Map();
+// The valley as it was on its first morning, made again from its seed (newValley is
+// deterministic), for "then and now". Only the land, the creek and what grew there: none of
+// the eight, who are shown where they are now.
+function cwThenWorld(w) {
+  let v = newValley(w.seed, { calStart: w.calStart, tzMin: w.tzMin });
+  runUntil(v, 1200);
+  let same = JSON.stringify(v.creek.init) === JSON.stringify(w.creek.init);
+  v.creatures = [];
+  v.byId = {};
+  for (let s of v.structures) v.byId[s.id] = s;
+  return same ? v : null;
+}
+
+// The chronicle's days since a catch-up began (and the day before, for what changed).
+function cwChronicle(w, from) {
+  let C = w.chronicle;
+  if (!C) return null;
+  let d0 = Math.floor(from / 86400),
+    days = C.days.filter((e) => e.d >= d0 - 1).slice(-41);
+  if (C.cur) days.push({ ...C.cur, today: true });
+  return days;
+}
+
 function cwLine(w, c) {
   let got = CW_LINES.get(c.id);
   if (got) return got;
@@ -193,9 +216,11 @@ var CW_ENT_KEYS = ["structures", "res", "items", "pods"];
 // Send what changed since the last message. full: everything (a new page, a catch-up);
 // heavy: also look over the structures, plants, materials and slow-changing creekfolk
 // details (twice a second; actions and the creek go every time).
-function cwSendState(full, heavy = true) {
-  let w = CW.world,
-    S = CW.sent;
+// alt: describe another world (the valley as it was on day one) into a message of type
+// alt.type, with its own record of what was sent, and return it instead of posting.
+function cwSendState(full, heavy = true, alt = null) {
+  let w = alt ? alt.world : CW.world,
+    S = alt ? alt.sent : CW.sent;
   if (!w) return;
   let m = { type: full ? "sync" : "state", t: w.t, now: cwNow(), weather: null, acts: [], slow: [], gone: [], ent: {}, entGone: {} };
   if (full) {
@@ -207,7 +232,7 @@ function cwSendState(full, heavy = true) {
     S.creekT = -1;
     S.weather = "";
     S.fauna = "";
-    S.beavers = S.groveLogs = S.skycal = S.fishRun = "";
+    S.beavers = S.groveLogs = S.skycal = S.fishRun = S.carvings = "";
     m.seed = w.seed;
     m.calStart = w.calStart;
     m.tzMin = w.tzMin;
@@ -252,6 +277,8 @@ function cwSendState(full, heavy = true) {
       groveLogs: (w.grove && w.grove.logs) || null,
       skycal: w.skycal || null,
       fishRun: (w.returning && w.returning.active) || null,
+      // carvings in sand, clay and stone: where, what in, how worn, how far cut
+      carvings: (w.carvings || []).filter((k) => !k.gone).map((k) => [k.id, k.mat, k.x, k.z, Math.round(k.wear * 10) / 10, Math.round(k.done * 10) / 10]),
     };
     for (let k in x) {
       let j = JSON.stringify(x[k]);
@@ -285,6 +312,7 @@ function cwSendState(full, heavy = true) {
     };
     transfer.push(m.water.wt.buffer, m.water.green.buffer, m.water.wet.buffer, m.water.wear.buffer);
   }
+  if (alt) return (m.type = alt.type), m;
   if (w.log.length && w.log[w.log.length - 1] !== S.lastLog) {
     let i = w.log.length - 1;
     while (i >= 0 && w.log[i] !== S.lastLog) i--;
@@ -337,7 +365,7 @@ function cwLoop() {
             CW.catching = null;
             CW.jumping = false;
             w.onLog = null;
-            cwPost({ type: "caught", from: c.from, to: w.t, ms: Date.now() - c.started, events: CW.events.splice(0) });
+            cwPost({ type: "caught", from: c.from, to: w.t, ms: Date.now() - c.started, events: CW.events.splice(0), chron: cwChronicle(w, c.from) });
             cwSave(true);
             cwSendState(true);
           }
@@ -388,6 +416,11 @@ self.onmessage = async (ev) => {
         cwPost({ type: "refused", message: r.error, where: "saved" });
       }
       cwPost({ type: "need" }); // no valley yet: the page makes one
+    } else if (m.type === "then" && w) {
+      let tw = cwThenWorld(w),
+        msg = tw ? cwSendState(true, true, { world: tw, type: "then", sent: { acts: new Map(), slow: new Map(), ent: new Map(), terrain: -1, grids: -1, creekT: -1, weather: "", logN: 0 } }) : { type: "then", none: true };
+      msg.id = m.id;
+      cwPost(msg);
     } else if (m.type === "new") {
       let v = newValley(m.seed, { calStart: m.calStart, tzMin: m.tzMin });
       CW.lastSave = 0;

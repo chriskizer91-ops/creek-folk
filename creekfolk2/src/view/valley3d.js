@@ -1638,6 +1638,15 @@ var CF2Valley = (function () {
       // walls on a stone footing
       B.add("stone|f", bake(cyl(wr + 0.06, wr + 0.1, 0.28, seg), s.x, h0 + 0.1, s.z));
       B.add("mudwall|f|c", bake(cyl(wr * 0.95, wr, wallH, seg), s.x, h0 + 0.05 + wallH / 2, s.z));
+      // repairs that show: a patch of fresher mud on the wall for each time it was patched up
+      if (!far && s.patches) {
+        var PR = rnd(s.id * 389 + 3);
+        for (var pq = 0; pq < Math.min(8, s.patches); pq++) {
+          var pa = rot + 0.7 + PR() * 4.9, // round the wall, clear of the door (at rot)
+            ph = h0 + 0.3 + PR() * wallH * 0.7;
+          B.add("mud|f", bake(new THREE.CircleGeometry(0.16 + PR() * 0.12, 7), s.x + Math.sin(pa) * wr * 1.01, ph, s.z + Math.cos(pa) * wr * 1.01, 0, pa, 0, 1, 0.75 + PR() * 0.4, 1));
+        }
+      }
       // the roof: three courses stepping in to a knot at the top
       var y0 = h0 + 0.05 + wallH;
       B.add(roofK + "|f|c", bake(cyl(re * 0.66, re, Hr * 0.4, seg), s.x, y0 + Hr * 0.2 - 0.05, s.z));
@@ -1827,6 +1836,49 @@ var CF2Valley = (function () {
         B.add((lg.tk === "pine" ? "cedar" : lg.tk === "willow" ? "willow" : "elm") + "|f", bake(new THREE.IcosahedronGeometry(0.32, 0), sx, y + r + 0.95, sz, 0, R() * 3, 0, 1, 1.2, 1));
       }
     }
+    // Carvings (cf2-carve.js): a story drawn in the sand by the creek, a clay tablet leaning
+    // by a home, a standing stone at the Telling Stones; the lines fade as they wear, and a
+    // stone being cut shows as many lines as are cut so far.
+    function addCarvingThing(B, cv, far) {
+      var id = cv[0],
+        mat = cv[1],
+        x = cv[2],
+        z = cv[3],
+        wear = cv[4],
+        done = cv[5],
+        R = rnd(id * 613 + 29),
+        y = height(x, z),
+        yaw = R() * 6.28,
+        lines = Math.round(6 * (1 - Math.min(1, wear)) * (mat === "stone" ? Math.min(1, done) : 1));
+      if (mat === "sand") {
+        if (far) return;
+        B.add("gravel|f", bake(box(1.1, 0.03, 0.8), x, y + 0.012, z, 0, yaw, 0));
+        for (var q = 0; q < lines; q++) B.add("mudW|f", bake(box(0.3 + R() * 0.5, 0.012, 0.035), x + (R() - 0.5) * 0.7, y + 0.032, z + (R() - 0.5) * 0.5, 0, yaw + (R() - 0.5) * 2.4, 0));
+        return;
+      }
+      if (mat === "clay") {
+        var hh = 0.5 * (1 - 0.45 * Math.min(1, wear));
+        B.add("stone|f", bake(new THREE.DodecahedronGeometry(0.14, 0), x - Math.sin(yaw) * 0.14, y + 0.08, z - Math.cos(yaw) * 0.14));
+        B.add("clay|f", bake(box(0.4, hh, 0.08), x, y + hh / 2, z, -0.28, yaw, 0));
+        if (!far) for (q = 0; q < lines; q++) B.add("mudW|f", bake(box(0.26, 0.022, 0.02), x + Math.sin(yaw) * 0.05, y + hh * (0.25 + 0.12 * q), z + Math.cos(yaw) * 0.05, -0.28, yaw, 0));
+        return;
+      }
+      // a standing stone, tapering a little, leaning a little; while it is being cut it lies
+      // on two logs beside where it will stand
+      var up = done >= 1,
+        sh = 1.35,
+        sw = 0.62;
+      if (up) {
+        var lean = (R() - 0.5) * 0.08;
+        B.add("lime|f", bake(cyl(sw * 0.42, sw * 0.55, sh, 5), x, y + sh / 2 - 0.05, z, lean, yaw, lean * 0.5, 1, 1, 0.55));
+        if (!far) for (q = 0; q < lines; q++) B.add("limeD|f", bake(box(sw * 0.62, 0.035, 0.04), x + Math.sin(yaw) * sw * 0.29, y + 0.35 + q * 0.13, z + Math.cos(yaw) * sw * 0.29, 0, yaw, 0));
+      } else {
+        B.add("wood|f", bake(cyl(0.07, 0.07, 1.0, 6), x - Math.cos(yaw) * 0.45, y + 0.07, z + Math.sin(yaw) * 0.45, Math.PI / 2, yaw, 0));
+        B.add("wood|f", bake(cyl(0.07, 0.07, 1.0, 6), x + Math.cos(yaw) * 0.45, y + 0.07, z - Math.sin(yaw) * 0.45, Math.PI / 2, yaw, 0));
+        B.add("lime|f", bake(box(sh, sw * 0.5, sw), x, y + 0.14 + sw * 0.25, z, 0, yaw, 0));
+        if (!far) for (q = 0; q < lines; q++) B.add("limeD|f", bake(box(0.04, 0.02, sw * 0.7), x - sh * 0.35 + q * 0.13, y + 0.15 + sw * 0.5, z, 0, yaw, 0));
+      }
+    }
     // The beavers' lodge: a dome of sticks in the pond, growing as the sticks come in; and
     // their little stick dams across the side channels on the floor.
     function addLodge(B, L, far) {
@@ -1929,13 +1981,14 @@ var CF2Valley = (function () {
       var parts = [];
       for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.kind === "grove" ? Math.floor(groveSize(vw, r) * 6) : r.stage || r.size || ""));
       for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) parts.push("log" + lg.id + ":" + Math.floor(groveLogDecay(vw, lg) * 5));
+      for (var cv of vw.carvings || []) if (tileOf(cv[2], cv[3]) === Tl) parts.push("cv" + cv.join(","));
       var Bv = vw.beavers;
       if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) parts.push("lodge" + Math.round((Bv.lodge.size || 0) * 10));
       if (Bv) for (var sd of Bv.small || []) if (tileOf(sd.x, sd.z) === Tl) parts.push("sd" + sd.x + "," + sd.z);
       for (var s of vw.list("structures").values())
         if (tileOf(s.x, s.z) === Tl && s.kind === "home")
           parts.push("h" + s.id + ":" + s.owner + ":" + (vw.creature(s.owner) ? furIndex(vw.creature(s.owner).look || {}) : "") + ":" + (s.deco && s.deco.list ? s.deco.list.filter((d) => d.at <= vw.t).length + (s.deco.old ? "o" : "") : ""));
-      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
+      for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) parts.push(s.id + ":" + s.kind + ":" + s.level + ":" + (s.patches || "") + ":" + (s.building ? s.building.level + "." + s.building.stage + "." + Math.floor((s.building.labor || 0) / 60) : "") + ":" + (s.kind === "dam" && vw.dams[s.id] ? vw.dams[s.id].crest.toFixed(2) : "") + ":" + (s.beds ? s.beds.map((b) => b.state[0] + Math.floor((b.grow || 0) * 3)).join("") : ""));
       return parts.join("|");
     }
     var LB = null, // the batch the lights of the tile being built go into (near tiles only)
@@ -1955,6 +2008,7 @@ var CF2Valley = (function () {
         }
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) addStructure(B, s, far);
       for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) addNurseLog(B, lg, far);
+      for (var cv of vw.carvings || []) if (tileOf(cv[2], cv[3]) === Tl) addCarvingThing(B, cv, far);
       var Bv = vw.beavers;
       if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) addLodge(B, Bv.lodge, far);
       if (Bv && !far) Bv.small.forEach((sd, j) => tileOf(sd.x, sd.z) === Tl && addSideDam(B, sd, j));

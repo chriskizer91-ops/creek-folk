@@ -7518,8 +7518,8 @@
         i,
         3,
         s ?
-        `The creatures now call their home \u201C${n.word}\u201D.` :
-        `The creatures have settled on a name for their home: \u201C${n.word}\u201D.`,
+        `The creekfolk now call their home \u201C${n.word}\u201D.` : // CF2: "creekfolk" (Creekfolk 1: "The creatures")
+        `The creekfolk have settled on a name for their home: \u201C${n.word}\u201D.`,
         [],
         i.meadow,
         "word"
