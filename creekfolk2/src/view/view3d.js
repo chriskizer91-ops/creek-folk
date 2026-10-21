@@ -51,6 +51,10 @@ var View3D = class {
       this.valley = CF2Valley.create(this.vw, { detail: this.app.quality === "low" ? 2 : 3 });
       this.valley.seed = this.vw.seed;
       this.scene.add(this.valley.group);
+      // its creatures and its air (life3d.js, air3d.js)
+      if (this.life) this.scene.remove(this.life.group, this.air.group);
+      this.life = CF2Life.create(this);
+      this.air = CF2Air.create(this);
       let pal = [PKToon.P.ink].concat(CF2Valley.palette(), spritePalette(), folkPalette(), ["#a8d0de", "#fff2c8"]),
         seen = {};
       pal = pal.filter((c) => ((c = c.toLowerCase()), seen[c] ? false : (seen[c] = 1)));
@@ -232,7 +236,11 @@ var View3D = class {
     st = this.st;
     let L = cf2Look(hour, st, this.vw.cycle ? seasonAt(this.vw.w).doy : null),
       px = this.px,
-      V = this.view;
+      V = this.view,
+      fl = this.air ? Math.min(1, this.air.flash) : 0;
+    // a flash of lightning lights everything for a moment
+    if (fl > 0) (L.shade = L.shade.map((v) => v + (1.8 - v) * fl)), (L.light = L.light.map((v) => v + (1.8 - v) * fl)), (L.lift = [0.1 * fl, 0.1 * fl, 0.12 * fl]);
+    this.look = L;
     px.setGrade2(L.shade, L.light, L.lift);
     this.valley.setNight(L.night > 0.45);
     this.sun.intensity = L.sun * CF2_LIGHT;
@@ -373,6 +381,8 @@ var View3D = class {
     let ty = this.placeCamera(dt);
     this.valley.stream(this.view.x, this.view.z, this.view.hv < 60 ? Math.max(40, this.view.hv * 1.2) : 999, 6);
     this.light(t, ty);
+    this.life.update(t, dt);
+    this.air.update(t, dt, this.look);
     this.drawFolk(t, dt);
     this.beasts.update(t, dt);
     this.cutAround();

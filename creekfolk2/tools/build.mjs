@@ -66,6 +66,8 @@ const VIEW_FILES = [
   'src/view/sprites.js',  // creekfolk as small pixel sprites, for the middle of the zoom
   'src/view/valley3d.js', // the valley in 3D, drawn from the simulation
   'src/view/beasts3d.js', // the simulation's animals: beavers, the glowing fish run
+  'src/view/life3d.js',   // its creatures: heron, turtles, minnows, frogs, dragonflies, butterflies, teal
+  'src/view/air3d.js',    // its air: rain, lightning, snow, mist, fireflies, leaves, swallows
   'src/view/folk3d.js',   // creekfolk close up, on the shared rig
   'src/view/view3d.js',   // the 3D view: camera, light, the zoom from dots to faces
   'src/view/app.js',      // the worker, the drawing loop
