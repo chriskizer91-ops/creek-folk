@@ -46,7 +46,7 @@ var Hud = class {
     let w = { cycle: vw.cycle, calStart: vw.calStart, tzMin: vw.tzMin, t },
       txt = `${dateText(w, t)} · ${timeOfDayName(t)}`;
     if (txt !== this._clock) $("clock").textContent = this._clock = txt;
-    if (this.toastT && performance.now() > this.toastT) $("toast").classList.remove("on"), (this.toastT = 0);
+    if (this.toastT && performance.now() > this.toastT) $("toast").classList.remove("on"), (this.toastT = 0), this.lastLine && this.showLine(this.lastLine);
     if (this.lastLine && performance.now() - (this._agoAt || 0) > 15000) this.showLine(this.lastLine), (this._agoAt = performance.now());
   }
   // ---- what's happening --------------------------------------------------
@@ -60,6 +60,8 @@ var Hud = class {
   showLine(e) {
     let ago = (this.app.vw.tNow() - e.t) / 60,
       el = $("line");
+    // the same news is already being shown big: the line waits until it has gone
+    if (this.toastT && $("toast").textContent === e.text) return void (el.hidden = true);
     el.hidden = false;
     el.innerHTML = "";
     el.append(document.createTextNode(e.text));

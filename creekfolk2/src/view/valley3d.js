@@ -61,6 +61,9 @@ var CF2Valley = (function () {
     thatch: ["#8a7442", "#b0985a", "#d0ba78"],
     mudwall: ["#7a6044", "#9a7c58", "#b89a70"],
     tile: ["#7a3a2a", "#a24e38", "#c06a4e"],
+    tile2: ["#7a4a2a", "#a2683c", "#c08a5a"], // a browner clay
+    tile3: ["#6a3428", "#8a4434", "#a85a46"], // a darker one
+    thatch2: ["#7a6a3e", "#9e8a52", "#c0aa6e"], // older, greyer thatch
     stone: ["#6a6a64", "#908e86", "#b2b0a6"],
     pod: ["#6a5a2a", "#8e7a3a", "#b29c52"],
     glow: ["#8ac8a8", "#bff0d6", "#eafff4"],
@@ -1589,7 +1592,8 @@ var CF2Valley = (function () {
         }
         return;
       }
-      var roofK = show >= 3.6 ? "tile" : "thatch";
+      // each home's clay or reeds came from its own pit or patch: one of a few tones
+      var roofK = show >= 3.6 ? ["tile", "tile2", "tile3"][s.id % 3] : s.id % 2 ? "thatch2" : "thatch";
       // the deck round it (the raised floor), plank by plank
       if (show > 4.05) {
         var nd = far ? 8 : 22,
