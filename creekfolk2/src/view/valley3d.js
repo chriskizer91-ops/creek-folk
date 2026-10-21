@@ -89,6 +89,7 @@ var CF2Valley = (function () {
   CF2_FUR.forEach((r, i) => (PAINT["fur" + i] = r));
   PAINT.lodge = ["#4e3a28", "#5e4630", "#7a5c40"];
   PAINT.hearth = ["#e8a040", "#ffd27a", "#fff0c0"]; // windows lit at night
+  PAINT.lily = ["#3f6b3f", "#5f9255", "#8fb86f"]; // lily pads on still water
   var FOAM = { water: "#eef6f6", waterC: "#eef6f6", pond: "#b4ccb0", mudW: "#d9cba8" };
   var REFL = { water: "#a9ccd8", waterC: "#acdad8", pond: "#729480", mudW: "#9caaa8" };
   var VARY = { grass: 0.12, grassL: 0.11, grassD: 0.11, straw: 0.1, strawL: 0.1, dust: 0.1, marsh: 0.12, path: 0.08, pathE: 0.1, clay: 0.07, gravel: 0.08, bed: 0.08, lime: 0.05, limeBed: 0.06, moss: 0.1, soil: 0.08, mud: 0.08 };
@@ -1194,7 +1195,8 @@ var CF2Valley = (function () {
       g.computeVertexNormals();
       return g;
     })();
-    var flowerGeo = new THREE.CylinderGeometry(0.045, 0.016, 0.03, 5),
+    var padGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.008, 9, 1, false, 0.4, 5.9),
+      flowerGeo = new THREE.CylinderGeometry(0.045, 0.016, 0.03, 5),
       pebGeo = new THREE.OctahedronGeometry(1, 0),
       leafGeo = box(0.09, 0.008, 0.06),
       capGeo = new THREE.SphereGeometry(1, 8, 4, 0, 6.29, 0, Math.PI / 2),
@@ -1317,6 +1319,32 @@ var CF2Valley = (function () {
           o.position.set(it.x, it.y + 0.6 + it.s * 0.2, it.z);
           o.rotation.set(0, it.r2 * 6, 0);
         });
+      }
+      // lily pads on still water (ponds behind dams, marsh pools, the floor's standing water),
+      // spring to autumn, a few in flower in summer; not where the creek runs
+      if (season !== "winter") {
+        var pads = clumps(Math.round(40 * K), 9, 0.9, (t, x, z) => {
+          var wl = W.water(x, z);
+          if (wl == null) return false;
+          var d = wl - height(x, z);
+          if (d < 0.06 || d > 1.0) return false;
+          if (vw.nodes && sampV(T.cut, x, z) > 0.1) {
+            var nq = nodeAt(z).q;
+            if (nq > 1e-4 && !(vw.ponds && vw.ponds[creekNodeIndex(z)] > nodeAt(z).wl - 0.01)) return false;
+          }
+          return true;
+        });
+        instIn(Tl, into, padGeo, "lily", pads, (o, it) => {
+          o.position.set(it.x, W.water(it.x, it.z) + 0.006, it.z);
+          o.rotation.set(0, it.r2 * 6.28, 0);
+          o.scale.setScalar(0.7 + it.s * 0.6);
+        });
+        if (season === "summer")
+          instIn(Tl, into, flowerGeo, "stem", pads.filter((it) => it.r3 < 0.18), (o, it) => {
+            o.position.set(it.x + 0.03, W.water(it.x, it.z) + 0.03, it.z);
+            o.rotation.set(0, it.r1 * 3, 0);
+            o.scale.setScalar(1.1);
+          });
       }
       // pebbles
       ["lime", "rock"].forEach(function (key, q) {

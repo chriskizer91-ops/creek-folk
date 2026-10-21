@@ -150,6 +150,9 @@ node tools/build.mjs --dev && node tools/determinism.cjs 4    # live == replay =
 node tools/month.cjs --seeds 2 --days 30 --save 15,30            # whole months headless; prints the valley and creek
 node tools/map.cjs <seed> <days> runs/map.png                    # the simulated valley from above, as a picture
 node tools/build.mjs && node tools/browser-test.mjs              # the rules, in headless Chromium (no network allowed)
+node tools/build.mjs --dev && node tools/tour.mjs runs/x.json   # the 3D view live (WebGL): zooms, follow, triggers, a jump
+node tools/bench-browser.mjs runs/x.json 30                      # catch-up speed in the browser's worker
+node tools/ui-shots.mjs runs/x.json runs/ui                      # the interface on a laptop and a phone
 ```
 
 Screenshots: `node tools/shots.mjs <save.json | new> <out dir> [views.json | -] [w h]`; contact sheets:
