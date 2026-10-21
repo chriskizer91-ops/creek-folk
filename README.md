@@ -6,6 +6,8 @@ and are remembered with a tree, and slowly turn a cut-down creek into a wetland.
 player mostly watches, and gives a gift every twelve hours. Every moment is simulated,
 whether or not anyone is watching.
 
+Creekfolk 2, its descendant, is being planned in `creekfolk2/`.
+
 ## Play
 Open a build in a desktop browser (phones work too). Each build is one self-contained
 HTML file and keeps its own saves.
