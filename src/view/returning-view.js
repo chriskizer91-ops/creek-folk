@@ -386,3 +386,19 @@ function returningTabHTML(w) {
     return base(w) + returningTabHTML(w);
   };
 })();
+
+// A creekfolk's panel says how they look and what they wear (looks.js), so a family's
+// likeness can be read in words too.
+(function () {
+  let base = Hud.prototype.creatureHTML;
+  Hud.prototype.creatureHTML = function (id) {
+    let html = base.call(this, id),
+      w = this.w,
+      c = w && w.byId[id];
+    if (!c || typeof looksText !== "function" || !html.includes('<p class="doing">')) return html;
+    let l = c.look || {},
+      t = looksText(w, c) + (l.wear && LOOKS_WEAR_NAMES[l.wear] ? `; ${LOOKS_WEAR_NAMES[l.wear]}` : "") + (c.treasure && c.beliefs && c.beliefs.giver > 0.5 ? "; they wear the treasure they found" : "");
+    let at = html.indexOf("</p>", html.indexOf('<p class="doing">'));
+    return at < 0 ? html : html.slice(0, at + 4) + `<p class="muted">${escapeHtml(t[0].toUpperCase() + t.slice(1))}.</p>` + html.slice(at + 4);
+  };
+})();
