@@ -36,6 +36,13 @@ Object.assign(BEAVER, {
   earliestDay: 22, // not before week 4 (Creekfolk 1: 120) ...
   driest: 0.5, // ... and once half the floor stayed wet at the driest point (Creekfolk 1: 0.55) ...
   latestDay: 28, // ... and by day 28 whatever the creek (Creekfolk 1: 210)
+  // They keep the dams to the creekfolk's own standard, so the healed floor still feels the dry
+  // season a little: they mend a dam once it's as worn as the creekfolk let theirs get
+  // (Creekfolk 1: 0.75), build a crest no higher above the floor than the creekfolk do
+  // (Creekfolk 1: 0.25 m), and dam a dozen of the floor's side channels (scaled: 29).
+  mendAt: 0.6,
+  above: 0.1,
+  smallDams: 12,
 });
 
 // Every life tick (from beaverLifeTick): did the beavers come in the night? Looked at once a
