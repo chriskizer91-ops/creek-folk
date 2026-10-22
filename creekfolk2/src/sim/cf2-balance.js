@@ -18,6 +18,9 @@
 //     alive downstream and may visit; the history names them. Before anything is let go, each
 //     record keeps the family line it belongs to (`line`: the first-parent line back to a
 //     founder or a traveler), which the page dresses families by (cwLine in cf2-worker.js).
+//     A record kept long after its creekfolk has gone is folded to what is still read of it
+//     (name, birth, parents, generation, line, when they passed or left, their tree): their
+//     children, partner, age and how they left are in the other records or follow from these.
 //   - ties to those long gone (`c.rel`). A creekfolk keeps a tie to someone who passed or left
 //     for `relDays`, a weak one (warmth not above `relWarm`) for `relWeakDays`; ties to someone
 //     still alive downstream are kept while they may visit.
@@ -33,8 +36,13 @@
 //     not one of the eight's: its name falls out of use (the word leaves everyone's speech).
 //     Without this the names (and the words for them, talked about in every chat) grow by a
 //     few a month for good.
-//   - what each creekfolk has seen (`c.seen`) leaves out the grove's trees, which nothing looks
-//     up there (a wrapper of lookAround, at the end of this file).
+//   - what each creekfolk has seen (`c.seen`) leaves out the grove's trees (an edit in place in
+//     core.js's lookAround, marked CF2). Creekfolk 1 notes every resource in sight there, grove
+//     trees too, but only food, materials and the like are ever looked up again; the grove grows
+//     to about 240 trees over months, which would add as many entries to every mind and make
+//     every look around (a fifth of the simulation's time) slower as the valley ages.
+//   - a visitor's mind is its own copy of the record of how it left (a wrapper of visits, near
+//     the end of this file; a determinism fix more than a size one).
 //   - Creekfolk 1's two graphs, which nothing in Creekfolk 2 reads or draws (`w.timeline`,
 //     hourly; `w.popLog`, every six hours), keep `timelineDays` and `popLogDays` (Creekfolk 1:
 //     60 and 400 days, so they filled up only after the founders' month).
@@ -55,11 +63,11 @@ var BALANCE = {
   relWeakDays: 6, // ... a weak one sooner
   relWarm: 0.4, // a tie at or below this warmth is weak (Creekfolk 1 names a child for a loved one above 0.4)
   timelineDays: 30, // Creekfolk 1's hourly timeline, kept this many days (Creekfolk 1: 60)
-  popLogDays: 60, // Creekfolk 1's population log, kept this many days (Creekfolk 1: 400)
+  popLogDays: 30, // Creekfolk 1's population log, kept this many days (Creekfolk 1: 400)
 };
 
 function balanceOf(w) {
-  return (w.balance = w.balance || { t: 0, runs: 0, lineage: 0, rel: 0, contrib: 0, pairs: 0, downstream: 0, myths: 0, places: 0 });
+  return (w.balance = w.balance || { t: 0, runs: 0, lineage: 0, folded: 0, rel: 0, contrib: 0, pairs: 0, downstream: 0, myths: 0, places: 0 });
 }
 
 var cf2BalanceLifeTick = lifeTick;
@@ -192,7 +200,21 @@ function balanceLineage(w, L, now, D, away) {
   for (let list of [w.hist, w.log]) for (let e of list || []) for (let id of e.who || []) add(id);
   if (w.lastFounder) add(w.lastFounder.id);
   let n = 0;
-  for (let id in L) if (!keep.has(+id)) delete L[id], n++;
+  for (let id in L) {
+    if (!keep.has(+id)) {
+      delete L[id], n++;
+      continue;
+    }
+    // kept long after they've gone (for the grove, or as someone's ancestor): only what is
+    // read of them stays; their children and partner are in the others' records, their age
+    // and how they left in when they were born, passed or left
+    let r = L[id],
+      g = r.died ?? r.left ?? null;
+    if (g != null && now - g >= BALANCE.goneDays * D && r.children) {
+      delete r.children, delete r.partner, delete r.how, delete r.age;
+      balanceOf(w).folded = (balanceOf(w).folded || 0) + 1;
+    }
+  }
   balanceOf(w).lineage += n;
 }
 
@@ -242,25 +264,21 @@ function balancePlaces(w, L, now) {
   balanceOf(w).places += drop.size;
 }
 
-// The grove's trees are not kept in what each creekfolk has seen (`c.seen`). Creekfolk 1 notes
-// every resource in sight there, grove trees too, but only food, materials and the like are
-// ever looked up again; the grove grows to its full size (about 240 trees) over months, so its
-// trees would add as many entries to every mind, and to every look through them. Wraps
-// lookAround (core.js; cf2-scale.js wraps it first, for the distance).
-var cf2BalanceLook = lookAround;
-lookAround = function (i, t, e = 10) {
-  cf2BalanceLook(i, t, e);
-  let seen = t.seen;
-  for (let id of balanceGroveIds(i)) if (seen[id] !== undefined) delete seen[id];
+// A visitor from downstream gets its own copy of the mind it left with. Creekfolk 1's visits
+// (minds.js) hands the visitor the very objects kept in `w.downstream` (its words, ties, looks,
+// temperament, family), so while the visitor is here everything it learns changes the record of
+// how it left; a save and reload separates the two, and the valley then goes on differently
+// from one that wasn't reloaded (found by tools/determinism.cjs from a day-22 save). Copying
+// them as a reload would makes a live run, a replay and a reloaded run the same again.
+var cf2BalanceVisits = visits;
+visits = function (w, force = false) {
+  let r = cf2BalanceVisits(w, force);
+  for (let c of w.creatures) {
+    if (!c.visitor) continue;
+    let d = (w.downstream || []).find((x) => x.id === c.id),
+      sn = d && d.snap;
+    if (!sn) continue;
+    for (let k of ["look", "temp", "interests", "accent", "lex", "rel", "parents", "children"]) if (c[k] && c[k] === sn[k]) c[k] = JSON.parse(JSON.stringify(c[k]));
+  }
+  return r;
 };
-var balanceGroveCache = new WeakMap();
-function balanceGroveIds(w) {
-  let g = w.grove,
-    key = g ? `${g.n}|${g.fallen}|${w.res.length}` : "-",
-    got = balanceGroveCache.get(w);
-  if (got && got.key === key) return got.ids;
-  let ids = [];
-  for (let r of w.res) if (r.kind === "grove") ids.push(r.id);
-  balanceGroveCache.set(w, { key, ids });
-  return ids;
-}
