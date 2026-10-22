@@ -86,7 +86,8 @@ function mindSheet(w, c) {
   // how they look (Creekfolk 1's 3C), and what they wear for what they love
   if (c.look) {
     let worn = looksWorn(w, c);
-    h += `<p class="mute">${esc(looksText(w, c).replace(/^./, (x) => x.toUpperCase()))}${worn ? `; wears ${esc(LOOKS_WEAR_NAMES[worn])}` : ""}.</p>`;
+    let tr = c.treasureId != null && (w.treasures || []).find((t) => t.id === c.treasureId);
+    h += `<p class="mute">${esc(looksText(w, c).replace(/^./, (x) => x.toUpperCase()))}${worn ? `; wears ${esc(LOOKS_WEAR_NAMES[worn])}` : ""}${tr ? `${worn ? ", and" : "; wears"} ${esc(TREASURE_KINDS[tr.k].phrase)} on a cord${tr.by === c.id ? ", found after a storm" : `, that ${esc(tr.byName)} found`}` : ""}.</p>`;
   }
   if (c.carry) h += `<p class="mute">Carrying ${c.carry.n > 1 ? c.carry.n + " " : ""}${esc(MATERIAL_LABELS[c.carry.k] || c.carry.k)}.</p>`;
   let home = c.home != null ? w.byId[c.home] : null;

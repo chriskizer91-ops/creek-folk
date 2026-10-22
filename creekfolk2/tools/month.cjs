@@ -4,7 +4,8 @@
 //   node tools/month.cjs [--seeds 2] [--days 30] [--every 3] [--jobs 2] [--save 10,20,30] [--out runs/month]
 //
 // Each seed runs in its own process. LIFE='{"pairBirthDays":4}' (JSON) tunes lives;
-// SIM=<file> runs a frozen copy of the simulation.
+// SIM=<file> runs a frozen copy of the simulation; CARE=1 plays the player's care: a treasure
+// every two days (each kind in turn) and a little food near a home every fifteen hours.
 "use strict";
 const { fork } = require("node:child_process");
 const fs = require("node:fs");
@@ -40,6 +41,14 @@ if (process.argv[2] === "--child") {
   for (let d = 1; d <= days; d++) {
     for (let k = 1; k <= 8; k++) {
       S.runUntil(w, (d - 1 + k / 8) * D);
+      if (process.env.CARE) {
+        const step = (d - 1) * 8 + k;
+        if (step % 16 === 3) S.placeTreasure(w, Object.keys(S.TREASURE_KINDS)[(step >> 4) % Object.keys(S.TREASURE_KINDS).length]);
+        if (step % 5 === 2) {
+          const h = w.structures.find((s) => s.kind === "home" && s.level > 0);
+          if (h) S.leaveFood(w, h.x + 3, h.z + 2, ["berry", "seeds", "fruit"][step % 3]);
+        }
+      }
       const fNow = foundersAlive();
       for (const id of fPrev) if (!fNow.includes(id)) arc.passed.push(+(w.t / D).toFixed(2));
       fPrev = fNow;
@@ -74,6 +83,17 @@ if (process.argv[2] === "--child") {
         homes: w.structures.filter((s) => s.kind === "home" && s.level > 0).length,
         built: w.structures.filter((s) => s.level > 0).length,
         errors: w.stats.errors || 0,
+        care: process.env.CARE
+          ? {
+              placed: w.stats.treasuresPlaced || 0,
+              found: w.stats.treasures || 0,
+              buried: (w.treasures || []).filter((t) => t.st === "buried").length,
+              waiting: (w.treasures || []).filter((t) => ["wait", "bar", "pond", "floor"].includes(t.st)).length,
+              believers: w.creatures.filter((c) => !c.visitor && c.beliefs && c.beliefs.giver > 0.5).length,
+              beyond: w.creatures.filter((c) => c.beliefs && c.beliefs.beyond).map((c) => c.name).join(","),
+              eaten: w.stats.foodEaten || 0,
+            }
+          : undefined,
         season: S.seasonAt(w).name,
         sec: +((now - tPrev) / 1000).toFixed(1),
         x: Math.round((every * D * 1000) / Math.max(1, now - tPrev)),
@@ -102,7 +122,7 @@ const results = {};
 let next = 0,
   running = 0;
 const fmt = (s, r) =>
-  `${s.padEnd(7)} d${String(r.day).padStart(3)} ${r.season.padEnd(6)} pop ${String(r.pop).padStart(2)} (${r.ch}/${r.ad}/${r.el}) f${r.founders} cap ${r.cap} feed ${r.feed} b${r.births} p${r.passings} gone ${r.departed} | wet ${r.wet.toFixed(2)} driest ${r.driest == null ? "-" : r.driest.toFixed(2)} trench ${r.trench} dams ${r.dams || "-"} floods ${r.floods} ${Object.entries(r.stages).map(([k, v]) => k + ":" + v).join(" ")} dry ${r.dry} | homes ${r.homes} built ${r.built} err ${r.errors} | ${r.sec}s ${r.x}x`;
+  `${s.padEnd(7)} d${String(r.day).padStart(3)} ${r.season.padEnd(6)} pop ${String(r.pop).padStart(2)} (${r.ch}/${r.ad}/${r.el}) f${r.founders} cap ${r.cap} feed ${r.feed} b${r.births} p${r.passings} gone ${r.departed} | wet ${r.wet.toFixed(2)} driest ${r.driest == null ? "-" : r.driest.toFixed(2)} trench ${r.trench} dams ${r.dams || "-"} floods ${r.floods} ${Object.entries(r.stages).map(([k, v]) => k + ":" + v).join(" ")} dry ${r.dry} | homes ${r.homes} built ${r.built} err ${r.errors}${r.care ? ` | care: treasures ${r.care.found}/${r.care.placed} found, ${r.care.buried} buried, ${r.care.waiting} out; believers ${r.care.believers}${r.care.beyond ? ", " + r.care.beyond + " suspects" : ""}; food eaten ${r.care.eaten}` : ""} | ${r.sec}s ${r.x}x`;
 function launch() {
   if (next >= seeds.length) return;
   const seed = seeds[next++];
