@@ -22,10 +22,11 @@ node tools/vendor-three.mjs     # only to change three.js: vendor/three-r186.js 
 Every build makes two self-contained pages: `creekfolk2.html` (the game; the dev menu is hidden
 behind Ctrl+Shift+D or `#dev`) and `creekfolk2-dev.html` (a visible Dev button that works on a
 phone, and its own saves). `BUILD_VERSION` in `tools/build.mjs` names the build (`cf2-1` is
-Phase 1, `cf2-2` Phase 2); bump it for every build handed to the author, because each build keeps its own saves.
+Phase 1, `cf2-2` Phase 2, `cf2-3` Phase 3); bump it for every build handed to the author, because each build keeps its own saves.
 No page ever makes a network request: three.js and the fonts (`assets/fonts`, OFL) are embedded.
 `releases/` keeps the two files handed to the author at the end of each phase
-(`creekfolk2-phase1*.html`, build `cf2-1`; `creekfolk2-phase2*.html`, build `cf2-2`); never rebuild them.
+(`creekfolk2-phase1*.html`, build `cf2-1`; `creekfolk2-phase2*.html`, build `cf2-2`;
+`creekfolk2-phase3*.html`, build `cf2-3`); never rebuild them.
 
 ## Architecture
 
@@ -145,14 +146,15 @@ All source files share one scope: the build concatenates them in the order liste
 
 ## The living balance (Phase 3: the beavers, bounded memory)
 
-- **The beavers** (`cf2-beavers.js`) come in week 4: on four seeds on days 24.1 to 24.8, in the
-  spring after the creek was half wet at its driest (by day 28 whatever the creek). They mend
-  about ten dams a day and build up the silted ones; the creekfolk then leave the dams to them
-  (dam-tending, about 0.1% of grown-ups' waking time before, measures 0.00 to 0.01% after; new
-  dams and levels stay the creekfolk's). Beaver-kept dams hardly leak and the beavers build them
-  up to 0.25 m over the floor with 29 little side dams, so a healed valley stays 95 to 99% wet
-  at its driest from day 30 or 38 on (without them, 82 to 92%). Up to six beavers (kits each
-  spring, old ones leave after 60 days).
+- **The beavers** (`cf2-beavers.js`) come in week 4: on four seeds with care on days 24.7 to
+  28.0, in the spring after the creek was half wet at its driest (by day 28 whatever the creek).
+  They keep the dams to the creekfolk's own standard (Decision 24): they mend a dam at the same
+  wear (`BEAVER.mendAt` 0.6), build a silted one up no higher than 0.1 m over the floor
+  (`above`) and dam a dozen of the floor's side channels (`smallDams`); the creekfolk then leave
+  the dams to them (dam-tending, about 0.1% of grown-ups' waking time before, 0.00 to 0.01%
+  after; new dams and levels stay the creekfolk's). A healed valley stays about 90 to 96% wet at
+  its driest with them (Creekfolk 1's numbers gave 95 to 99%; without beavers, 81 to 92%). Up to
+  six beavers (kits each spring, old ones leave after 60 days).
 - **Bounded** (`cf2-balance.js`): everything that grew with every creekfolk who ever lived is let
   go or folded every six hours, keeping what it means; see the file's header for the list, and
   what still fills up slowly towards its cap (the bank's mud bands, the chronicle's 400 days, the

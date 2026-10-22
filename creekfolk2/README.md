@@ -12,7 +12,12 @@ from the air down to a creekfolk's face (`docs/PHASE1.md`). Phase 2 (the founder
 built: the creek heals in the founders' month, the eight arrive with the old valley's craft,
 words, customs and stories, the last of them passes near day 30, and the valley keeps three
 records of time (the mud in the creek's bank, carvings in sand, clay and stone, the
-chronicle), with then and now (`docs/PHASE2.md`). The playable files are in `releases/`.
+chronicle), with then and now (`docs/PHASE2.md`). Phase 3 (care and the living balance) is
+built: the player can leave a little food and, every two days, a treasure for the creek to carry
+down; belief wakes from what they find, and one of them comes to suspect someone beyond the
+valley; beavers come in week 4; the founders are remembered each year; and the valley lets go of
+what nothing needs any more, so it can run on (`docs/PHASE3.md`). The playable files are in
+`releases/`.
 
 - `docs/BRIEF.md`: the author's brief for Creekfolk 2.
 - `docs/DECISIONS.md`: what has been decided since the brief, and why. It wins over the

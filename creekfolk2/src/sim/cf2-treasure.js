@@ -32,8 +32,10 @@ var TREASURE = {
   keep: 300,           // treasures remembered (the oldest settled ones are dropped first)
   headZ: 3,            // where they are placed: the head of the valley
   findR: 7,            // m (times CF2_SCALE.see): how near a creekfolk has to pass to notice one
-  findPond: 0.35,      // under water they're harder to see
-  buryMM: 25,          // a pond or bar that gets this much mud over a treasure buries it
+  findPond: 0.5,       // under water they're harder to see
+  buryMM: 25,          // a pond that gets this much mud over a treasure buries it ...
+  buryBar: 45,         // ... a bar, this much gravel and mud
+  deep: 0.3,           // m of still water over a treasure before it is out of sight
   searchHours: 8,      // valley hours after a storm that searchers go looking
   growDays: 8,         // a planted nut grows into a young tree in about this long
   wonder: 0.8,         // how much a find moves them (Creekfolk 1's "need": a gift the valley needed)
@@ -87,7 +89,8 @@ function treasureStructName(w, s) {
     return rank < ORDINAL_WORDS.length ? `the ${ORDINAL_WORDS[rank]} dam` : "one of the high dams";
   }
   let o = s.owner != null && (w.byId[s.owner] || (w.lineage || {})[s.owner]);
-  return s.kind === "home" && o ? `${o.name}'s home` : (o ? o.name + "'s " : "the ") + structureLabel(s);
+  if (s.kind === "home") return o ? `${o.name}'s home` : "a home nobody lives in now";
+  return (o ? o.name + "'s " : "the ") + structureLabel(s);
 }
 
 // The player places a treasure at the head of the valley. Returns it, or null if one was
@@ -144,14 +147,16 @@ function carryTreasures(w, T) {
       // a dam: what the flood can lift over its crest goes on (light things easily, heavy ones
       // only in the biggest floods); the rest stops in its pond
       if (cr._damAt && cr._damAt[j + 1] && !rng.chance(TREASURE_OVER[wt] * clamp((k - 5) / 20, 0, 1))) {
-        st = full && full[j] > ns[j].bed + 0.1 ? "pond" : "bar";
+        st = full && full[j] - ns[j].bed > TREASURE.deep ? "pond" : "bar";
         break;
       }
       j++;
       went += nx.len;
+      // where the flood runs into still water it drops what it carries: on the shallow delta at
+      // the pond's head (a bar, easy to see), or out in deeper water
       let pond = full && full[j] > nx.bed + 0.15;
       if (pond && wt > 0) {
-        st = "pond";
+        st = full[j] - nx.bed > TREASURE.deep ? "pond" : "bar";
         break;
       }
       if (wt === 0 && nx.ob > 0.2 && rng.chance(0.06)) {
@@ -191,7 +196,7 @@ function buryTreasures(w, before) {
     if ((tr.st !== "pond" && tr.st !== "bar") || tr.moved === Math.round(w.t)) continue;
     let n = cr.nodes[tr.i],
       rise = (n.bed - before[tr.i]) * 1000;
-    if (rise < TREASURE.buryMM) continue;
+    if (rise < (tr.st === "pond" ? TREASURE.buryMM : TREASURE.buryBar)) continue;
     let init = cr.init && cr.init[tr.i] ? cr.init[tr.i][0] : n.bed,
       r = (R.mud[tr.i] = R.mud[tr.i] || { b: [], f: [], p: 0, pf: 0 });
     (r.tr = r.tr || []).push([Math.round(w.t / 8640), tr.id, Math.round((before[tr.i] - init) * 1000)]);
@@ -468,7 +473,12 @@ function searchOption(w, c) {
     hi = creekNodeIndex(VL - 8),
     near = creekNodeIndex(c.z),
     known = (w.treasures || []).filter((t) => t.foundT && t.h && t.h.some((e) => e[0] === "bar" || e[0] === "pond" || e[0] === "floor")).map((t) => t.foundAt).filter((i) => i != null),
-    a = clamp((known.length && w.rng.chance(0.6) ? w.rng.pick(known) : near) + w.rng.int(-10, 6), lo, hi),
+    // they look where things were found before, and in the still water above the dams, where
+    // they have learned the creek lets things go
+    ponds = Object.values(w.creek.dams || {}).map((d) => d.i - 3),
+    pick = w.rng.next(),
+    from = known.length && pick < 0.4 ? w.rng.pick(known) : ponds.length && pick < 0.8 ? w.rng.pick(ponds) : near,
+    a = clamp(from + w.rng.int(-6, 4), lo, hi),
     b2 = clamp(a + w.rng.int(8, 22), lo, hi),
     side = c.x < ns[a].x ? -1 : 1,
     pt = (i) => ({ x: ns[i].x + side * (creekTopWidth(ns[i]) / 2 + 0.8), z: ns[i].z });

@@ -130,6 +130,33 @@ These came up while tuning the founders' month; the author confirmed all six.
     season), standing stones at the Telling Stones (days to cut, for good). Those who were there
     recut a stone that tells their story wrongly.
 
+## Made in Phase 3 (for the author to confirm)
+
+19. **A treasure every two real days** (Decision 6 said two or three). Thirteen kinds in four
+    groups, after What the Water Brings' collections but with their own names: things the water
+    rounded, the old sea, glass and light, seeds and wood.
+20. **What becomes of each.** A creek stone is set into the crest of a dam; a shell, glass or
+    feather is worn on a cord and passed to a child (or laid at the wearer's tree in the grove);
+    a crystal or a spiral shell is kept on a windowsill; a nut is planted and grows into a tree.
+    One left in a pond until the next flood's mud covers it is buried in the creek's bank for
+    good, and the bank's cross-section shows it.
+21. **No requests and no keeping watch.** Creekfolk 1's standing requests ("the gardens are
+    dry") and believers keeping watch when a gift is due are left out (the brief made them
+    optional; treasures are rare and unpaced). Believers leave offerings at the Giving Place
+    after a find; after a storm some walk the banks to look, and that becomes a custom; "the
+    creek is resting" after ten days without a find.
+22. **Kindness.** Up to three piles of food out at once; uneaten food spoils after a day and a
+    half; whoever finds food at a spot three times starts stopping by, and now and then leaves
+    something back; a spot several know gets a name.
+23. **The day they remember the eight**: each valley year, on the day the last founder passed,
+    at the founders' standing stones (or their trees in the grove).
+24. **The beavers keep the dams to the creekfolk's own standard** (they mend at the same wear,
+    build no higher, dam a dozen side channels rather than twenty-nine). With Creekfolk 1's
+    beaver numbers the healed floor stayed 95 to 99% wet at the driest point; with these it is
+    about 90 to 96%. A healed valley stays wet through the dry season even without beavers
+    (81 to 92%), the way a real beaver meadow does. If the author wants a stronger dry-season
+    pulse, the smallest change is to let the ponds soak less into the floor (`CF2_CREEK.pondSide`).
+
 ## Still open
 
 - **What caught the author's eye in What the Map Forgot.** Asked; until the author says,

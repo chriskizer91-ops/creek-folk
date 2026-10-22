@@ -18,7 +18,7 @@ import { transform } from 'esbuild';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dev = process.argv.includes('--dev');
-export const BUILD_VERSION = 'cf2-2';
+export const BUILD_VERSION = 'cf2-3';
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 // Order matters: later files may use names from earlier ones. The first group is
