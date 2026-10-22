@@ -52,6 +52,8 @@ export const SIM_FILES = [
   'src/sim/cf2-records.js',  // what happened, written in the land: mud layers, the dams' record
   'src/sim/cf2-chronicle.js', // the chronicle of every day; the last founder's passing
   'src/sim/cf2-carve.js',    // carvings in sand, clay and stone
+  'src/sim/cf2-beavers.js',  // the beavers come in week 4 and take over much of the dam-tending
+  'src/sim/cf2-balance.js',  // the living balance keeps its size: old records let go, keeping their meaning
   'src/sim/cf2-belief.js',   // belief asleep for now; no temple, no Hall of the Ancestors
   'src/sim/api.js',       // Creekfolk 1: the surface used by tools and the worker
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it

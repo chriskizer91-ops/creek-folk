@@ -8,4 +8,7 @@ Object.assign(CreekSim, {
   CF2_CRAFT,
   cf2BranchWater,
   cf2BranchState,
+  CF2_BEAVER,
+  BALANCE,
+  balanceWorld,
 });

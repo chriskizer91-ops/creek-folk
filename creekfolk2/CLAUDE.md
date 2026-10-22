@@ -56,7 +56,7 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/looks.js` | Inherited looks: 24 fur colours in a ring, coat patterns, face markings, pale paws, the colour of what they wear, what grown-ups wear for their passion (`creature.look`, `looksOf`, `looksText`, `looksWorn`); believers wear their treasure (`c.treasure`). |
 | `src/sim/homes.js` | Doors and decorations by the door from what the owner loves (`home.deco`), the porch and hearth levels (comfort, not room), the fourth garden bed, a second and third garden. |
 | `src/sim/grove.js` | The memorial grove: tree kinds by family, growth all year (`groveSize`), nurse logs (`world.grove.logs`), bounded (240 standing, 24 logs); goats' kids, old goats, wool blankets. Scaled to real size in place (`// CF2:`). |
-| `src/sim/beavers.js` | The beavers (`world.beavers`): arrival (3C's rule: after day 120 with 55% wet at the driest, or by day 210), the lodge in the deepest pond, kits, tending and raising dams, little side dams on the floor that hold water. |
+| `src/sim/beavers.js` | The beavers (`world.beavers`): arrival (3C's rule: after day 120 with 55% wet at the driest, or by day 210; Creekfolk 2 brings them in week 4, `cf2-beavers.js`), the lodge in the deepest pond, kits, tending and raising dams, little side dams on the floor that hold water. |
 | `src/sim/skycal.js` | The sky stones on the terrace after the first midwinter (`world.skycal`, structure `skycal`); meeting there on midwinter morning. |
 | `src/sim/returning.js` | The Returning (needs a finished temple, so never in Creekfolk 2) and the glowing fish run at midwinter once the creek has healed (`world.returning`); the 3C hooks (`lifeTick3C`, `lifeOptions3C`, `devTrigger3C`, `partDone3C`). |
 
@@ -72,6 +72,8 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/cf2-records.js` | What happened, written in the land: a band in the creek's bank for every flood (`world.records.mud`), the dams' record (`world.records.dams`), patches from repairs (`s.patches`); `bankAt`, `firstDamBank`, `depthWords` for the page. `RECORDS`. |
 | `src/sim/cf2-chronicle.js` | The chronicle, a page of facts for every real day (`world.chronicle`), and the last founder's passing (`world.lastFounder`, a story, a memory for everyone). `CHRONICLE`. |
 | `src/sim/cf2-carve.js` | Carvings (`world.carvings`): sand by the creek, clay tablets by homes, standing stones at the Telling Stones; wear, reading, copying, recutting and "correcting". Goal and action `carve`. `CARVE`. |
+| `src/sim/cf2-beavers.js` | The beavers come in week 4 (Phase 3): from day 22, once half the floor stayed wet at the driest point, a young pair comes up the creek in the spring that follows (days 24 to 26; by day 28 whatever the creek), in the night, and is found at first light. Once they live there the creekfolk leave the dams to them, mending only a badly worn one and building up only where a stone apron is needed. `CF2_BEAVER`. |
+| `src/sim/cf2-balance.js` | The living balance keeps its size (Phase 3): every six hours, `balanceWorld` lets go of what nothing needs any more (lineage records, after each keeps its family `line`; ties to those long gone; the work shares of the gone; noted pairs; the departed who have lived out their span; myths of forgotten stories; places named for a passing whose names fell out of use), so the save and memory stay level after the founders' month. `BALANCE`, counts in `world.balance`. |
 | `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
@@ -181,6 +183,8 @@ minutes behind: the worker replays the gap in 250 ms slices and reports progress
 
 ```
 node tools/build.mjs --dev && node tools/determinism.cjs 4    # live == replay == save/reload, by state hash
+node tools/determinism.cjs 2 x runs/x.json                       # the same, from a saved valley (the beavers' coming, the balance letting go)
+node tools/longrun.cjs --seeds 2 --days 92 --jobs 2 --save 60,92 # months headless: population, wet, save size and what it's made of, memory, time per day, dam-tending; checks that nothing trends after day 35
 node tools/month.cjs --seeds 2 --days 30 --save 15,30            # whole months headless; prints the valley and creek
 node tools/map.cjs <seed> <days> runs/map.png                    # the simulated valley from above, as a picture
 node tools/creek-lab.cjs --seed cf2-1 --dams arc --fixed-weather  # the creek alone, scripted or replayed dams (--dams <save>, healed, none)

@@ -155,7 +155,8 @@ function cwSlow(w, c) {
 }
 // The two family lines a creekfolk comes from: the first parent's first parent's ... back to
 // a founder or a traveler, and the same up the second parent's side (from the lineage, so
-// lines outlive the ones who started them). The page dresses families by them.
+// lines outlive the ones who started them; a record keeps its line in `line` before older
+// records are let go, cf2-balance.js). The page dresses families by them.
 var CW_LINES = new Map();
 // The valley as it was on its first morning, made again from its seed (newValley is
 // deterministic), for "then and now". Only the land, the creek and what grew there: none of
@@ -188,6 +189,7 @@ function cwLine(w, c) {
       for (let n = 0; n < 400; n++) {
         let r = L[id],
           p = r && r.parents && r.parents[0];
+        if (r && r.line != null) return r.line;
         if (p == null || !L[p]) return id;
         id = p;
       }
