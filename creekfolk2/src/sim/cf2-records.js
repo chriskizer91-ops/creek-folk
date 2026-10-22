@@ -128,7 +128,7 @@ function bankAt(w, z) {
     dams = Object.entries(R.dams)
       .filter(([, d]) => d.i === i)
       .map(([id, d]) => ({ id, ...d, now: cr.dams[id] || null }));
-  return { i, z: n.z, n, bed0: init[0], fp0: init[1], bed: n.bed, fp: n.fp, wl: n.wl, bands: r.b, floor: r.f, dams };
+  return { i, z: n.z, n, bed0: init[0], fp0: init[1], bed: n.bed, fp: n.fp, wl: n.wl, bands: r.b, floor: r.f, dams, buried: r.tr || [] };
 }
 
 // The point of the creek with the deepest record behind the oldest dam (for the Land tab).

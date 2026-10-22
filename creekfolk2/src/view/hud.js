@@ -20,6 +20,7 @@ var Hud = class {
     $("xSettings").onclick = () => ($("vSettings").hidden = true);
     $("xAway").onclick = () => ($("vAway").hidden = true);
     $("bVillage").onclick = () => this.openVillage();
+    $("bCare").onclick = () => this.openCare();
     // then and now: hold the button, or T
     let then = (on) => {
       let R = this.app.renderer;
@@ -132,6 +133,7 @@ var Hud = class {
   }
   welcomeBack() {
     if (this.app.renderer && this.app.renderer.welcomeBack) this.app.renderer.welcomeBack();
+    setTimeout(() => this.waveHello(), 1500);
   }
   // ---- the first moment --------------------------------------------------
   showStart(note) {

@@ -15,12 +15,24 @@ const days = +(process.argv[2] || 4),
   seed = process.argv[3] || "det-1";
 const T = days * 86400,
   opts = { calStart: Date.parse("2026-10-20T15:00:00Z"), tzMin: 300 };
-// The player gives gifts at the same moments in every run.
+// The player cares at the same moments in every run: a treasure every two days (each kind in
+// turn) and a little food near a home every sixteen hours.
 const GIFTS = [];
-const KINDS = Object.keys(S.GIFT_KINDS); // every kind of gift, in turn (some land too soon and are refused)
-for (let d = 0; d < days; d++) GIFTS.push([d * 86400 + 9.3 * 3600, KINDS[(2 * d) % KINDS.length]], [d * 86400 + 21.7 * 3600, KINDS[(2 * d + 1) % KINDS.length]]);
+const KINDS = Object.keys(S.TREASURE_KINDS),
+  FOODS = Object.keys(S.KIND_FOODS);
+for (let d = 0; d < days; d += 2) GIFTS.push([d * 86400 + 9.3 * 3600, "treasure", KINDS[(d / 2) % KINDS.length]]);
+for (let h = 5; h < days * 24; h += 16) GIFTS.push([h * 3600 + 0.4 * 3600, "food", FOODS[Math.floor(h / 16) % FOODS.length]]);
+GIFTS.sort((a, b) => a[0] - b[0]);
 function runWithGifts(w, to) {
-  for (const [t, k] of GIFTS) if (t > w.t && t <= to) { S.runUntil(w, t); S.giveGift(w, k); }
+  for (const [t, what, k] of GIFTS)
+    if (t > w.t && t <= to) {
+      S.runUntil(w, t);
+      if (what === "treasure") S.placeTreasure(w, k);
+      else {
+        const h = w.structures.find((s) => s.kind === "home");
+        if (h) S.leaveFood(w, h.x + 3, h.z + 2, k);
+      }
+    }
   S.runUntil(w, to);
 }
 const hash = (w) => crypto.createHash("sha256").update(S.saveWorld(w)).digest("hex").slice(0, 16);

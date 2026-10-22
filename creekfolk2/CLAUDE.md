@@ -72,6 +72,9 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/cf2-records.js` | What happened, written in the land: a band in the creek's bank for every flood (`world.records.mud`), the dams' record (`world.records.dams`), patches from repairs (`s.patches`); `bankAt`, `firstDamBank`, `depthWords` for the page. `RECORDS`. |
 | `src/sim/cf2-chronicle.js` | The chronicle, a page of facts for every real day (`world.chronicle`), and the last founder's passing (`world.lastFounder`, a story, a memory for everyone). `CHRONICLE`. |
 | `src/sim/cf2-carve.js` | Carvings (`world.carvings`): sand by the creek, clay tablets by homes, standing stones at the Telling Stones; wear, reading, copying, recutting and "correcting". Goal and action `carve`. `CARVE`. |
+| `src/sim/cf2-treasure.js` | Treasures delivered by the creek (`world.treasures`, `placeTreasure`, one every two real days): they wait at the head of the valley for a flood, travel like tracer stones, settle on bars, in ponds or on the floor, get found (or buried in the bank), and become something (set in a dam, kept, planted, worn, passed on). Belief wakes from them (Creekfolk 1's `noticeGift`); the search after a storm becomes a custom; the one who suspects. `TREASURE`, `TREASURE_KINDS`, `treasureWhere`. |
+| `src/sim/cf2-kindness.js` | Everyday kindness (`world.kindness`, `leaveFood`): food the player leaves is noticed, eaten, learned as a spot, visited, answered with small things left back; a spot several know gets a name. `KIND`, `KIND_FOODS`. |
+| `src/sim/cf2-founders.js` | Customs around the founders: the yearly day they remember the eight (`world.customs.founders`), at the founders' stones or trees. `FOUNDERS_DAY`. |
 | `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
@@ -79,6 +82,7 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/view/vworld.js` | The page's copy of the valley. |
 | `src/view/words.js`, `sheets.js` | Plain words about creekfolk (from Creekfolk 1's interface); the village and mind sheets. |
 | `src/view/records-view.js` | The records on the page: the creek's bank as a cross-section (`bankSheet`, opened by tapping the creek), the Ways and stories tab (customs, words, and for each story what happened, what was carved, what they say now), the Chronicle tab and its pages in "while you were away". |
+| `src/view/care-view.js` | Care on the page: the Care sheet (leave food, then tap where; a treasure for the creek; where each of your treasures is now; what they make of it), and the one who suspects waving when the page opens (`Hud.waveHello`, `View3D.waveFor`). |
 | `src/view/hud.js` | The interface: clock chip, log line, catching up, the clock's questions, settings, backups, sheets. |
 | `src/view/dev.js` | The developer menu. |
 | `src/view/mapview.js` | The valley from above on a 2D canvas: the fallback without WebGL2. |
@@ -193,6 +197,7 @@ node tools/bench-browser.mjs runs/x.json 30                      # catch-up spee
 node tools/ui-shots.mjs runs/x.json runs/ui                      # the interface on a laptop and a phone
 node tools/records-shots.mjs runs/x.json runs/rec                # the bank, Ways and stories, the Chronicle, then and now, the last founder's moment
 node tools/records-report.cjs runs/x.json                        # the culture and the records of a saved valley, in numbers
+node tools/care-shots.mjs runs/x.json runs/care                   # the Care sheet, food and treasures where they lie, a worn treasure, the wave
 ```
 
 Screenshots: `node tools/shots.mjs <save.json | new> <out dir> [views.json | -] [w h]`; contact sheets:

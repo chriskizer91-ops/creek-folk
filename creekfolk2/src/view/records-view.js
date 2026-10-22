@@ -61,6 +61,14 @@ function bankSvg(w, b) {
     for (let k = 0; k < 4; k++) s += `<rect x="${x0 + 18 + k * 9}" y="${Y(top)}" width="4" height="${(+Y(d.base) - +Y(top)).toFixed(1)}" fill="${P.stake}"/>`;
     s += `<rect x="${x0 + 14}" y="${Y(d.base + 0.08)}" width="40" height="${(+Y(d.base) - +Y(d.base + 0.08)).toFixed(1)}" fill="${P.stone}"/>`;
   }
+  // treasures buried in the mud here (cf2-treasure.js): a glint at the height the mud had reached
+  for (let [, id, mm] of b.buried || []) {
+    let tr = (w.treasures || []).find((t) => t.id === id),
+      K = tr && TREASURE_KINDS[tr.k],
+      ty = b.bed0 + mm / 1000 + 0.004,
+      tx = x0 + 30 + ((id * 37) % 70);
+    s += `<circle cx="${tx}" cy="${Y(ty)}" r="4" fill="${K ? K.paint : "#fff"}" stroke="#2a2420" stroke-width="1"><title>${esc(K ? K.label : "a treasure")}</title></circle>`;
+  }
   s += `<line x1="${x0}" y1="${Y(b.bed0)}" x2="${xFoot}" y2="${Y(b.bed0)}" stroke="${P.oldLine}" stroke-dasharray="4 3"/>`;
   s += `<text x="${x0}" y="${+Y(b.bed0) + 13}" font-size="11" fill="#f3e9d2">the bed on the first day</text>`;
   s += `<text x="${xTop + 4}" y="${+Y(Math.max(yf, b.fp)) - 5}" font-size="11" fill="${P.ink}">the floor</text>`;
@@ -116,6 +124,11 @@ function bankWords(w, b) {
       early = b.bands.slice(0, half).reduce((a, x) => a + x[1], 0) / half,
       late = b.bands.slice(half).reduce((a, x) => a + x[1], 0) / (n - half);
     if (late < early * 0.6) out.push("The newer bands are thinner: there's less room left for mud to settle.");
+  }
+  for (let [t10, id] of b.buried || []) {
+    let tr = (w.treasures || []).find((t) => t.id === id),
+      K = tr && TREASURE_KINDS[tr.k];
+    if (K) out.push(esc(`Something glints in the mud: ${K.phrase}, buried by a flood on ${bandDate(w, t10)}. No one ever found it.`));
   }
   return `<p>${out.join(" ")}</p><p class="mute">Dark bands are the wet season's mud, pale ones the dry season's silt, grey the gravel the creek carried when it ran fast. The column on the right shows each band thick enough to see; the drawing on the left is true to size.</p>`;
 }

@@ -150,6 +150,7 @@ function cwSlow(w, c) {
     asleep: !!c.asleep,
     emote: c.emote || null,
     beyond: !!(c.beliefs && c.beliefs.beyond),
+    tr: c.treasureId != null ? ((w.treasures || []).find((t) => t.id === c.treasureId) || {}).k || null : null, // the treasure they wear
     line: cwLine(w, c),
   };
 }
@@ -157,6 +158,23 @@ function cwSlow(w, c) {
 // a founder or a traveler, and the same up the second parent's side (from the lineage, so
 // lines outlive the ones who started them). The page dresses families by them.
 var CW_LINES = new Map();
+// What the page draws of care: [id, kind, state, x, z, structure or tree] for treasures that can be
+// seen where they are; the food piles and what was left back; the Giving Place, its offerings
+// and its lantern; and how long until the creek can carry another treasure.
+function cwCare(w) {
+  let K = w.kindness || { piles: [], left: [] },
+    of = w.offerings;
+  return {
+    tr: (w.treasures || []).filter((t) => ["wait", "bar", "pond", "floor", "set", "kept", "grove"].includes(t.st)).map((t) => [t.id, t.k, t.st, t.x, t.z, t.sid ?? t.rid ?? null]),
+    piles: K.piles.map((p) => [p.id, p.x, p.z, p.food, p.n]),
+    left: K.left.map((l) => [l.id, l.x, l.z, l.k]),
+    gp: w.givingPlace ? { x: w.givingPlace.x, z: w.givingPlace.z } : null,
+    offerings: of ? of.recent.length : 0,
+    lantern: !!w.lantern,
+    wait: Math.ceil(treasureWait(w) / 600) * 600,
+  };
+}
+
 // The valley as it was on its first morning, made again from its seed (newValley is
 // deterministic), for "then and now". Only the land, the creek and what grew there: none of
 // the eight, who are shown where they are now.
@@ -232,7 +250,7 @@ function cwSendState(full, heavy = true, alt = null) {
     S.creekT = -1;
     S.weather = "";
     S.fauna = "";
-    S.beavers = S.groveLogs = S.skycal = S.fishRun = S.carvings = "";
+    S.beavers = S.groveLogs = S.skycal = S.fishRun = S.carvings = S.care = "";
     m.seed = w.seed;
     m.calStart = w.calStart;
     m.tzMin = w.tzMin;
@@ -279,6 +297,9 @@ function cwSendState(full, heavy = true, alt = null) {
       fishRun: (w.returning && w.returning.active) || null,
       // carvings in sand, clay and stone: where, what in, how worn, how far cut
       carvings: (w.carvings || []).filter((k) => !k.gone).map((k) => [k.id, k.mat, k.x, k.z, Math.round(k.wear * 10) / 10, Math.round(k.done * 10) / 10]),
+      // care: treasures lying where they can be seen (waiting, settled, set in a dam, on a
+      // windowsill, at a tree), food left out and what was left back, the Giving Place
+      care: cwCare(w),
     };
     for (let k in x) {
       let j = JSON.stringify(x[k]);
@@ -421,6 +442,16 @@ self.onmessage = async (ev) => {
         msg = tw ? cwSendState(true, true, { world: tw, type: "then", sent: { acts: new Map(), slow: new Map(), ent: new Map(), terrain: -1, grids: -1, creekT: -1, weather: "", logN: 0 } }) : { type: "then", none: true };
       msg.id = m.id;
       cwPost(msg);
+    } else if (m.type === "treasure" && w) {
+      // the player places a treasure at the head of the valley
+      let tr = placeTreasure(w, m.kind);
+      cwPost({ type: "cared", id: m.id, ok: !!tr, wait: treasureWait(w) });
+      cwSendState(false);
+    } else if (m.type === "food" && w) {
+      // the player leaves a little food
+      let p = leaveFood(w, m.x, m.z, m.food);
+      cwPost({ type: "cared", id: m.id, ok: !!p, full: (w.kindness && w.kindness.piles.length) >= KIND.piles });
+      cwSendState(false);
     } else if (m.type === "new") {
       let v = newValley(m.seed, { calStart: m.calStart, tzMin: m.tzMin });
       CW.lastSave = 0;

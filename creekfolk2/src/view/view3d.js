@@ -166,6 +166,14 @@ var View3D = class {
     });
   }
   pick(sx, sy) {
+    // leaving food: the next tap on the ground says where
+    if (this.placing) {
+      let g = this.groundAt(sx, sy),
+        k = this.placing;
+      this.placing = null;
+      if (g && this.onPlace) this.onPlace(k, g.x, g.z);
+      return;
+    }
     let t = this.vw.tNow(),
       best = null,
       bd = 34,
@@ -367,7 +375,9 @@ var View3D = class {
         }
         if (f.sprite) f.sprite.visible = false;
         f.model.root.visible = true;
-        Folk3D.pose(f.model, c, { x: p.x, y, z: p.z, face: f.face, walking: moved > 0.002, dt, t, clock: this.time });
+        // the one who suspects someone looks in: when the page opens, they turn to the camera and wave
+        let waving = this.waveFor && this.waveFor.id === c.id && performance.now() < this.waveFor.until && moved <= 0.002;
+        Folk3D.pose(f.model, c, { x: p.x, y, z: p.z, face: waving ? camYaw + Math.PI : f.face, walking: moved > 0.002, dt, t, clock: this.time, wave: waving });
         continue;
       }
       if (f.model) f.model.root.visible = false;

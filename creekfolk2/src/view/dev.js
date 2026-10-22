@@ -50,6 +50,7 @@ var DevMenu = class {
         ["beavers", "Beavers"],
         ["skycal", "Sky stones"],
         ["returning", "The fish run"],
+        ["treasureready", "A treasure (no wait)"],
       ],
       O = [
         [null, "None"],

@@ -88,6 +88,16 @@ var CF2Valley = (function () {
   // the owners' colours, for their doors (Creekfolk 1's 3C), and what the grove's logs grow
   CF2_FUR.forEach((r, i) => (PAINT["fur" + i] = r));
   PAINT.lodge = ["#4e3a28", "#5e4630", "#7a5c40"];
+  // care (cf2-treasure.js, cf2-kindness.js): each treasure's colour, food left out, the leaf it's on
+  var shadeHex = (h, f) => {
+    var n = parseInt(h.slice(1), 16),
+      c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(f < 1 ? v * f : v + (255 - v) * (f - 1)));
+    return "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+  };
+  for (var tk in TREASURE_KINDS) PAINT["tr_" + tk] = [shadeHex(TREASURE_KINDS[tk].paint, 0.6), TREASURE_KINDS[tk].paint, shadeHex(TREASURE_KINDS[tk].paint, 1.35)];
+  PAINT.kindnut = ["#5a3a20", "#8a5a34", "#b07a4a"];
+  PAINT.kindfruit = ["#a8501e", "#e08a3c", "#f4b468"];
+  PAINT.kindleaf = ["#3e5a24", "#5c7f32", "#86a84a"];
   PAINT.hearth = ["#e8a040", "#ffd27a", "#fff0c0"]; // windows lit at night
   PAINT.lily = ["#3f6b3f", "#5f9255", "#8fb86f"]; // lily pads on still water
   var FOAM = { water: "#eef6f6", waterC: "#eef6f6", pond: "#b4ccb0", mudW: "#d9cba8" };
@@ -872,10 +882,11 @@ var CF2Valley = (function () {
     }
     function treeKindOf(r) {
       var v = r.kind === "podtree" ? "pod" : r.tk || r.variant || "oak";
-      return v === "pine" ? "cedar" : v === "birch" ? "syc" : v === "willow" ? "willow" : v === "pod" ? "pecan" : v === "gold" ? "gold" : v === "elm" ? "elm" : "oak";
+      return v === "pine" ? "cedar" : v === "birch" || v === "syc" ? "syc" : v === "willow" ? "willow" : v === "pod" || v === "pecan" ? "pecan" : v === "gold" ? "gold" : v === "elm" ? "elm" : "oak";
     }
     function treeSize(r) {
       if (r.kind === "grove") return clamp(0.62 * groveSize(vw, r), 0.2, 3.2); // grove trees grow all their lives, the founders' into giants
+      if (r.grow != null) return 0.2 + 0.75 * r.grow; // a young tree still growing (a treasure's, a willow cutting)
       return 0.85 + ((r.id * 2654435761) % 1000) / 2000 + (r.kind === "podtree" ? 0.25 : 0);
     }
     function buildTree(B, r, Dd) {
@@ -1887,6 +1898,78 @@ var CF2Valley = (function () {
         if (!far) for (q = 0; q < lines; q++) B.add("limeD|f", bake(box(0.04, 0.02, sw * 0.7), x - sh * 0.35 + q * 0.13, y + 0.15 + sw * 0.5, z, 0, yaw, 0));
       }
     }
+    // Care: treasures where they lie, set in a dam, on a windowsill, at a tree in the grove; food
+    // the player left on a leaf, and the little things left back; the Giving Place's offerings
+    // and its lantern (lit at night, while the creek rests).
+    var OFFER_PAINT = { pebble: "rock", flower: "fred", bead: "wood", ring: "straw", feather: "tr_feather", shell: "tr_spiral", whistle: "reed", figure: "clay" };
+    function trGeo(k, sz) {
+      var g = TREASURE_KINDS[k].group;
+      return g === "round" ? new THREE.DodecahedronGeometry(sz, 0) : g === "glass" ? new THREE.OctahedronGeometry(sz, 0) : g === "sea" ? new THREE.ConeGeometry(sz, sz * 1.2, 6) : k === "feather" ? new THREE.BoxGeometry(sz * 0.5, sz * 0.15, sz * 3.2) : new THREE.IcosahedronGeometry(sz, 0);
+    }
+    function addCare(B, Tl) {
+      var CA = vw.care,
+        R;
+      for (var ct of CA.tr) {
+        if (tileOf(ct[3], ct[4]) !== Tl) continue;
+        var id = ct[0],
+          k = ct[1],
+          st = ct[2],
+          x = ct[3],
+          z = ct[4],
+          y = height(x, z);
+        R = rnd(id * 977 + 3);
+        if (st === "set") {
+          var d = vw.dams && vw.dams[ct[5]],
+            dn = d && vw.nodes ? vw.nodes[d.i] : null;
+          if (!dn) continue;
+          var u = (R() - 0.5) * 0.8 * dn.wb;
+          B.add("tr_" + k + "|f", bake(trGeo(k, 0.12), T.creekX(dn.z) + u, d.crest + 0.1, dn.z - 0.1, R() * 3, R() * 3, 0));
+          continue;
+        }
+        if (st === "kept") {
+          var h = vw.list("structures").get(ct[5]);
+          if (!h) continue;
+          var rad = (STRUCTURES.home.radius || 1.5) * 0.66,
+            a = (h.rot || 0) - 1.75 + 0.35;
+          B.add("tr_" + k + "|f", bake(trGeo(k, 0.06), h.x + Math.sin(a) * rad * 1.02, height(h.x, h.z) + 0.95, h.z + Math.cos(a) * rad * 1.02, 0, R() * 3, 0));
+          continue;
+        }
+        var off = st === "grove" ? 0.55 : 0,
+          sz = st === "grove" ? 0.07 : 0.09;
+        B.add("tr_" + k + "|f", bake(trGeo(k, sz), x + off * Math.cos(id), (st === "pond" ? y : y) + sz * 0.5, z + off * Math.sin(id), R() * 3, R() * 3, 0));
+        if (st !== "pond" && st !== "grove") B.add("foam|f", bake(box(0.035, 0.035, 0.035), x + 0.07, y + sz * 1.6, z - 0.05)); // a glint
+      }
+      for (var cp of CA.piles) {
+        if (tileOf(cp[1], cp[2]) !== Tl) continue;
+        R = rnd(cp[0] * 31 + 1);
+        var py = height(cp[1], cp[2]);
+        B.add("kindleaf|f", bake(new THREE.CylinderGeometry(0.22, 0.24, 0.02, 7), cp[1], py + 0.012, cp[2], 0, R() * 3, 0, 1, 1, 0.75));
+        for (var q = 0; q < cp[4] * 2; q++) B.add((cp[3] === "berry" ? "berry" : cp[3] === "seeds" ? "kindnut" : "kindfruit") + "|f", bake(cp[3] === "fruit" ? new THREE.IcosahedronGeometry(0.07, 0) : box(0.06, 0.05, 0.06), cp[1] + (R() - 0.5) * 0.2, py + 0.05 + (q > 3 ? 0.04 : 0), cp[2] + (R() - 0.5) * 0.16));
+      }
+      for (var cl of CA.left) {
+        if (tileOf(cl[1], cl[2]) !== Tl) continue;
+        R = rnd(cl[0] * 17 + 5);
+        var ly = height(cl[1], cl[2]),
+          lk = OFFER_PAINT[cl[3]] || "rock";
+        B.add(lk + "|f", bake(cl[3] === "feather" ? box(0.03, 0.01, 0.22) : cl[3] === "ring" ? new THREE.TorusGeometry(0.06, 0.015, 4, 10) : new THREE.IcosahedronGeometry(0.045, 0), cl[1], ly + 0.03, cl[2], cl[3] === "ring" ? Math.PI / 2 : 0, R() * 3, 0));
+      }
+      var gp = CA.gp;
+      if (gp && tileOf(gp.x, gp.z) === Tl) {
+        R = rnd(4217);
+        var gy = height(gp.x, gp.z),
+          kinds = ["pebble", "flower", "bead", "ring", "shell", "feather", "figure", "whistle"];
+        B.add("stone|f", bake(new THREE.CylinderGeometry(0.42, 0.5, 0.18, 7), gp.x, gy + 0.09, gp.z));
+        for (var oq = 0; oq < Math.min(14, CA.offerings); oq++) {
+          var oa = oq * 2.4 + R() * 0.4,
+            od = 0.18 + 0.05 * (oq % 3);
+          B.add((OFFER_PAINT[kinds[oq % kinds.length]] || "rock") + "|f", bake(new THREE.IcosahedronGeometry(0.04, 0), gp.x + Math.cos(oa) * od, gy + 0.21, gp.z + Math.sin(oa) * od));
+        }
+        if (CA.lantern) {
+          B.add("post|f", bake(box(0.05, 1.1, 0.05), gp.x + 0.6, gy + 0.55, gp.z));
+          if (LB) LB.add("hearth|g", bake(box(0.14, 0.16, 0.14), gp.x + 0.6, gy + 1.0, gp.z));
+        }
+      }
+    }
     // The beavers' lodge: a dome of sticks in the pond, growing as the sticks come in; and
     // their little stick dams across the side channels on the floor.
     function addLodge(B, L, far) {
@@ -2005,9 +2088,16 @@ var CF2Valley = (function () {
       focus = { x: VW / 2, z: VL / 2, r: 60 };
     function thingsKey(Tl) {
       var parts = [];
-      for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.kind === "grove" ? Math.floor(groveSize(vw, r) * 6) : r.stage || r.size || ""));
+      for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) parts.push(r.id + ":" + r.kind + ":" + (r.amt > 0 ? Math.ceil(r.amt / 3) : 0) + ":" + (r.pods || 0) + ":" + (r.kind === "grove" ? Math.floor(groveSize(vw, r) * 6) + "." + (r.left || 0) : r.grow != null ? "g" + Math.floor(r.grow * 8) : r.stage || r.size || ""));
       for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) parts.push("log" + lg.id + ":" + Math.floor(groveLogDecay(vw, lg) * 5));
       for (var cv of vw.carvings || []) if (tileOf(cv[2], cv[3]) === Tl) parts.push("cv" + cv.join(","));
+      var CA = vw.care;
+      if (CA) {
+        for (var ct of CA.tr) if (tileOf(ct[3], ct[4]) === Tl) parts.push("tr" + ct.join(","));
+        for (var cp of CA.piles) if (tileOf(cp[1], cp[2]) === Tl) parts.push("fd" + cp.join(","));
+        for (var cl of CA.left) if (tileOf(cl[1], cl[2]) === Tl) parts.push("lf" + cl[0]);
+        if (CA.gp && tileOf(CA.gp.x, CA.gp.z) === Tl) parts.push("gp" + Math.min(14, CA.offerings) + (CA.lantern ? "L" : ""));
+      }
       var Bv = vw.beavers;
       if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) parts.push("lodge" + Math.round((Bv.lodge.size || 0) * 10));
       if (Bv) for (var sd of Bv.small || []) if (tileOf(sd.x, sd.z) === Tl) parts.push("sd" + sd.x + "," + sd.z);
@@ -2026,6 +2116,18 @@ var CF2Valley = (function () {
         det = W.detail;
       LB = far ? null : new Batch();
       for (var r of vw.list("res").values()) if (tileOf(r.x, r.z) === Tl) addThing(B, r, det, far);
+      // what the valley leaves at the founders' trees each year they remember the eight (cf2-founders.js)
+      if (!far)
+        for (var gr of vw.list("res").values())
+          if (gr.kind === "grove" && gr.left && tileOf(gr.x, gr.z) === Tl) {
+            var GR = rnd(gr.id * 59 + 2),
+              gy0 = height(gr.x, gr.z);
+            for (var gq = 0; gq < gr.left; gq++) {
+              var ga = gq * 0.9 + GR() * 0.3,
+                gd = 0.7 + 0.12 * (gq % 2);
+              B.add("rock|f", bake(new THREE.DodecahedronGeometry(0.07, 0), gr.x + Math.cos(ga) * gd, gy0 + 0.04, gr.z + Math.sin(ga) * gd, GR() * 3, GR() * 3, 0));
+            }
+          }
       for (var sc of SCENERY) if (tileOf(sc.x, sc.z) === Tl) addTree(B, sc, det, far);
       for (var rk of ROCKS)
         if (tileOf(rk.x, rk.z) === Tl) {
@@ -2035,6 +2137,7 @@ var CF2Valley = (function () {
       for (var s of vw.list("structures").values()) if (tileOf(s.x, s.z) === Tl) addStructure(B, s, far);
       for (var lg of vw.groveLogs || []) if (tileOf(lg.x, lg.z) === Tl) addNurseLog(B, lg, far);
       for (var cv of vw.carvings || []) if (tileOf(cv[2], cv[3]) === Tl) addCarvingThing(B, cv, far);
+      if (vw.care && !far) addCare(B, Tl);
       var Bv = vw.beavers;
       if (Bv && Bv.lodge && tileOf(Bv.lodge.x, Bv.lodge.z) === Tl) addLodge(B, Bv.lodge, far);
       if (Bv && !far) Bv.small.forEach((sd, j) => tileOf(sd.x, sd.z) === Tl && addSideDam(B, sd, j));

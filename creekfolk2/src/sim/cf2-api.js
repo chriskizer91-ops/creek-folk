@@ -8,4 +8,10 @@ Object.assign(CreekSim, {
   CF2_CRAFT,
   cf2BranchWater,
   cf2BranchState,
+  TREASURE,
+  TREASURE_KINDS,
+  placeTreasure,
+  treasureWhere,
+  KIND_FOODS,
+  leaveFood,
 });

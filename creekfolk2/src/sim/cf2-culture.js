@@ -211,7 +211,7 @@ function thankTheCreek(w) {
     C.thanks <= 3 ? 3 : 2,
     first
       ? `The first storm came over the new valley. Those by the creek went down to the water to ${g} and thank it, as they did in the old valley.`
-      : `The rains came back after the dry season. ${who.length === 1 ? who[0].name + " went" : numberWord(who.length).replace(/^./, (x) => x.toUpperCase()) + " creekfolk went"} down to the water to ${g} and thank the creek, ${founders ? "the old valley's way" : why ? "the way the first eight did" : "as creekfolk always have, though no one can say anymore why"}.`,
+      : `The rains came back after the dry season. ${who.length === 1 ? who[0].name + " went" : who.length > 12 ? "Most of the valley went" : numberWord(who.length).replace(/^./, (x) => x.toUpperCase()) + " creekfolk went"} down to the water to ${g} and thank the creek, ${founders ? "the old valley's way" : why ? "the way the first eight did" : "as creekfolk always have, though no one can say anymore why"}.`,
     who.map((c) => c.id),
     who[0],
     "custom",

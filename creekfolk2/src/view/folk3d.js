@@ -79,7 +79,7 @@ var Folk3D = (function () {
   }
   function key(c) {
     var l = c.look || {};
-    return `${furIndex(l)}|${c.stage}|${l.tail || 0}|${l.ear > 1.15 ? 1 : 0}|${clothOf(c).key}|${l.pat}|${l.pale}|${l.face}|${l.socks}|${c.stage === "child" ? "" : c.wear || l.wear}`;
+    return `${furIndex(l)}|${c.stage}|${l.tail || 0}|${l.ear > 1.15 ? 1 : 0}|${clothOf(c).key}|${l.pat}|${l.pale}|${l.face}|${l.socks}|${c.stage === "child" ? "" : c.wear || l.wear}|${c.tr || ""}`;
   }
   // A marking laid on the surface of a round part (centre C, radii R): at angle th down from the
   // top and ph round from the front, a thin oval a wide (round the part) and b tall, flat to it.
@@ -213,6 +213,12 @@ var Folk3D = (function () {
     } else if (wear === "scarf") {
       S.add(at(mesh(new THREE.BoxGeometry(0.055, 0.18, 0.025), cloth), 0.07, 0.24, 0.16, -0.25, 0, 0.12));
       S.add(at(mesh(new THREE.BoxGeometry(0.05, 0.13, 0.025), cloth), 0.11, 0.26, 0.15, -0.25, 0, 0.35));
+    }
+    // the treasure the creek brought them, on a cord round the neck (cf2-treasure.js)
+    if (c.tr && CF2Valley.PAINT["tr_" + c.tr]) {
+      var cord = at(mesh(new THREE.TorusGeometry(0.105, 0.006, 4, 16), M(CF2_WEAR.leather || EXTRA.stick, "cord")), 0, 0.3, 0.03, Math.PI / 2 - 0.35, 0, 0);
+      S.add(cord);
+      S.add(at(mesh(new THREE.IcosahedronGeometry(0.026, 0), M(CF2Valley.PAINT["tr_" + c.tr], "tr_" + c.tr)), 0, 0.23, 0.165));
     }
     var HP = new THREE.Group();
     J.Hips.add(HP);
@@ -360,6 +366,13 @@ var Folk3D = (function () {
     } else if (ty === "watch" || ty === "look") {
       turn(J.Head, -0.25, 0.4 * Math.sin(t * 0.3), 0);
     }
+    // the one who suspects someone is looking in: looks up, and waves (cf2-treasure.js)
+    if (p.wave && !asleep) {
+      turn(J.Head, -0.5, 0, 0);
+      turn(J.Neck, -0.15, 0, 0);
+      turn(J.UpperArm_R, -2.75, 0, 0.35);
+      turn(J.Forearm_R, -0.25 + 0.5 * Math.sin((p.clock || 0) * 9), 0, 0);
+    }
     // eyes shut in sleep
     for (var e of m.lids || []) e.visible = !!asleep;
   }
@@ -367,6 +380,7 @@ var Folk3D = (function () {
   function palette() {
     var out = [];
     for (var k in EXTRA) out.push.apply(out, EXTRA[k]);
+    for (var tk in TREASURE_KINDS) out.push.apply(out, CF2Valley.PAINT["tr_" + tk]);
     return out;
   }
   return { ok, build, pose, key, palette };

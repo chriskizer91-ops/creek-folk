@@ -23,6 +23,7 @@ var App = class {
     this.hud = new Hud(this);
     this.renderer = makeRenderer(this, document.getElementById("view"));
     this.renderer.onCreekTap = (z) => this.hud.openBank(z);
+    this.renderer.onPlace = (food, x, z) => this.hud.placeFood(food, x, z);
     document.getElementById("bThen").hidden = !this.renderer.setThen; // then and now needs the 3D view
     this.dev = new DevMenu(this);
     this.post({ type: "boot", db: VALLEY_DB, dev: DEV_BUILD, offset: Clock.offset() });
@@ -82,6 +83,7 @@ var App = class {
       case "sync":
         this.vw.sync(m);
         if (this.renderer) this.renderer.onSync();
+        if (!this.waved) (this.waved = true), setTimeout(() => H.waveHello(), 3000); // the page has just opened
         H.onLog(m.log || []);
         break;
       case "state":
