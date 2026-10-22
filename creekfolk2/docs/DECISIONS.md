@@ -103,6 +103,33 @@ building starts._
     - the 371-colour palette is a shader uniform larger than some phones allow; it moves
       into a texture.
 
+## Made in Phase 2 (for the author to confirm)
+
+These came up while tuning the founders' month; each can be undone if the author prefers.
+
+13. **Dams are worked at low water.** Dams are begun, given their next level and built up only
+    in the dry season, as people do with real stream work. It paces the healing by the seasons
+    (about one step a valley year) rather than by how many hands there are.
+14. **Storms come in fronts.** The chance of a storm grows with the time since the last, so a
+    wet season brings 5 to 9 storms rather than anywhere from 3 to 12. A month still varies
+    with its weather (days 14 and 22 swing most), but less.
+15. **The mud comes from this valley.** The old valley upstream has healed, so its creek runs
+    clear; the mud that fills the trench comes off this valley's own hills and down the Dry
+    Fork.
+16. **Ponds soak into the floor.** A pond standing above the floor's water table feeds it
+    sideways, as beaver ponds do in a drought, so a healed floor stays wet through the dry
+    season. A pond's water spreads onto any ground lower than its surface, so shores follow
+    the ground.
+17. **The founders arrive with their culture already made.** Their words (in the old valley's
+    accent), customs (offerings at a passing, gathering at the season's turn, thanking the
+    creek when the rains come back) and stories of the old valley (already drifted) are there
+    on day one, and their craft (dams from the bottom of the creek up, mud, tools, planting).
+    Clay and the glowing mushrooms are still this creek's to teach. Belief that the creek gives
+    stays asleep: they bring the word for it, not the faith.
+18. **Carving by material.** Sand by the creek (gone with the next flood), clay tablets (about a
+    season), standing stones at the Telling Stones (days to cut, for good). Those who were there
+    recut a stone that tells their story wrongly.
+
 ## Still open
 
 - **What caught the author's eye in What the Map Forgot.** Asked; until the author says,

@@ -162,7 +162,7 @@ function arriveWithCulture(w) {
   logEvent(
     w,
     3,
-    `They brought the old valley's ways with them: when someone passes they ${OFFERINGS[ov.offering][1]} for them, they gather when the season turns, and when the rains come back they ${GESTURE_FIRST[ov.gesture].replace(/my /, "their ")} to thank the creek. In their old words the creek is "${ov.words.creek}", and home is "${ov.words.home}".`,
+    `They kept the old valley's ways, too: when someone passes they ${OFFERINGS[ov.offering][1]} for them, they gather when the season turns, and when the rains come back they ${GESTURE_FIRST[ov.gesture].replace(/my /, "their ")} to thank the creek. In their old words the creek is "${ov.words.creek}", and home is "${ov.words.home}".`,
     founders.map((c) => c.id),
     w.meadow,
     "custom",

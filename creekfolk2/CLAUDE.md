@@ -7,7 +7,7 @@ descendants live on in the finished valley, forever. The player mostly watches.
 This folder is Creekfolk 2. The rest of the repository is Creekfolk 1 (`../CLAUDE.md`), whose
 simulation Creekfolk 2 started from. Read, in this order: `docs/BRIEF.md` (the author's brief),
 `docs/DECISIONS.md` (what was decided since; **it wins over the brief**), `docs/HOW-CREEKFOLK-WORKS.md`
-(Creekfolk 1's minds and creek in plain words), the plan for the current phase (`docs/phase1-plan.md`),
+(Creekfolk 1's minds and creek in plain words), the latest phase report (`docs/PHASE2.md`) and its plan (`docs/phase2-plan.md`),
 and `docs/MERGE.md` before touching any of Creekfolk 1's files.
 
 ## Build and run
@@ -22,10 +22,10 @@ node tools/vendor-three.mjs     # only to change three.js: vendor/three-r186.js 
 Every build makes two self-contained pages: `creekfolk2.html` (the game; the dev menu is hidden
 behind Ctrl+Shift+D or `#dev`) and `creekfolk2-dev.html` (a visible Dev button that works on a
 phone, and its own saves). `BUILD_VERSION` in `tools/build.mjs` names the build (`cf2-1` is
-Phase 1); bump it for every build handed to the author, because each build keeps its own saves.
+Phase 1, `cf2-2` Phase 2); bump it for every build handed to the author, because each build keeps its own saves.
 No page ever makes a network request: three.js and the fonts (`assets/fonts`, OFL) are embedded.
 `releases/` keeps the two files handed to the author at the end of each phase
-(`creekfolk2-phase1.html`, `creekfolk2-phase1-dev.html`, build `cf2-1`); never rebuild them.
+(`creekfolk2-phase1*.html`, build `cf2-1`; `creekfolk2-phase2*.html`, build `cf2-2`); never rebuild them.
 
 ## Architecture
 

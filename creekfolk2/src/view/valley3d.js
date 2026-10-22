@@ -1977,14 +1977,16 @@ var CF2Valley = (function () {
       // its wings: where the pond stands over the floor, the dam carries on across the floor as
       // a low bank of mud and sticks, as far as the water would go round it (the simulation
       // holds the pond's water on the floor up to just below the dam: creek.js creekPondFloor)
-      if (cd && cd.pl > n.fp - 0.15) {
+      var wgrid = G();
+      if (cd && cd.pl > n.fp - 0.15 && wgrid) {
         var wz = z + 1.4;
         for (var sd2 = -1; sd2 <= 1; sd2 += 2)
           for (var u2 = hw + 0.5; u2 < 45; u2 += 1) {
             var wx = cx + sd2 * u2 * Math.sin(ang),
               wzz = wz + sd2 * u2 * Math.cos(ang),
               wg = height(wx, wzz);
-            if (wg > cd.pl + 0.03 || wx < 1 || wx > VW - 1) break;
+            // as far as the pond's water stands on the ground just above the dam
+            if (wg > cd.pl + 0.03 || wx < 1 || wx > VW - 1 || sampC(wgrid.wt, wx, wzz - 1.6) < wg + 0.01) break;
             var bh = cd.pl - wg + 0.14;
             B.add("mud|f", bake(box(1.05, bh, 0.55), wx, wg + bh / 2 - 0.04, wzz, 0, ang - Math.PI / 2, 0));
             if (!far && (Math.round(u2) % 2 === 0)) B.add("wood|f", bake(cyl(0.035, 0.04, 1.1, 4), wx, wg + bh - 0.02, wzz + 0.12, 0, ang - Math.PI / 2, Math.PI / 2 + (R() - 0.5) * 0.3));

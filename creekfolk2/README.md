@@ -8,8 +8,11 @@ This folder is the home of Creekfolk 2. Everything else in this repository is Cr
 
 Phase 1 (the foundation) is built: the new valley at real scale, Creekfolk 1's simulation
 (with its 3C) running on it in a worker, drawn with What the Water Brings' pixel renderer,
-from the air down to a creekfolk's face. `docs/PHASE1.md` says what it does, what was
-measured, and what comes next. The playable files are in `releases/`.
+from the air down to a creekfolk's face (`docs/PHASE1.md`). Phase 2 (the founders' arc) is
+built: the creek heals in the founders' month, the eight arrive with the old valley's craft,
+words, customs and stories, the last of them passes near day 30, and the valley keeps three
+records of time (the mud in the creek's bank, carvings in sand, clay and stone, the
+chronicle), with then and now (`docs/PHASE2.md`). The playable files are in `releases/`.
 
 - `docs/BRIEF.md`: the author's brief for Creekfolk 2.
 - `docs/DECISIONS.md`: what has been decided since the brief, and why. It wins over the

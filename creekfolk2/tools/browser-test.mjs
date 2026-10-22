@@ -21,6 +21,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+// this build's database, from BUILD_VERSION in tools/build.mjs ('cf2-2' keeps its valleys in 'creekfolk2-2')
+const DB = 'creekfolk2-' + fs.readFileSync(path.join(root, 'tools/build.mjs'), 'utf8').match(/BUILD_VERSION = 'cf2-(\d+)'/)[1];
 const DEVF = path.join(root, 'dist/creekfolk2-dev.html'),
   GAMEF = path.join(root, 'dist/creekfolk2.html');
 const results = [];
@@ -63,7 +65,7 @@ await sleep(2500);
 let s = await state(p);
 check('a new valley starts and the page draws it', s.ready && s.n === 8 && s.t > 0, `seed ${s.seed}, ${s.n} creekfolk, t ${s.t.toFixed(1)} s`);
 const dbs = await p.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name) : []));
-check('the dev build keeps its own database', dbs.includes('creekfolk2-1-dev') && !dbs.includes('creekfolk2-1'), JSON.stringify(dbs));
+check('the dev build keeps its own database', dbs.includes(DB + '-dev') && !dbs.includes(DB), JSON.stringify(dbs));
 
 // ---- a dev jump of a day, through the worker -------------------------------
 let t0 = s.t,
@@ -190,7 +192,7 @@ await sleep(400);
 const devOpens = await p.isVisible('#vDev');
 check('the game build hides the dev menu; Ctrl+Shift+D opens it', devHidden && devOpens);
 const dbs2 = await p.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
-check('the game keeps its valley in its own database', dbs2.includes('creekfolk2-1'), JSON.stringify(dbs2));
+check('the game keeps its valley in its own database', dbs2.includes(DB), JSON.stringify(dbs2));
 await p.close();
 
 check('no network requests', reqs.length === 0, reqs.slice(0, 3).join(' '));
