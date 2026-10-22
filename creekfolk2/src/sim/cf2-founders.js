@@ -69,7 +69,7 @@ function foundersDayTick(w) {
   let word = wordFor(w, leader, "remembering"),
     where = at.what === "stones" ? "the founders' standing stones" : at.what === "grove" ? "the founders' trees in the grove" : "the Waking Meadow",
     known = w.creatures.some((c) => !c.visitor && c.lore && Object.keys(c.lore).some((k) => w.stories[k] && w.stories[k].kind === "lastfounder")),
-    offer = w.customs.passing && w.customs.passing.custom ? `, and ${OFFERINGS[w.customs.passing.custom][1].replace(/ for them$/, "")} for each of the eight` : "";
+    offer = w.customs.passing && w.customs.passing.custom ? `, and ${OFFERINGS[w.customs.passing.custom][0]} for each of the eight` : "";
   if (C.n === 1) {
     logEvent(w, 3, `A year after ${F.name} passed, ${leader.name} led the young ones to ${where} and told them who the eight were${offer}.`, goers.map((c) => c.id), at, "custom");
   } else if (C.n === 2) {
