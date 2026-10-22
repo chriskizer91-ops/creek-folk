@@ -75,7 +75,7 @@ All source files share one scope: the build concatenates them in the order liste
 | `src/sim/cf2-treasure.js` | Treasures delivered by the creek (`world.treasures`, `placeTreasure`, one every two real days): they wait at the head of the valley for a flood, travel like tracer stones, settle on bars, in ponds or on the floor, get found (or buried in the bank), and become something (set in a dam, kept, planted, worn, passed on). Belief wakes from them (Creekfolk 1's `noticeGift`); the search after a storm becomes a custom; the one who suspects. `TREASURE`, `TREASURE_KINDS`, `treasureWhere`. |
 | `src/sim/cf2-kindness.js` | Everyday kindness (`world.kindness`, `leaveFood`): food the player leaves is noticed, eaten, learned as a spot, visited, answered with small things left back; a spot several know gets a name. `KIND`, `KIND_FOODS`. |
 | `src/sim/cf2-founders.js` | Customs around the founders: the yearly day they remember the eight (`world.customs.founders`), at the founders' stones or trees. `FOUNDERS_DAY`. |
-| `src/sim/cf2-belief.js` | Belief asleep for now; no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). |
+| `src/sim/cf2-belief.js` | What Creekfolk 2 leaves out of Creekfolk 1's belief: no temple, no Hall of the Ancestors, no journey to the spring (so no procession path or Returning festival either). Belief itself wakes from treasures (`cf2-treasure.js`). |
 | `src/sim/cf2-api.js` | What Creekfolk 2 adds to `CreekSim`. |
 | `src/sim/cf2-worker.js` | The worker: live running, catch-up, saves, the clock guards, messages. |
 | `src/view/clock.js` | The page's clock: `devNow()`, the player's correction, the dev offset, the database name. |
