@@ -110,6 +110,7 @@ All on this machine (a shared cloud container), nothing on a phone or a real gra
 |---|---|
 | Determinism (`tools/determinism.cjs 4`): live, uneven slices, save and reload | identical state hashes |
 | Four valleys to day 32 at once (`tools/month.cjs`) | 32 days in 302 to 313 s each (8,800 to 9,200 times real time; Phase 1 was about 13,000 with 20 creekfolk instead of 30, the same cost per creekfolk), no errors; saves 1.9 to 2.1 MB |
+| Catch-up of 30 days in the browser's worker, from a day-15 valley of 26 creekfolk (`tools/bench-browser.mjs`) | 6.8 minutes (6,350 times real time; Phase 1: 7.8 minutes with 23 creekfolk, the machine less busy now) |
 | One valley to day 60 (before the arc was merged) | saves 1.4 MB; carvings, the bank and the chronicle stay bounded |
 | The culture and the records in each valley (`tools/records-report.cjs`) | as above |
 | The rules in a browser (`tools/browser-test.mjs`) | 20 of 20 pass (on the release files) |
