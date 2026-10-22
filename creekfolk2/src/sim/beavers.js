@@ -21,6 +21,7 @@ var BEAVER = {
   smallHold: 0.2, // ... each holds water this far above the ground where it stands ...
   smallReach: 7, // ... over the low ground within this many metres, all year
   oldDays: 60, // real days a beaver lives, about
+  mendAt: 0.75, // CF2: a dam worn below this, a beaver mends (Creekfolk 1 wrote 0.75 in beaverDamJob)
 };
 
 function beaversOf(w) {
@@ -224,7 +225,7 @@ function beaverDamJob(w, B, b) {
       score = 0,
       canRaise = w.t - (s.beaverRaised || -1e9) > BEAVER.raiseGap && w.t - (B.lastRaise || -1e9) > BEAVER.raiseEvery;
     if (s.raise) score = canRaise && creekSafeToRaise(w, s, CREEK.raiseStep) ? 3 : 0; // unsafe or too soon: the creekfolk see to it
-    else if ((s.cond ?? 1) < 0.75) score = 2 + (0.75 - s.cond);
+    else if ((s.cond ?? 1) < BEAVER.mendAt) score = 2 + (BEAVER.mendAt - s.cond); // CF2: a value (Creekfolk 1: 0.75)
     else if (canRaise && d.crest < n.fp + BEAVER.above - 0.02 && creekSafeToRaise(w, s, CREEK.raiseStep) && s.pond > 0.6) score = 1;
     if (!score) continue;
     score /= 1 + Math.abs(d.i - b.i) / 40;

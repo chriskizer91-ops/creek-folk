@@ -14,4 +14,7 @@ Object.assign(CreekSim, {
   treasureWhere,
   KIND_FOODS,
   leaveFood,
+  CF2_BEAVER,
+  BALANCE,
+  balanceWorld,
 });

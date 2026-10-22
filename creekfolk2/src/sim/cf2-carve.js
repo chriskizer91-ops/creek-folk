@@ -202,8 +202,15 @@ function addCarving(w, k) {
   k = { id: w.carveSeq, t: Math.round(w.t), wear: 0, recut: [], ...k, text: s ? storyText(w, s, k.v) : "" };
   K.push(k);
   if (K.length > CARVE.keep) {
+    // what has worn away goes first, then the oldest sand or clay; when all of them are stones,
+    // the oldest stone, worn smooth, is let go (stones last for good, but the valley's memory
+    // of them is bounded: it would take most of a year to reach)
     let j = K.findIndex((x) => x.gone);
-    K.splice(j >= 0 ? j : K.findIndex((x) => x.mat !== "stone"), 1);
+    if (j < 0) j = K.findIndex((x) => x.mat !== "stone");
+    if (j < 0 || K[j] === k) j = 0;
+    let old = K[j];
+    K.splice(j, 1);
+    if (old.mat === "stone" && !old.gone) logEvent(w, 1, `${old.byName}'s old stone at the Telling Stones has worn so smooth that no one can read it anymore.`, [], old, "carving");
   }
   return k;
 }

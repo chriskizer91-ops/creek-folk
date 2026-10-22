@@ -55,6 +55,8 @@ export const SIM_FILES = [
   'src/sim/cf2-treasure.js', // treasures carried by floods; belief in the creek that gives wakes
   'src/sim/cf2-kindness.js', // everyday kindness: food the player leaves, and what comes back
   'src/sim/cf2-founders.js', // customs around the founders: the day they remember the eight
+  'src/sim/cf2-beavers.js',  // the beavers come in week 4 and take over much of the dam-tending
+  'src/sim/cf2-balance.js',  // the living balance keeps its size: old records let go, keeping their meaning
   'src/sim/cf2-belief.js',   // belief asleep for now; no temple, no Hall of the Ancestors
   'src/sim/api.js',       // Creekfolk 1: the surface used by tools and the worker
   'src/sim/cf2-api.js',   // what Creekfolk 2 adds to it

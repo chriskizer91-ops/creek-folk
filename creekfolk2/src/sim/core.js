@@ -3341,6 +3341,7 @@
     let n = e * e,
       s = isNight(i.t);
     for (let r of i.res) {
+      if (r.kind === "grove") continue; // CF2: the grove's trees aren't kept in what they've seen (nothing looks them up there, and the grove grows to 240 trees; cf2-balance.js)
       let o = (r.x - t.x) ** 2 + (r.z - t.z) ** 2,
         a = s && r.kind === "glowcap" && r.amt > 0;
       if (o > n * (a ? 2.2 : s ? 0.45 : 1)) continue;
