@@ -103,9 +103,9 @@ building starts._
     - the 371-colour palette is a shader uniform larger than some phones allow; it moves
       into a texture.
 
-## Made in Phase 2 (for the author to confirm)
+## Made in Phase 2 (confirmed by the author, 2026-10-22)
 
-These came up while tuning the founders' month; each can be undone if the author prefers.
+These came up while tuning the founders' month; the author confirmed all six.
 
 13. **Dams are worked at low water.** Dams are begun, given their next level and built up only
     in the dry season, as people do with real stream work. It paces the healing by the seasons
