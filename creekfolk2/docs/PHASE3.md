@@ -110,6 +110,9 @@ by the founders and their children, and clay tablets).
   indoors, the line shows but they can't be seen.
 - **The founders' day was seen in one valley only**, run to day 48 (the 32-day runs end before
   the first one, near day 37).
+- **A worn treasure is small**: a dot on a cord, hard to make out even close up. And when the
+  camera follows someone close up, they can sit near the edge of the picture rather than in the
+  middle. Both are for Phase 4.
 - **When the Telling Stones are full**, the most worn stone is the one that goes; nothing is
   carved over it.
 
